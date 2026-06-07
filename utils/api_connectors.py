@@ -216,3 +216,29 @@ def change_special_offer_status(access_token: str, offer_id: int, status: str) -
     except Exception as e:
         print(f"Error changing offer status: {e}")
         return False
+
+def process_special_offers_excel_sync(uploaded_file, access_token: str):
+    """
+    قراءة ملف Excel يحتوي على مجموعة عروض وبثها تلقائياً إلى API سلة.
+    يتوقع الملف أعمدة: (name, message, offer_type, min_purchase_amount, status)
+    """
+    try:
+        df_offers = pd.read_excel(uploaded_file)
+        success_count = 0
+        
+        for _, row in df_offers.iterrows():
+            payload = {
+                "name": str(row.get('name', row.get('اسم العميل', ''))),
+                "message": str(row.get('message', row.get('الرسالة التسويقية', ''))),
+                "offer_type": str(row.get('offer_type', 'buy_x_get_y')),
+                "applied_channel": "browser_and_application",
+                "min_purchase_amount": int(row.get('min_purchase_amount', 100)),
+                "status": str(row.get('status', 'active'))
+            }
+            # إرسال كل سطر كطلب منفصل لـ API سلة
+            if create_salla_special_offer(access_token, payload):
+                success_count += 1
+                
+        return True, f"✅ تم بنجاح معالجة الملف ونشر {success_count} عرض ترويجي على متجرك فوراً!"
+    except Exception as e:
+        return False, f"❌ خطأ أثناء قراءة ملف عروض الـ Excel: {e}"
