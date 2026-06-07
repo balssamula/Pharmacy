@@ -3,17 +3,19 @@ import sqlite3
 import uuid
 import socket
 import requests
-from utils.database import DB_PATH
-from datetime import datetime, timedelta
 import pandas as pd
 
+# 💡 [تم الإصلاح]: تحديد المسارات القياسية مباشرة دون استدعاء الملف لنفسه منعاً للـ Circular Import
 DB_DIR = "data"
 DB_PATH = os.path.join(DB_DIR, "pharmacy_reconciliation.db")
 PHARMACY_COUNT = 17
 
-# 💡 [الإصلاح]: تعريف الدالة في الأعلى تماماً قبل أي استدعاء
 def fix_users_table_columns():
     """حقن صامت وآمن لإضافة الأعمدة المفقودة في جدول المستخدمين منعاً للـ OperationalError"""
+    # التأكد من إنشاء المجلد الخاص بالبيانات أولاً إذا لم يكن موجوداً
+    if not os.path.exists(DB_DIR):
+        os.makedirs(DB_DIR)
+        
     conn = sqlite3.connect(DB_PATH)
     cur = conn.cursor()
     try:
@@ -29,7 +31,7 @@ def fix_users_table_columns():
     conn.commit()
     conn.close()
 
-# استدعاء الدالة الآن أصبح آمناً بنسبة 100% لأن بايثون قام بقراءتها مسبقاً
+# استدعاء الدالة الآمنة فوراً عند إقلاع التطبيق لترميم قاعدة البيانات
 fix_users_table_columns()
 
 def get_client_ip():
