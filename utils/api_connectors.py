@@ -1,4 +1,5 @@
 import requests
+import json
 import pandas as pd
 from datetime import datetime, timedelta
 
@@ -83,4 +84,92 @@ def fetch_abc_invoices_via_api(days_back: int = 1) -> pd.DataFrame:
         return pd.DataFrame()
     except Exception as e:
         print(f"❌ خطأ غير متوقع أثناء سحب بيانات فواتير ABC عبر الـ API: {e}")
+        return pd.DataFrame()
+
+
+# 🔑 إعدادات تطبيق سلة (Salla Partners Application) المستخرجة من ملفات الـ OpenAPI لديك
+SALLA_CLIENT_ID = "8a6c31ed-b841-48ca-85a9-3596e4d60d01"
+SALLA_CLIENT_SECRET = "1c9c66a597ec06c7ab9cd89d9d4e9a8bed005e6ee279e35ede14f905170b1ea5"
+SALLA_BASE_URL = "https://api.salla.dev/admin/v2/"
+
+def refresh_salla_token(current_refresh_token: str) -> dict:
+    """
+    تجديد صلاحية الـ Access Token لمنصة سلة تلقائياً قبل انتهائه (كل 24 ساعة).
+    بناءً على توثيق ملف الـ OpenAPI (tokenUrl) المرفق في مشروعك.
+    """
+    token_url = "https://accounts.salla.sa/oauth2/token"
+    
+    payload = {
+        "client_id": SALLA_CLIENT_ID,
+        "client_secret": SALLA_CLIENT_SECRET,
+        "grant_type": "refresh_token",
+        "refresh_token": current_refresh_token,
+        "redirect_uri": "https://app.apidog.com/oauth2-browser-callback.html"
+    }
+    
+    headers = {
+        "Content-Type": "application/x-www-form-urlencoded"
+    }
+    
+    try:
+        response = requests.post(token_url, data=payload, headers=headers, timeout=15.0)
+        if response.status_code == 200:
+            token_data = response.json()
+            print("🔑 تم تجديد مفاتيح الوصول لمنصة سلة (OAuth2) بنجاح تلقائي.")
+            # سيعود بـ access_token جديد و refresh_token جديد
+            return token_data
+        else:
+            print(f"❌ فشل تجديد توكن سلة. كود الاستجابة: {response.status_code}")
+            return {}
+    except Exception as e:
+        print(f"❌ خطأ في دالة refresh_salla_token: {e}")
+        return {}
+
+
+def parse_salla_webhook_payload(webhook_json: dict) -> pd.DataFrame:
+    """
+    تحويل الإشارة الفورية (JSON Payload) المستقبلة من Webhook سلة عند حدوث طلب جديد،
+    وتفكيك الأصناف (Order Items) وتحويلها إلى DataFrame يطابق كود المطابقة المحاسبي.
+    """
+    try:
+        # استخراج بيانات الطلب بناءً على المخطط التفصيلي للهيكل المرفق لديك
+        order_data = webhook_json.get('data', webhook_json)
+        order_number = str(order_data.get('id', ''))
+        customer = order_data.get('customer', {})
+        customer_name = f"{customer.get('first_name', '')} {customer.get('last_name', '')}".strip()
+        customer_phone = customer.get('mobile', '')
+        
+        shipping = order_data.get('shipping', {})
+        city = shipping.get('address', {}).get('city', '')
+        
+        order_status = order_data.get('status', {}).get('name', '')
+        order_date = order_data.get('created_at', '')
+        total_amount = float(order_data.get('amounts', {}).get('total', {}).get('amount', 0))
+        
+        # استخراج مصفوفة المنتجات والأصناف داخل الطلب (Items Array)
+        items = order_data.get('items', [])
+        parsed_items = []
+        
+        for item in items:
+            parsed_items.append({
+                "رقم الطلب": order_number,
+                "SKU": str(item.get('sku', '')),
+                "اسم المنتج": str(item.get('name', '')),
+                "الكمية": int(item.get('quantity', 1)),
+                "اسم العميل": customer_name,
+                "رقم الجوال": customer_phone,
+                "المدينة": city,
+                "حالة الطلب": order_status,
+                "تاريخ الطلب": order_date,
+                "إجمالي الطلب": total_amount
+            })
+            
+        if parsed_items:
+            df_salla_sync = pd.DataFrame(parsed_items)
+            print(f"📦 تم تفكيك وتحويل طلب سلة رقم ({order_number}) بنجاح إلى جدول معالجة.")
+            return df_salla_sync
+        return pd.DataFrame()
+        
+    except Exception as e:
+        print(f"❌ خطأ أثناء تفكيك وقراءة JSON Webhook سلة: {e}")
         return pd.DataFrame()
