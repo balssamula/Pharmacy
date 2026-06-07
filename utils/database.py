@@ -243,9 +243,27 @@ def init_database():
     cur.execute("CREATE INDEX IF NOT EXISTS idx_reconciliation_order ON reconciliation_items(order_number, sku);")
     cur.execute("CREATE INDEX IF NOT EXISTS idx_reconciliation_pharmacy ON reconciliation_items(pharmacy_name, case_type, status);")
     cur.execute("CREATE INDEX IF NOT EXISTS idx_users_username ON users(username);")
-
-    conn.commit()
-    conn.close()
+    def fix_users_table_columns():
+        """حقن صامت وآمن لإضافة الأعمدة المفقودة في جدول المستخدمين منعاً للـ OperationalError"""
+        import sqlite3
+        from utils.database import DB_PATH
+    
+        conn = sqlite3.connect(DB_PATH)
+        cur = conn.cursor()
+        try:
+            # إضافة عمود last_ip إذا لم يكن موجوداً
+            cur.execute("ALTER TABLE users ADD COLUMN last_ip TEXT DEFAULT ''")
+        except sqlite3.OperationalError:
+            pass  # العمود موجود بالفعل، تخطى الخطأ الآمن
+        
+        try:
+            # إضافة عمود pharmacist_name إذا لم يكن موجوداً
+            cur.execute("ALTER TABLE users ADD COLUMN pharmacist_name TEXT DEFAULT ''")
+        except sqlite3.OperationalError:
+            pass  # العمود موجود بالفعل
+        
+        conn.commit()
+        conn.close()
     
     # استدعاء الدالة فوراً عند إقلاع التطبيق لترميم قاعدة البيانات
     fix_users_table_columns()
