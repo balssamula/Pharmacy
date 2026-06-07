@@ -915,3 +915,65 @@ def show():
             st.dataframe(last_logins[['pharmacy_name', 'pharmacist_name', 'last_login', 'last_ip']], use_container_width=True)
     else:
         st.info("لا توجد سجلات دخول للصيدليات بعد")
+
+def show_special_offers_page():
+    """واجهة مستقلة تماماً تعرض على كامل مساحة الشاشة لإدارة العروض ورفع ملفات الـ Excel"""
+    st.markdown("# 🎁 مركز إدارة العروض الترويجية الخاصة (Live Sync)")
+    st.markdown("---")
+    
+    # جلب توكن الأمان النشط لمنصة سلة من الجلسة
+    access_token = st.session_state.get('salla_access_token', 'SAMPLE_TOKEN')
+    
+    # 📥 [الميزة المطلوبة]: نموذج رفع ملف Excel بمجموعة عروض دفعة واحدة
+    st.markdown("### 📊 رفع وتحديث العروض دفعة واحدة عبر ملف Excel")
+    with st.container():
+        st.info("📋 يجب أن يحتوي شيت الإكسيل على الأعمدة التالية بشكل قياسي: (name, message, offer_type, min_purchase_amount)")
+        offers_file = st.file_uploader("اختر ملف Excel العروض الخاصة التراكمي:", type=["xlsx", "xls"], key="excel_offers_uploader")
+        
+        if offers_file is not None:
+            if st.button("🚀 بدء معالجة الملف وبث العروض حياً إلى متجر سلة", use_container_width=True):
+                from utils.api_connectors import process_special_offers_excel_sync
+                success, msg = process_special_offers_excel_sync(offers_file, access_token)
+                if success:
+                    st.success(msg)
+                    st.balloons()
+                else:
+                    st.error(msg)
+                    
+    st.markdown("---")
+    st.markdown("### 📋 العروض الحالية النشطة بالمتجر (مراقبة وتعديل لحظي)")
+    
+    # جلب العروض الحية وعرضها مع أزرار التحكم الفردية (تفعيل / تعطيل)
+    from utils.api_connectors import get_salla_special_offers, change_special_offer_status
+    offers = get_salla_special_offers(access_token)
+    
+    if offers:
+        for offer in offers:
+            off_id = offer.get('id')
+            current_status = offer.get('status', 'inactive')
+            status_color = '#27ae60' if current_status == 'active' else '#e74c3c'
+            
+            st.markdown(f"""
+            <div style="background:#f8f9fa; border-radius:12px; padding:1.2rem; margin-bottom:1rem; border-right:5px solid {status_color}; box-shadow:0 2px 4px rgba(0,0,0,0.02);">
+                <h4 style="margin:0; color:#1f7a8c;">🎁 {offer.get('name')} ({'🟢 نشط حالياً' if current_status == 'active' else '🔴 معطل'})</h4>
+                <p style="margin:0.5rem 0; color:#444;">💬 الرسالة التسويقية: {offer.get('message')}</p>
+                <small style="color:#777;">🆔 معرف السيرفر: {off_id} | ⚙️ نوع العرض الحسابي: {offer.get('offer_type')}</small>
+            </div>
+            """, unsafe_allow_html=True)
+            
+            # أزرار التعديل والتعطيل المباشرة
+            c1, c2 = st.columns([1, 5])
+            with c1:
+                if current_status == "active":
+                    if st.button("🔴 إيقاف العرض", key=f"stop_{off_id}", use_container_width=True):
+                        if change_special_offer_status(access_token, off_id, "inactive"):
+                            st.toast("🔄 تم إيقاف وتعطيل العرض في المتجر!")
+                            st.rerun()
+                else:
+                    if st.button("🟢 تفعيل الآن", key=f"start_{off_id}", use_container_width=True):
+                        if change_special_offer_status(access_token, off_id, "active"):
+                            st.toast("✅ تم إطلاق وتفعيل العرض حياً للعملاء!")
+                            st.rerun()
+            st.markdown("---")
+    else:
+        st.warning("📭 لا توجد عروض خاصة منشأة في متجرك حالياً.")
