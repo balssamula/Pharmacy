@@ -254,6 +254,115 @@ def classify_cases(df_salla: pd.DataFrame, df_abc: pd.DataFrame) -> pd.DataFrame
     available_cols = [c for c in ordered_columns if c in result.columns]
     return result[available_cols]
 
+# =========================================================================
+# 📥 [الخطوة الأولى]: الدوال المطورة للربط الآلي والمطابقة عبر الـ API
+# =========================================================================
+
+def process_automated_sync(df_salla_raw: pd.DataFrame, df_abc_raw: pd.DataFrame, username: str = "نظام المزامنة الآلي"):
+    """
+    دالة معالجة ومطابقة البيانات تلقائياً القادمة مباشرة من الـ API (سلة + ABC)
+    وتخزينها في قاعدة البيانات بدون الحاجة لرفع ملفات يدوية.
+    """
+    if df_salla_raw.empty or df_abc_raw.empty:
+        print("⚠️ تحذير المزامنة: أحد الجداول المجلوبة من الـ API فارغ تماماً.")
+        return None, None
+
+    # تمرير البيانات مباشرة إلى دالة الفرز الصارم واصطياد الحالات والمكررات بين الفروع
+    results = classify_cases(df_salla_raw, df_abc_raw)
+    
+    # إنشاء رقم دفعة مميز يحمل وسم آلي (Auto Sync Batch)
+    upload_batch_id = f"auto_{uuid.uuid4().hex[:8]}_{datetime.now().strftime('%m%d%H%M')}"
+    timestamp = now_str()
+    
+    conn = sqlite3.connect(DB_PATH, timeout=60.0)
+    conn.execute("PRAGMA journal_mode=WAL")
+    conn.execute("PRAGMA synchronous=NORMAL")
+    cur = conn.cursor()
+    
+    try:
+        # 1. تسجيل إحصائيات المزامنة الآلية في جدول المرفوعات
+        cur.execute("""
+            INSERT INTO uploads (upload_batch_id, file_name, uploaded_by, uploaded_at, total_cases,
+                                 total_additions, total_returns, total_orphan_salla, total_orphan_abc, is_active)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 1)
+        """, (upload_batch_id, "مزامنة تلقائية (Live API)", username, timestamp, len(results),
+              int((results["case_type"] == "addition").sum()) if not results.empty else 0,
+              int((results["case_type"] == "return").sum()) if not results.empty else 0,
+              int((results["case_type"] == "orphan_salla").sum()) if not results.empty else 0,
+              int((results["case_type"] == "orphan_abc").sum()) if not results.empty else 0))
+        
+        # 2. حقن الحالات المستخرجة والمكررات في جدول التسويات
+        if not results.empty:
+            insert_df = results.copy()
+            insert_df['upload_batch_id'] = upload_batch_id
+            insert_df['status'] = 'قيد المتابعة'
+            insert_df['pharmacist_note'] = ''
+            insert_df['first_seen_at'] = timestamp
+            insert_df['last_seen_at'] = timestamp
+            insert_df['active'] = 1
+            insert_df['hidden_from_pharmacy'] = 0
+            insert_df['is_item_locked'] = 0
+            insert_df['item_locked_by'] = ''
+            insert_df['item_locked_at'] = ''
+            insert_df['performed_by'] = ''
+            insert_df['performed_at'] = ''
+            
+            valid_columns = [
+                'item_key', 'upload_batch_id', 'order_number', 'invoice_number', 'sku',
+                'product_name', 'salla_product_name', 'abc_product_name', 'pharmacy_name',
+                'salla_pharmacy_name', 'abc_pharmacy_name', 'abc_pharmacist_name',
+                'branch_number', 'salla_branch_number', 'salla_qty', 'abc_qty', 'difference',
+                'case_type', 'case_label', 'case_reason', 'status', 'performed_by', 'performed_at',
+                'customer_name', 'customer_phone', 'city', 'order_status', 'order_date',
+                'invoice_date', 'profile_type', 'receipt_classification', 'all_abc_pharmacies',
+                'other_branch_details', 'pharmacist_note', 'total_amount', 'first_seen_at',
+                'last_seen_at', 'active', 'hidden_from_pharmacy', 'payment_method',
+                'discount', 'shipping_cost', 'tax', 'coupon_discount', 'offer_discount',
+                'is_item_locked', 'item_locked_by', 'item_locked_at'
+            ]
+            
+            # تنظيف وتجهيز الأعمدة لـ SQLite
+            cols_to_drop = [col for col in insert_df.columns if col not in valid_columns]
+            if cols_to_drop: insert_df = insert_df.drop(columns=cols_to_drop)
+                
+            for col in valid_columns:
+                if col not in insert_df.columns:
+                    if col in ['salla_qty', 'abc_qty', 'difference', 'total_amount', 'discount', 'shipping_cost', 'tax', 'coupon_discount', 'offer_discount']:
+                        insert_df[col] = 0.0
+                    elif col in ['is_item_locked']:
+                        insert_df[col] = 0
+                    else:
+                        insert_df[col] = ''
+                        
+            insert_df = insert_df[valid_columns]
+            
+            columns = list(insert_df.columns)
+            placeholders = ", ".join(["?"] * len(columns))
+            sql_query = f"INSERT OR REPLACE INTO reconciliation_items ({', '.join(columns)}) VALUES ({placeholders})"
+            cur.executemany(sql_query, insert_df.values.tolist())
+            
+        # 3. أرشفة وتحديث الجلسات لتفعيل التحديث اللحظي المباشر
+        cur.execute("UPDATE reconciliation_items SET active = CASE WHEN upload_batch_id = ? THEN 1 ELSE 0 END", (upload_batch_id,))
+        cur.execute("UPDATE uploads SET is_active = 0")
+        cur.execute("UPDATE uploads SET is_active = 1 WHERE upload_batch_id = ?", (upload_batch_id,))
+        
+        session_name = f"🔄 مزامنة آلية {datetime.now().strftime('%H:%M')}"
+        cur.execute("UPDATE uploads SET session_name = ? WHERE upload_batch_id = ?", (session_name, upload_batch_id))
+        
+        conn.commit()
+        print(f"🚀 تم نجاح المزامنة الآلية بنجاح تحت الـ Batch ID: {upload_batch_id}")
+        
+    except Exception as e:
+        conn.rollback()
+        print(f"❌ خطأ أثناء معالجة وحقن بيانات المزامنة: {e}")
+        raise e
+    finally:
+        cur.close()
+        conn.close()
+        
+    return results, upload_batch_id
+    
+    
 def process_excel(uploaded_file, username):
     df_salla = pd.read_excel(uploaded_file, sheet_name="سلة")
     df_abc = pd.read_excel(uploaded_file, sheet_name="abc")
@@ -327,8 +436,9 @@ def process_excel(uploaded_file, username):
     finally:
         cur.close()
         conn.close()
-    return results, upload_batch_id
-
+    # تمرير الجداول بعد قراءتها يدوياً لنفس آلية التخزين
+    return process_automated_sync(df_salla, df_abc, username)
+    
 def update_balances(abc_file, salla_file):
     try:
         df_abc = pd.read_excel(abc_file, skiprows=4)
