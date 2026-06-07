@@ -101,10 +101,22 @@ def fix_users_table_columns():
 # استدعاء الدالة فوراً عند إقلاع التطبيق لترميم قاعدة البيانات
 fix_users_table_columns()
 
-def init_database():
+def fix_users_table_columns():
     os.makedirs(DB_DIR, exist_ok=True)
     conn = sqlite3.connect(DB_PATH, timeout=60.0)
     cur = conn.cursor()
+
+    try:
+        # إضافة عمود last_ip إذا لم يكن موجوداً
+        cur.execute("ALTER TABLE users ADD COLUMN last_ip TEXT DEFAULT ''")
+    except sqlite3.OperationalError:
+        pass  # العمود موجود بالفعل، تخطى الخطأ الآمن
+        
+    try:
+        # إضافة عمود pharmacist_name إذا لم يكن موجوداً
+        cur.execute("ALTER TABLE users ADD COLUMN pharmacist_name TEXT DEFAULT ''")
+    except sqlite3.OperationalError:
+        pass  # العمود موجود بالفعل
 
     # جدول المستخدمين
     cur.execute("""
@@ -257,8 +269,8 @@ def init_database():
     conn.commit()
     conn.close()
     
-    # تشغيل ترقية قاعدة البيانات لإضافة أي أعمدة مفقودة
-    upgrade_database()
+    # استدعاء الدالة فوراً عند إقلاع التطبيق لترميم قاعدة البيانات
+    fix_users_table_columns()
 
 def record_login_history(username: str, role: str, ip_address: str = None, user_agent: str = None):
     """تسجيل محاولة الدخول"""
