@@ -3,6 +3,7 @@ import sqlite3
 import uuid
 import socket
 import requests
+from utils.database import DB_PATH
 from datetime import datetime, timedelta
 import pandas as pd
 
