@@ -173,3 +173,46 @@ def parse_salla_webhook_payload(webhook_json: dict) -> pd.DataFrame:
     except Exception as e:
         print(f"❌ خطأ أثناء تفكيك وقراءة JSON Webhook سلة: {e}")
         return pd.DataFrame()
+
+def get_salla_special_offers(access_token: str) -> list:
+    """جلب قائمة العروض الخاصة من متجر سلة (طبقاً لملف List Special Offers.md)"""
+    url = f"{SALLA_BASE_URL}specialoffers"
+    headers = {"Authorization": f"Bearer {access_token}", "Accept": "application/json"}
+    try:
+        response = requests.get(url, headers=headers, timeout=15.0)
+        if response.status_code == 200:
+            return response.json().get('data', [])
+        return []
+    except Exception as e:
+        print(f"Error listing special offers: {e}")
+        return []
+
+def create_salla_special_offer(access_token: str, offer_payload: dict) -> bool:
+    """إنشاء عرض خاص جديد في المتجر (طبقاً لملف Create Special Offer.md)"""
+    url = f"{SALLA_BASE_URL}specialoffers"
+    headers = {
+        "Authorization": f"Bearer {access_token}",
+        "Content-Type": "application/json",
+        "Accept": "application/json"
+    }
+    try:
+        response = requests.post(url, json=offer_payload, headers=headers, timeout=15.0)
+        return response.status_code in [200, 201]
+    except Exception as e:
+        print(f"Error creating special offer: {e}")
+        return False
+
+def change_special_offer_status(access_token: str, offer_id: int, status: str) -> bool:
+    """تعديل حالة العرض نشط/غير نشط (طبقاً لملف Change Special Offer Status.md)"""
+    url = f"{SALLA_BASE_URL}specialoffers/{offer_id}/status"
+    headers = {
+        "Authorization": f"Bearer {access_token}",
+        "Content-Type": "application/json",
+        "Accept": "application/json"
+    }
+    try:
+        response = requests.put(url, json={"status": status}, headers=headers, timeout=15.0)
+        return response.status_code == 200
+    except Exception as e:
+        print(f"Error changing offer status: {e}")
+        return False
