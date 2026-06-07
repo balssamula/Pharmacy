@@ -11,8 +11,6 @@ DB_DIR = "data"
 DB_PATH = os.path.join(DB_DIR, "pharmacy_reconciliation.db")
 PHARMACY_COUNT = 17
 
-DB_PATH = "reconciliation.db" 
-
 # 💡 [الإصلاح]: تعريف الدالة في الأعلى تماماً قبل أي استدعاء
 def fix_users_table_columns():
     """حقن صامت وآمن لإضافة الأعمدة المفقودة في جدول المستخدمين منعاً للـ OperationalError"""
