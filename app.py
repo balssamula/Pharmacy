@@ -106,12 +106,17 @@ if not st.session_state.logged_in:
                 user = fetch_user(username_input, password_input)
                 if user:
                     st.session_state.logged_in = True
-                    st.session_state.username = user["username"]
-                    st.session_state.user_role = user["role"]
-                    st.session_state.pharmacist_name = user.get("pharmacist_name", "")
-                    update_last_access(user["username"])
-                    st.success(f"👋 أهلاً بك يا {user['username']}. تم تسجيل الدخول بنجاح!")
+                    # قراءة القيم باستخدام الفهارس الرقمية الصحيحة لـ Tuple الراجع من الدالة
+                    st.session_state.username = user[0]       # العمود الأول username
+                    st.session_state.user_role = user[2]      # العمود الثالث role
+                    
+                    # التحقق من وجود الاسم الكامل للصيدلي في العمود الرابع لتجنب الـ IndexError
+                    st.session_state.pharmacist_name = user[3] if len(user) > 3 else ""
+                    
+                    update_last_access(user[0])
+                    st.success(f"👋 أهلاً بك. تم تسجيل الدخول بنجاح!")
                     st.rerun()
+                    
                 else:
                     st.error("❌ اسم المستخدم أو كلمة المرور غير صحيحة.")
 else:
