@@ -19,7 +19,7 @@ st.markdown(
         display: none !important;
     }
     </style>
-    """,
+    </"" ",
     unsafe_allow_html=True
 )
 
@@ -34,249 +34,144 @@ st.markdown("""
         padding: 2rem;
         color: white;
         margin-bottom: 1rem;
-        text-align: center;
+        text-align: right;
     }
-    .metric-box {
-        background: white;
-        border-radius: 18px;
-        padding: 1rem;
-        border: 1px solid #e6eef0;
-        text-align: center;
-        margin: 0.5rem;
-    }
-    .stButton button { width: 100%; border-radius: 10px; }
-    .pill {
-        display: inline-block;
-        padding: 0.28rem 0.75rem;
-        border-radius: 999px;
-        font-size: 0.78rem;
-        font-weight: 700;
-    }
-    .pill-green { background: #dff7e8; color: #0f7a3a; }
-    .pill-amber { background: #fff0c2; color: #8a5b00; }
-    .pill-red { background: #ffe0df; color: #a32929; }
-    .pill-blue { background: #dff1ff; color: #0f5488; }
-    .pill-slate { background: #eef3f5; color: #445b66; }
-    .pill-cancel { background: #ffd8d8; color: #8f1f1f; }
-    .pill-payment { background: #fff0c2; color: #8a5b00; }
-    .pill-completed { background: #28a745; color: white; }
-    .stButton button { width: 100%; border-radius: 10px; }
-    .note-card {
-        background: linear-gradient(135deg, #f4fbfc 0%, #ffffff 100%);
-        border: 1px solid #d7ebef;
-        border-radius: 16px;
-        padding: 1rem;
-        margin-bottom: 1rem;
-    }
+    .hero h1 { font-weight: 800; margin: 0 0 0.5rem 0; font-size: 2.2rem; color: white; }
+    .hero p { margin: 0; font-size: 1.1rem; opacity: 0.9; }
+    
     .section-title {
-        font-size: 1.15rem;
-        font-weight: 800;
+        font-size: 1.4rem;
+        font-weight: 700;
         color: #16425b;
+        margin: 1.5rem 0 1rem 0;
         border-right: 5px solid #1f7a8c;
-        padding-right: 0.65rem;
-        margin: 1rem 0 0.8rem;
+        padding-right: 10px;
+        text-align: right;
     }
-    .session-card {
-        background: #f8f9fa;
+    
+    .note-card {
+        background-color: #f8f9fa;
+        border-right: 4px solid #1f7a8c;
+        padding: 1rem;
         border-radius: 12px;
-        padding: 0.8rem;
-        margin: 0.3rem 0;
-        border-right: 3px solid #1f7a8c;
+        margin-bottom: 1rem;
+        box-shadow: 0 2px 4px rgba(0,0,0,0.02);
+        text-align: right;
+    }
+    
+    div[data-testid="stMetric"] {
+        background: #ffffff;
+        border: 1px solid #e2e8f0;
+        border-radius: 16px;
+        padding: 10px 15px;
+        box-shadow: 0 4px 6px -1px rgba(0,0,0,0.02);
+        text-align: center;
+    }
+    div[data-testid="stMetricLabel"] {
+        font-size: 0.9rem !important;
+        color: #64748b !important;
+        font-weight: 500;
+    }
+    div[data-testid="stMetricValue"] {
+        font-size: 1.6rem !important;
+        color: #0f4c5c !important;
+        font-weight: 700;
     }
 </style>
 """, unsafe_allow_html=True)
 
-# Session State
-if 'logged_in' not in st.session_state:
+# إدارة الجلسة (Session State)
+if "logged_in" not in st.session_state:
     st.session_state.logged_in = False
-if 'username' not in st.session_state:
-    st.session_state.username = ""
-if 'user_role' not in st.session_state:
-    st.session_state.user_role = ""
-if 'pharmacist_name' not in st.session_state:
-    st.session_state.pharmacist_name = ""
-if 'page' not in st.session_state:
-    st.session_state.page = "dashboard"
+if "username" not in st.session_state:
+    st.session_state.username = None
+if "user_role" not in st.session_state:
+    st.session_state.user_role = None
+if "pharmacist_name" not in st.session_state:
+    st.session_state.pharmacist_name = None
 
-# Sidebar Login
-with st.sidebar:
-    st.title("🌟 نظام بلسم العلا")
-    st.caption("مطابقة طلبات سلة والفواتير")
-    st.caption("Balsam Alula Pharmacy")
-    st.markdown("---")
-
-    if not st.session_state.logged_in:
-        username = st.text_input("👤 اسم المستخدم")
-        password = st.text_input("🔒 كلمة المرور", type="password")
-        if st.button("🚪 دخول", use_container_width=True):
-            user = fetch_user(username, password)
-            if user:
-                st.session_state.logged_in = True
-                st.session_state.username = user[0]
-                st.session_state.user_role = user[1]
-                st.session_state.pharmacist_name = user[2] or ""
-                st.rerun()
-            else:
-                st.error("❌ بيانات الدخول غير صحيحة.")
-    else:
-        st.success(f"مرحباً {st.session_state.username}")
-        
-        # طلب اسم الصيدلي للصيادلة
-        if st.session_state.user_role == "pharmacy" and not st.session_state.pharmacist_name:
-            name = st.text_input("👤 اسم الصيدلي")
-            if st.button("💾 حفظ"):
-                if name.strip():
-                    st.session_state.pharmacist_name = name.strip()
-                    update_last_access(st.session_state.username, st.session_state.pharmacist_name)
-                    st.success("✅ تم حفظ الاسم")
-                    st.rerun()
-        if st.session_state.user_role == "pharmacy":
-            from utils.database import update_last_access
-            ip = update_last_access(st.session_state.username, st.session_state.pharmacist_name)
-            st.success(f"✅ تم تسجيل الدخول من IP: {ip}")
-        
-        # قائمة الأدوات حسب الصلاحيات
-        if st.session_state.user_role in ["admin", "manager"]:
-            st.markdown("---")
-            st.markdown("### 📂 الأدوات")
-            
-            permissions = get_user_permissions(st.session_state.username)
-            
-            if permissions and permissions.get("can_view_dashboard"):
-                if st.button("📊 لوحة التحكم الرئيسية", use_container_width=True):
-                    st.session_state.page = "dashboard"
-                    st.rerun()
-            
-            if permissions and permissions.get("can_view_balances"):
-                if st.button("🔄 تحديث الأرصدة", use_container_width=True):
-                    st.session_state.page = "balances"
-                    st.rerun()
-            
-            if permissions and permissions.get("can_view_monitoring"):
-                if st.button("👥 مراقبة التعديلات", use_container_width=True):
-                    st.session_state.page = "monitoring"
-                    st.rerun()
-            
-            if permissions and permissions.get("can_manage_users"):
-                if st.button("👥 إدارة المستخدمين", use_container_width=True):
-                    st.session_state.page = "users"
-                    st.rerun()
-
-            st.markdown("### 🛠️ لوحة التحكم العامة")
-    
-                # تحويل التنقل إلى أزرار راديو أو قائمة خيارات بالقائمة الجانبية
-                app_mode = st.radio(
-                    "اختر الشاشة الحالية:",
-                    ["📊 لوحة مطابقات الفروع (المطابقة المالية)", "🎁 إدارة العروض الخاصة (منصة سلة)"]
-                )
-
-            # التوجيه الشرطي للواجهات بناءً على اختيار القائمة الجانبية
-            if app_mode == "📊 لوحة مطابقات الفروع (المطابقة المالية)":
-                # استدعاء الشاشة الأصلية للتبويبات العشرة دون أي تغيير أو تداخل
-                if st.session_state.role == "manager":
-                    admin_dashboard.show()
-                else:
-                    pharmacy_dashboard.show()
-
-            elif app_mode == "🎁 إدارة العروض الخاصة (منصة سلة)":
-                # فتح واجهة العروض الخاصة بشكل كامل ومستقل على مساحة الشاشة بالكامل
-                if st.session_state.role == "manager":
-                    # سنقوم بإنشاء دالة العروض المخصصة للإدارة
-                    admin_dashboard.show_special_offers_page()
-                else:
-                    st.error("⚠️ هذه الشاشة مخصصة فقط لصلاحيات إدارة النظام.")
-        
-            # ========== القسم الجديد - يظهر لـ admin و manager فقط ==========
-            st.markdown("---")
-            st.markdown("### 📦 تقارير إضافية")
-            if st.button("📦 تفصيلي المنتجات من سلة", use_container_width=True):
-                st.session_state.page = "product_details"
-                st.rerun()
-
-            # 💡 إضافة زر تحليل المبيعات
-            if st.button("📊 تحليل مبيعات الشهور", use_container_width=True):
-                st.session_state.page = "sales_analysis"
-                st.rerun()
-                
-        st.markdown("---")
-        if st.button("🚪 تسجيل خروج", use_container_width=True):
-            for key in ["logged_in", "username", "user_role", "pharmacist_name", "page"]:
-                st.session_state[key] = False if key == "logged_in" else "dashboard"
-            st.rerun()
-
-# Main Content
+# شاشة تسجيل الدخول
 if not st.session_state.logged_in:
-    st.markdown("""
-    <div class="hero">
-        <h1>نظام بلسم العلا لمراقبة إدخالات الفواتير</h1>
-        <p>نظام متكامل لمطابقة طلبات سلة والفواتير</p>
-    </div>
-    """, unsafe_allow_html=True)
-    
-    col1, col2, col3 = st.columns(3)
-    with col1:
-        st.markdown("""
-        <div class="metric-box">
-            <div style="font-size:1.5rem;font-weight:800;">17</div>
-            <div>🏥 فرع</div>
-        </div>
-        """, unsafe_allow_html=True)
+    col1, col2, col3 = st.columns([1, 2, 1])
     with col2:
-        st.markdown("""
-        <div class="metric-box">
-            <div style="font-size:1.5rem;font-weight:800;">1000+</div>
-            <div>📦 طلب شهرياً</div>
-        </div>
-        """, unsafe_allow_html=True)
-    with col3:
-        st.markdown("""
-        <div class="metric-box">
-            <div style="font-size:1.5rem;font-weight:800;">99%</div>
-            <div>⚡ دقة المطابقة</div>
-        </div>
-        """, unsafe_allow_html=True)
-        
-elif st.session_state.user_role == "pharmacy":
-    if not st.session_state.pharmacist_name:
-        st.info("👈 الرجاء إدخال اسم الصيدلي من القائمة الجانبية")
-    else:
-        from pages import pharmacy_dashboard
-        pharmacy_dashboard.show()
-else:  # admin or manager
-    page = st.session_state.get("page", "dashboard")
+        st.markdown("<h2 style='text-align: center; color: #0f4c5c; margin-top: 2rem;'>🔐 تسجيل الدخول للنظام</h2>", unsafe_allow_html=True)
+        with st.form("login_form"):
+            username_input = st.text_input("👤 اسم المستخدم", placeholder="أدخل اسم المستخدم...")
+            password_input = st.text_input("🔑 كلمة المرور", type="password", placeholder="أدخل كلمة المرور...")
+            submit_login = st.form_submit_button("ورود إلى لوحة التحكم", use_container_width=True)
+            
+            if submit_login:
+                user = fetch_user(username_input, password_input)
+                if user:
+                    st.session_state.logged_in = True
+                    st.session_state.username = user["username"]
+                    st.session_state.user_role = user["role"]
+                    st.session_state.pharmacist_name = user.get("pharmacist_name", "")
+                    update_last_access(user["username"])
+                    st.success(f"👋 أهلاً بك يا {user['username']}. تم تسجيل الدخول بنجاح!")
+                    st.rerun()
+                else:
+                    st.error("❌ اسم المستخدم أو كلمة المرور غير صحيحة.")
+else:
+    # الحصول على الصلاحيات الحالية للمستخدم النشط
     permissions = get_user_permissions(st.session_state.username)
     
-    if page == "users" and permissions and permissions.get("can_manage_users"):
-        from pages import users_management
-        users_management.show()
-    elif page == "balances" and permissions and permissions.get("can_view_balances"):
-        from pages import balances_updater
-        balances_updater.show()
-    elif page == "monitoring" and permissions and permissions.get("can_view_monitoring"):
-        from pages import monitoring
-        monitoring.show()
-    # ========== صفحة تفصيلي المنتجات - تظهر لـ admin و manager فقط ==========
-    elif page == "product_details" and st.session_state.user_role in ["admin", "manager"]:
-        from pages import product_details
-        product_details.show()
+    # 💡 [حقن القائمة الجانبية الهيكلية]: بناء أزرار التنقل الراديوية بدون مشاكل المسافات البادئة
+    with st.sidebar:
+        st.markdown(f"### 🏥 مرحباً {st.session_state.username}")
+        if st.session_state.pharmacist_name:
+            st.markdown(f"👤 صيدلي: {st.session_state.pharmacist_name}")
+            
+        st.markdown("---")
+        st.markdown("### 🛠️ التنقل بين الشاشات")
+        
+        # مصفوفة الخيارات الأساسية للتنقل
+        nav_options = ["📊 لوحة مطابقات التسويات المالية"]
+        
+        # فتح صلاحية العروض الخاصة لـ admin و manager فقط
+        if st.session_state.user_role in ["admin", "manager"]:
+            nav_options.append("🎁 مركز إدارة العروض الخاصة (سلة)")
+            
+        if permissions and permissions.get("can_manage_users"):
+            nav_options.append("👥 إدارة صلاحيات المستخدمين")
+        if permissions and permissions.get("can_view_balances"):
+            nav_options.append("💰 تحديث ورفع الأرصدة")
+        if permissions and permissions.get("can_view_monitoring"):
+            nav_options.append("🖥️ شاشة المراقبة والنظام")
+            
+        app_mode = st.radio("اختر الوجهة الحالية:", nav_options, key="main_navigation_pane")
+        st.markdown("---")
+        
+        if st.button("🚪 تسجيل الخروج", use_container_width=True, key="logout_sidebar_btn"):
+            st.session_state.logged_in = False
+            st.session_state.username = None
+            st.session_state.user_role = None
+            st.session_state.pharmacist_name = None
+            st.rerun()
 
-    # 💡 توجيه صفحة تحليل مبيعات الشهور
-    elif page == "sales_analysis" and st.session_state.user_role in ["admin", "manager"]:
-        from pages import sales_analysis
-        sales_analysis.show()
-    else:
-        if permissions and permissions.get("can_view_dashboard"):
+    # =========================================================================
+    # 🧠 توجيه الشاشات والصفحات بناءً على الخيار المحدد من السايدبار
+    # =========================================================================
+    if app_mode == "📊 لوحة مطابقات التسويات المالية":
+        if st.session_state.user_role in ["admin", "manager"]:
             from pages import admin_dashboard
             admin_dashboard.show()
         else:
-            st.error("⚠️ ليس لديك صلاحية الوصول إلى لوحة التحكم")
-
-st.markdown("---")
-st.markdown(
-    """
-    <div style="text-align:center;color:#607783;padding:0.6rem 0 0.8rem;">
-        نظام بلسم العلا لمطابقة الطلبات والفواتير © 2026
-    </div>
-    """,
-    unsafe_allow_html=True,
-)
+            from pages import pharmacy_dashboard
+            pharmacy_dashboard.show()
+            
+    elif app_mode == "🎁 مركز إدارة العروض الخاصة (سلة)":
+        from pages import admin_dashboard
+        admin_dashboard.show_special_offers_page()
+        
+    elif app_mode == "👥 إدارة صلاحيات المستخدمين":
+        from pages import users_management
+        users_management.show()
+        
+    elif app_mode == "💰 تحديث ورفع الأرصدة":
+        from pages import balances_updater
+        balances_updater.show()
+        
+    elif app_mode == "🖥️ شاشة المراقبة والنظام":
+        from pages import monitoring
+        monitoring.show()
