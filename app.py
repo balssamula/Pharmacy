@@ -11,6 +11,7 @@ st.set_page_config(
     initial_sidebar_state="expanded",
 )
 
+# 💡 [تم الإصلاح]: إغلاق وسم النص البرمجي الـ CSS المكسور لمنع الـ SyntaxError
 st.markdown(
     """
     <style>
@@ -19,15 +20,16 @@ st.markdown(
         display: none !important;
     }
     </style>
-    </"" ",
+    """,
     unsafe_allow_html=True
 )
 
-# CSS المشترك
+# حقن الـ CSS المشترك والمنسق بالكامل
 st.markdown("""
 <style>
     @import url('https://fonts.googleapis.com/css2?family=Tajawal:wght@300;400;500;700;800&display=swap');
     * { font-family: 'Tajawal', sans-serif; }
+    
     .hero {
         background: linear-gradient(135deg, #0f4c5c 0%, #1f7a8c 50%, #16425b 100%);
         border-radius: 24px;
@@ -116,7 +118,6 @@ else:
     # الحصول على الصلاحيات الحالية للمستخدم النشط
     permissions = get_user_permissions(st.session_state.username)
     
-    # 💡 [حقن القائمة الجانبية الهيكلية]: بناء أزرار التنقل الراديوية بدون مشاكل المسافات البادئة
     with st.sidebar:
         st.markdown(f"### 🏥 مرحباً {st.session_state.username}")
         if st.session_state.pharmacist_name:
@@ -125,10 +126,10 @@ else:
         st.markdown("---")
         st.markdown("### 🛠️ التنقل بين الشاشات")
         
-        # مصفوفة الخيارات الأساسية للتنقل
+        # مصفوفة خيارات التنقل القياسية
         nav_options = ["📊 لوحة مطابقات التسويات المالية"]
         
-        # فتح صلاحية العروض الخاصة لـ admin و manager فقط
+        # حقن خيار العروض الخاصة المنفصل والمطلوب للإداره فقط حراً بالسايدبار
         if st.session_state.user_role in ["admin", "manager"]:
             nav_options.append("🎁 مركز إدارة العروض الخاصة (سلة)")
             
@@ -150,7 +151,7 @@ else:
             st.rerun()
 
     # =========================================================================
-    # 🧠 توجيه الشاشات والصفحات بناءً على الخيار المحدد من السايدبار
+    # 🧠 توجيه ومزامنة الصفحات بناءً على الخيار المحدد من السايدبار
     # =========================================================================
     if app_mode == "📊 لوحة مطابقات التسويات المالية":
         if st.session_state.user_role in ["admin", "manager"]:
