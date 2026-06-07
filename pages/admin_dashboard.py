@@ -924,7 +924,6 @@ def show_special_offers_page():
     # جلب توكن الأمان النشط لمنصة سلة من الجلسة
     access_token = st.session_state.get('salla_access_token', 'SAMPLE_TOKEN')
     
-    # 📥 [الميزة المطلوبة]: نموذج رفع ملف Excel بمجموعة عروض دفعة واحدة
     st.markdown("### 📊 رفع وتحديث العروض دفعة واحدة عبر ملف Excel")
     with st.container():
         st.info("📋 يجب أن يحتوي شيت الإكسيل على الأعمدة التالية بشكل قياسي: (name, message, offer_type, min_purchase_amount)")
@@ -961,7 +960,6 @@ def show_special_offers_page():
             </div>
             """, unsafe_allow_html=True)
             
-            # أزرار التعديل والتعطيل المباشرة
             c1, c2 = st.columns([1, 5])
             with c1:
                 if current_status == "active":
