@@ -76,32 +76,10 @@ def upgrade_database():
     finally:
         conn.close()
 
-def fix_users_table_columns():
-    """حقن صامت وآمن لإضافة الأعمدة المفقودة في جدول المستخدمين منعاً للـ OperationalError"""
-    import sqlite3
-    from utils.database import DB_PATH
-    
-    conn = sqlite3.connect(DB_PATH)
-    cur = conn.cursor()
-    try:
-        # إضافة عمود last_ip إذا لم يكن موجوداً
-        cur.execute("ALTER TABLE users ADD COLUMN last_ip TEXT DEFAULT ''")
-    except sqlite3.OperationalError:
-        pass  # العمود موجود بالفعل، تخطى الخطأ الآمن
-        
-    try:
-        # إضافة عمود pharmacist_name إذا لم يكن موجوداً
-        cur.execute("ALTER TABLE users ADD COLUMN pharmacist_name TEXT DEFAULT ''")
-    except sqlite3.OperationalError:
-        pass  # العمود موجود بالفعل
-        
-    conn.commit()
-    conn.close()
-
 # استدعاء الدالة فوراً عند إقلاع التطبيق لترميم قاعدة البيانات
 fix_users_table_columns()
 
-def fix_users_table_columns():
+def init_database():
     os.makedirs(DB_DIR, exist_ok=True)
     conn = sqlite3.connect(DB_PATH, timeout=60.0)
     cur = conn.cursor()
