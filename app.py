@@ -142,7 +142,9 @@ else:
         # حقن خيار العروض الخاصة المنفصل والمطلوب للإداره فقط حراً بالسايدبار
         if st.session_state.user_role in ["admin", "manager"]:
             nav_options.append("🎁 مركز إدارة العروض الخاصة (سلة)")
-            
+            nav_options.append("📦 تفصيلي المنتجات")       # 💡 إضافة الخيار ليظهر في السايدبار
+            nav_options.append("📈 تحليل مبيعات الشهور") # 💡 إضافة الخيار ليظهر في السايدبار
+
         if permissions and permissions.get("can_manage_users"):
             nav_options.append("👥 إدارة صلاحيات المستخدمين")
         if permissions and permissions.get("can_view_balances"):
