@@ -155,13 +155,35 @@ else:
             st.rerun()
 
     # =========================================================================
-    # 3️⃣ توجيه ومزامنة الصفحات الفعلي بناءً على اختيار السايدبار النظيف
+    # 🧠 [وضع الإشراف]: توجيه ومزامنة الصفحات بناءً على اختيار السايدبار
     # =========================================================================
     if app_mode == "📊 لوحة مطابقات التسويات المالية":
         if u_role in ["admin", "manager"] or u_name in ["admin", "manager"]:
-            from pages import admin_dashboard
-            admin_dashboard.show()
+            # جلب قائمة الصيدليات المتاحة للإشراف عليها
+            from utils.database import get_available_branches
+            branches = get_available_branches()
+            
+            # إضافة خيار عرض لوحة الإدارة العامة أولاً
+            supervision_options = ["🏢 لوحة الإدارة العامة الشاملة"] + list(branches)
+            
+            selected_view = st.sidebar.selectbox(
+                "👁️ وضع الإشراف (عرض كـ):",
+                supervision_options,
+                key="supervision_branch_select"
+            )
+            
+            if selected_view == "🏢 لوحة إدارة العامة الشاملة":
+                from pages import admin_dashboard
+                admin_dashboard.show()
+            else:
+                # محاكاة الدخول باسم الصيدلية المختارة وعرض شاشتها فوراً
+                st.session_state.supervised_pharmacy = selected_view
+                from pages import pharmacy_dashboard
+                st.markdown(f"### 🌐 أنت الآن تتصفح في [وضع الإشراف] على: {selected_view}")
+                pharmacy_dashboard.show()
         else:
+            # الصيدلي العادي يرى فرعه فقط دون خيارات إشراف
+            st.session_state.supervised_pharmacy = None
             from pages import pharmacy_dashboard
             pharmacy_dashboard.show()
             
