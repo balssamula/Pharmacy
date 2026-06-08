@@ -322,9 +322,24 @@ def show():
         if st.button("🔄 تحديث الصفحة", use_container_width=True):
             st.rerun()
     with col2:
-        if st.button("📥 حظر وتصدير التقارير إلى Excel", use_container_width=True):
+        if st.button("📥 تصدير التقارير إلى Excel", use_container_width=True):
             st.session_state.show_export_pharmacy = True
 
+    # واجهة العرض السحابي المباشر داخل فرع الصيدلية
+    st.markdown('### 🌐 مراقبة مبيعات الفرع الحية (السحاب المشترك)')
+    with st.spinner("🔄 جاري مزامنة فواتير الفرع من السحاب..."):
+        from utils.api_connectors import fetch_abc_invoices_live
+        df_abc_cloud = fetch_abc_invoices_live()
+        
+    if not df_abc_cloud.empty:
+        # تصفية الفواتير لتظهر فقط الفواتير التابعة لهذا الفرع تبعا للاسم المسجل به
+        df_branch_cloud = df_abc_cloud[df_abc_cloud['رقم الصيدلية'].astype(str).str.contains(str(pharmacy_name), na=False)]
+        if not df_branch_cloud.empty:
+            st.success(f"✅ تم مزامنة {len(df_branch_cloud):,} فاتورة خاصة بفرعكم اليوم حياً من النظام المركزي.")
+            st.dataframe(df_branch_cloud.head(500), use_container_width=True)
+        else:
+            st.info("📭 الاتصال مستقر بالسحاب، ولكن لا توجد فواتير مرفوعة تخص فرعكم الحالي اليوم بعد.")
+            
     df = fetch_active_items(pharmacy_name, include_hidden=False)
     
     # 💡 [موقع حرج]: جلب الفواتير والطلبات القديمة وتجهيز فلاتر التبويبات في أعلى الدالة لمنع الـ UnboundLocalError
