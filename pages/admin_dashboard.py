@@ -896,15 +896,19 @@ def show():
         else:
             st.success("🎉 لا توجد عناصر قديمة (طلبات أو فواتير)")
     
-    st.markdown('<div class="section-title">👥 آخر دخول للصيدليات</div>', unsafe_allow_html=True)
+    st.markdown('<div class="section-title">👥 آخر دخول للصيدليات والفروع</div>', unsafe_allow_html=True)
     last_logins = get_all_last_logins()
+    
     if not last_logins.empty:
+        # 💡 [تصفية أمنية]: استبعاد حسابات الإدارة وعرض الفروع فقط في جدول المراقبة
+        pharmacy_logins = last_logins[~last_logins['username'].isin(['manager'])]
+        
         cols = st.columns(4)
-        for idx, (_, row) in enumerate(last_logins.head(8).iterrows()):
+        for idx, (_, row) in enumerate(pharmacy_logins.head(8).iterrows()):
             with cols[idx % 4]:
                 st.markdown(f"""
                 <div class="note-card">
-                    <strong>🏥 {row['pharmacy_name'][-10:]}</strong><br>
+                    <strong>🏥 {row['pharmacy_name']}</strong><br>
                     <span>👤 {row['pharmacist_name'] or 'غير مسجل'}</span><br>
                     <span>📅 {row['last_login'][:16] if row['last_login'] else 'لم يدخل'}</span><br>
                     <span>🌐 IP: {row['last_ip'] or 'غير معروف'}</span>
