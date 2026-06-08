@@ -389,22 +389,27 @@ def show():
             st.markdown("### 📋 آخر محاولات الدخول")
             st.dataframe(login_history, use_container_width=True)
     
-    st.markdown('### 📊 فحص المطابقات الحية')
+st.markdown('### 📊 فحص المطابقات الحية (Supabase Cloud)')
 
     # 💡 جلب البيانات تلقائياً من السحاب بدلاً من الرفع اليدوي القديم
     with st.spinner("🔄 جاري سحب وتحديث الفواتير حياً من قاعدة البيانات السحابية..."):
         df_abc_all = fetch_abc_invoices_live()
 
     if not df_abc_all.empty:
-        # 🧠 [فلترة الفرع]: جلب اسم الفرع الحالي (سواء الصيدلي الحالي أو عبر وضع الإشراف للإدارة)
+        # 🧠 جلب اسم الفرع الحالي (سواء الصيدلي الحالي أو عبر وضع الإشراف للإدارة)
         current_branch = st.session_state.get('supervised_pharmacy') or st.session_state.get('pharmacy_name')
     
-        # تصفية الفواتير لتظهر فقط الفواتير الخاصة بالفرع النشط حالياً
-        # تأكد أن مسمى العمود هنا يطابق ما يعود من دالة الترجمة (مثلاً: 'رقم الصيدلية')
-        df_abc = df_abc_all[df_abc_all['رقم الصيدلية'] == current_branch]
+        # 🏢 [إصلاح الإدارة العامة]: إذا كان العرض للإدارة الشاملة، نعرض كافة الفواتير الـ 103 ألف بدون فلترة فروع
+        if current_branch in [None, "🏢 لوحة الإدارة العامة الشاملة", "🏢 لوحة إدارة العامة الشاملة"]:
+            df_abc = df_abc_all
+            st.success(f"👑 [وضع المسؤول العام]: تم جلب {len(df_abc):,} فاتورة حية من السحاب لكافة الفروع بنجاح!")
+        else:
+            # فلترة مرنة تدعم صيغ أسماء الفروع للفرع المشرف عليه حالياً
+            df_abc = df_abc_all[df_abc_all['رقم الصيدلية'].astype(str).str.contains(str(current_branch), na=False)]
+            st.success(f"🏥 فرع [{current_branch}]: تم العثور على {len(df_abc):,} فاتورة حية في السحاب.")
     
-        # يكمل كود محرك الفرز القياسي والمطابقة مع طلبات سلة أدناه تلقائياً...
-        st.dataframe(df_abc) # تجربة استعراض الجدول للتأكد
+        # استعراض أول 1000 سطر لحماية الذاكرة وسرعة المتصفح
+        st.dataframe(df_abc.head(1000), use_container_width=True)
     else:
         st.info("📭 لا توجد فواتير مسحوبة من السحاب لهذا النطاق الزمني حتى الآن.")
     
