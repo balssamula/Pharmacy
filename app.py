@@ -11,7 +11,7 @@ st.set_page_config(
     initial_sidebar_state="expanded",
 )
 
-# إخفاء روابط التنقل التلقائي الافتراضية لـ Streamlit
+# إخفاء روابط التنقل الافتراضية لـ Streamlit
 st.markdown(
     """
     <style>
@@ -23,7 +23,7 @@ st.markdown(
     unsafe_allow_html=True
 )
 
-# حقن التنسيقات البصرية والخطوط والـ CSS المشترك
+# حقن التنسيقات البصرية والـ CSS المشترك
 st.markdown("""
 <style>
     @import url('https://fonts.googleapis.com/css2?family=Tajawal:wght@300;400;500;700;800&display=swap');
@@ -40,16 +40,6 @@ st.markdown("""
     .hero h1 { font-weight: 800; margin: 0 0 0.5rem 0; font-size: 2.2rem; color: white; }
     .hero p { margin: 0; font-size: 1.1rem; opacity: 0.9; }
     
-    .section-title {
-        font-size: 1.4rem;
-        font-weight: 700;
-        color: #16425b;
-        margin: 1.5rem 0 1rem 0;
-        border-right: 5px solid #1f7a8c;
-        padding-right: 10px;
-        text-align: right;
-    }
-    
     div[data-testid="stMetric"] {
         background: #ffffff;
         border: 1px solid #e2e8f0;
@@ -58,8 +48,6 @@ st.markdown("""
         box-shadow: 0 4px 6px -1px rgba(0,0,0,0.02);
         text-align: center;
     }
-    div[data-testid="stMetricLabel"] { font-size: 0.9rem !important; color: #64748b !important; font-weight: 500; }
-    div[data-testid="stMetricValue"] { font-size: 1.6rem !important; color: #0f4c5c !important; font-weight: 700; }
 </style>
 """, unsafe_allow_html=True)
 
@@ -73,7 +61,13 @@ if "user_role" not in st.session_state:
 if "pharmacist_name" not in st.session_state:
     st.session_state.pharmacist_name = None
 
-# 1️⃣ شاشة تسجيل الدخول القياسية للسيستم
+# دالة ذكية وصارمة لتحويل مدخلات قاعدة البيانات الملعوبة إلى قيم Boolean حقيقية
+def parse_bool(val):
+    if val in [True, 1, "1", "True", "true", "T", "t"]:
+        return True
+    return False
+
+# 1️⃣ شاشة تسجيل الدخول
 if not st.session_state.logged_in:
     col1, col2, col3 = st.columns([1, 2, 1])
     with col2:
@@ -97,39 +91,42 @@ if not st.session_state.logged_in:
                 else:
                     st.error("❌ اسم المستخدم أو كلمة المرور غير صحيحة.")
 else:
-    # جلب الصلاحيات الفعلية من قاعدة البيانات للمستخدم الحالي
+    # 💡 تنظيف وتوحيد نصوص الأدوار وأسماء المستخدمين لضمان كسر حساسية الحروف
+    u_role = str(st.session_state.user_role).strip().lower()
+    u_name = str(st.session_state.username).strip().lower()
+
+    # جلب الصلاحيات الفعلية من قاعدة البيانات وتحويلها بشكل صارم ومضمون
     permissions = get_user_permissions(st.session_state.username)
     
-    # تحويل الصلاحيات إلى قيم منطقية صارمة (Boolean Check) لمنع التداخل والظهور الخاطئ
-    can_view_dash = permissions.get("can_view_dashboard") if permissions else False
-    can_manage_users = permissions.get("can_manage_users") if permissions else False
-    can_view_balances = permissions.get("can_view_balances") if permissions else False
-    can_view_monitoring = permissions.get("can_view_monitoring") if permissions else False
+    can_view_dash = parse_bool(permissions.get("can_view_dashboard")) if permissions else False
+    can_manage_users = parse_bool(permissions.get("can_manage_users")) if permissions else False
+    can_view_balances = parse_bool(permissions.get("can_view_balances")) if permissions else False
+    can_view_monitoring = parse_bool(permissions.get("can_view_monitoring")) if permissions else False
 
-    # في حال كان الحساب هو المسؤول الأعلى (admin) نمنحه كامل الصلاحيات تلقائياً كـ Override أمني
-    if st.session_state.user_role == "admin":
+    # حماية وأوفررايد أمني مطلق لحساب الـ admin الرئيسي ليملك كافة الصلاحيات دائماً
+    if u_role == "admin" or u_name == "admin":
         can_view_dash = True
         can_manage_users = True
         can_view_balances = True
         can_view_monitoring = True
 
-    # 2️⃣ بناء القائمة الجانبية (Sidebar) الديناميكية وحقن الأزرار كاملة
+    # 2️⃣ بناء القائمة الجانبية (Sidebar) الديناميكية المحصنة
     with st.sidebar:
         st.markdown(f"### 🏥 مرحباً بك: {st.session_state.username}")
-        st.markdown(f"⚙️ الصلاحية المباشرة: **{st.session_state.user_role.upper()}**")
+        st.markdown(f"⚙️ الصلاحية النشطة: **{u_role.upper()}**")
         if st.session_state.pharmacist_name:
             st.markdown(f"👤 الاسم: {st.session_state.pharmacist_name}")
             
         st.markdown("---")
         st.markdown("### 🛠️ التنقل بين الشاشات والصفحات")
         
-        # مصفوفة الخيارات الظاهرة بالسايدبار بناءً على الصلاحيات المقيدة والتحقق الصارم
         nav_options = []
         
         if can_view_dash:
             nav_options.append("📊 لوحة مطابقات التسويات المالية")
             
-        if st.session_state.user_role in ["admin", "manager"]:
+        # 💡 [حماية مزدوجة]: التحقق من الدور أو اسم المستخدم لضمان ظهور الأزرار لـ admin و manager فوراً
+        if u_role in ["admin", "manager"] or u_name in ["admin", "manager"]:
             nav_options.append("🎁 مركز إدارة العروض الخاصة (سلة)")
             nav_options.append("📦 تفصيلي وجرد المنتجات")
             nav_options.append("📈 تحليل مبيعات الشهور")
@@ -143,7 +140,10 @@ else:
         if can_view_monitoring:
             nav_options.append("🖥️ شاشة المراقبة والنظام")
             
-        # رسم قائمة الأزرار في السايدبار
+        # منع انهيار الواجهة في حال كانت المصفوفة فارغة لأي سبب
+        if not nav_options:
+            nav_options = ["📊 لوحة مطابقات التسويات المالية"]
+
         app_mode = st.radio("اختر الوجهة الحالية:", nav_options, key="main_navigation_pane")
         st.markdown("---")
         
@@ -155,10 +155,10 @@ else:
             st.rerun()
 
     # =========================================================================
-    # 3️⃣ [تم التوجيه والإصلاح الحاسم]: ربط نصوص السايدبار بالصفحات المقابلة لها
+    # 3️⃣ توجيه ومزامنة الصفحات الفعلي بناءً على اختيار السايدبار النظيف
     # =========================================================================
     if app_mode == "📊 لوحة مطابقات التسويات المالية":
-        if st.session_state.user_role in ["admin", "manager"]:
+        if u_role in ["admin", "manager"] or u_name in ["admin", "manager"]:
             from pages import admin_dashboard
             admin_dashboard.show()
         else:
