@@ -26,6 +26,7 @@ from utils.helpers import (
     get_tab_label, numeric_value
 )
 from utils.excel_processor import process_excel
+from utils.api_connectors import fetch_abc_invoices_live
 
 def export_to_excel(dataframes_dict: dict) -> bytes:
     output = BytesIO()
@@ -388,18 +389,24 @@ def show():
             st.markdown("### 📋 آخر محاولات الدخول")
             st.dataframe(login_history, use_container_width=True)
     
-    st.markdown("---")
+    st.markdown('### 📊 فحص المطابقات الحية')
+
+    # 💡 جلب البيانات تلقائياً من السحاب بدلاً من الرفع اليدوي القديم
+    with st.spinner("🔄 جاري سحب وتحديث الفواتير حياً من قاعدة البيانات السحابية..."):
+        df_abc_all = fetch_abc_invoices_live()
+
+    if not df_abc_all.empty:
+        # 🧠 [فلترة الفرع]: جلب اسم الفرع الحالي (سواء الصيدلي الحالي أو عبر وضع الإشراف للإدارة)
+        current_branch = st.session_state.get('supervised_pharmacy') or st.session_state.get('pharmacy_name')
     
-    with st.expander("📂 رفع ملف الطلبات والفواتير", expanded=True):
-        uploaded_file = st.file_uploader("اختر ملف Excel", type=["xlsx"])
-        if uploaded_file:
-            if st.button("🔄 معالجة الملف", use_container_width=True, type="primary"):
-                with st.spinner("جاري معالجة الملف..."):
-                    results, upload_batch_id = process_excel(uploaded_file, st.session_state.username)
-                if results is not None:
-                    st.success(f"✅ تمت المعالجة بنجاح!")
-                    st.balloons()
-                    st.rerun()
+        # تصفية الفواتير لتظهر فقط الفواتير الخاصة بالفرع النشط حالياً
+        # تأكد أن مسمى العمود هنا يطابق ما يعود من دالة الترجمة (مثلاً: 'رقم الصيدلية')
+        df_abc = df_abc_all[df_abc_all['رقم الصيدلية'] == current_branch]
+    
+        # يكمل كود محرك الفرز القياسي والمطابقة مع طلبات سلة أدناه تلقائياً...
+        st.dataframe(df_abc) # تجربة استعراض الجدول للتأكد
+    else:
+        st.info("📭 لا توجد فواتير مسحوبة من السحاب لهذا النطاق الزمني حتى الآن.")
     
     latest = get_latest_upload_summary()
     if latest:
