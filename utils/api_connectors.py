@@ -5,72 +5,39 @@ import pymysql
 from datetime import datetime, timedelta
 
 def fetch_abc_invoices_live() -> pd.DataFrame:
-    """
-    [البديل الآلي الحقيقي]: الاتصال المباشر بقاعدة بيانات MySQL لنظام ABC 
-    وسحب فواتير اليوم تلقائياً وتحويلها إلى DataFrame جاهز تماماً للمطابقة والفرز.
-    """
-    # 🔑 إعدادات الاتصال الحقيقية والمستخرجة من ملف ABC.set الخاص بصيدليتك
-    host = '10.20.1.15'
-    user = 'olamng'
-    password = 'ola@abc'
-    database = 'abc'
-    port = 3306
-    ssl_ca_path = 'data/ABC1.pem' # مسار ملف الشهادة الأمنية المرفق لحماية الاتصال
+    """قراءة فواتير ABC حياً ومباشرة من قاعدة بيانات Supabase المشتركة"""
+    SUPABASE_URL = "https://dvikehqqkfscoozjlysz.supabase.co/rest/v1/abc_invoices?select=*"
+    SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImR2aWtlaHFxa2ZzY29vempseXN6Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODA5MTQ1MjUsImV4cCI6MjA5NjQ5MDUyNX0.h5Ip3wkp3rgSV6VXCTCCfV_aPba0TRDIBjfBa1q9eK0"
+    
+    headers = {
+        "apikey": SUPABASE_ANON_KEY,
+        "Authorization": f"Bearer {SUPABASE_ANON_KEY}"
+    }
     
     try:
-        print(f"🔄 جاري فتح اتصال آمن مباشر بقاعدة بيانات ABC ({host})...")
-        
-        # إنشاء الاتصال بقاعدة البيانات المحلية 
-        connection = pymysql.connect(
-            host=host,
-            user=user,
-            password=password,
-            database=database,
-            port=port,
-            ssl={'ca': ssl_ca_path} if os.path.exists(ssl_ca_path) else None,
-            timeout=15
-        )
-        
-        # استعلام جلب فواتير اليوم الحالي تلقائياً بناءً على تاريخ السيرفر
-        # ملحوظة هندسية: يتم تعديل اسم الجدول 'sales_invoices' واسم عمود التاريخ 'sales_date' 
-        # بناءً على المخطط الداخلي الفعلي لجداول قاعدة بيانات ABC لديك في حال اختلافها.
-        query = "SELECT * FROM sales_invoices WHERE DATE(sales_date) = CURDATE()"
-        
-        # قراءة البيانات المقروءة من MySQL وتحويلها فوراً لـ DataFrame في الذاكرة
-        df_raw = pd.read_sql(query, connection)
-        connection.close()
-        
-        if df_raw.empty:
-            print("📭 مزامنة ABC: الاتصال ناجح بالسيرفر، ولكن لا توجد فواتير مسجلة اليوم حتى الآن.")
-            return pd.DataFrame()
+        response = requests.get(SUPABASE_URL, headers=headers, timeout=15)
+        if response.status_code == 200:
+            data = response.json()
+            if not data:
+                return pd.DataFrame()
             
-        # 🧠 [هندسة التحويل والترجمة]: خريطة مطابقة الجداول وتوحيد مسميات أعمدة الـ MySQL لتطابق محرك التسويات الحالي
-        # يتم تعديل الجانب الأيسر (الـ Keys) لتطابق أسماء الأعمدة في جداول MySQL الحقيقية لـ ABC صراحةً
-        column_mapping = {
-            'OrderNo': 'رقم الطلب',
-            'InvoiceNo': 'Net Sold Qty', 
-            'ItemNo': 'رقم الصنف',
-            'ItemName': 'اسم الصنف',
-            'NetQty': 'Net Sold Qty',
-            'ReceiptNo': 'رقم الفاتورة',
-            'SalesDate': 'التاريخ',
-            'BranchNo': 'رقم الصيدلية',
-            'Username': 'الصيدلي',
-            'ProfileType': 'نوع البروفايل'
-        }
-        
-        # التحقق من وجود الأعمدة وإعادة تسميتها بشكل متوافق تماماً مع كود المطابقة
-        available_mappings = {k: v for k, v in column_mapping.items() if k in df_raw.columns}
-        if available_mappings:
-            df_renamed = df_raw.rename(columns=available_mappings)
-            print(f"✅ تم سحب وتجهيز {len(df_renamed)} سطر فاتورة حية من قاعدة بيانات ABC بنجاح.")
-            return df_renamed
+            df_cloud = pd.DataFrame(data)
+            
+            # إعادة ترجمة الأعمدة للعربية ليتوافق مع واجهات المحرك الافتراضية للسيستم
+            column_mapping_arabic = {
+                'receipt_no': 'رقم الفاتورة',
+                'item_no': 'رقم الصنف',
+                'product_name': 'اسم الصنف',
+                'net_qty': 'Net Sold Qty',
+                'sales_date': 'التاريخ',
+                'branch_name': 'رقم الصيدلية',
+                'username': 'الصيدلي',
+                'profile_type': 'نوع البروفايل'
+            }
+            return df_cloud.rename(columns=column_mapping_arabic)
         else:
-            print("⚠️ تنبيه: مسميات أعمدة الـ MySQL لم تطابق الخريطة القياسية، تم تمرير الجدول الخام لمحرك الفرز.")
-            return df_raw
-            
-    except Exception as e:
-        print(f"❌ خطأ حرج: تعذر الاتصال المباشر بقاعدة بيانات ABC محلياً. السبب: {e}")
+            return pd.DataFrame()
+    except Exception:
         return pd.DataFrame()
 
 
