@@ -28,11 +28,17 @@ if is_webhook:
 
 # --- 2. سحب مفتاح الوصول الفعلي للمتجر ---
 TOKEN_FILE = "salla_tokens.json"
-ACCESS_TOKEN = ""
+ACCESS_TOKEN = "ory_at_ugEJJSSlUAAlAnZIEQPc_hn5cqsgxpNyG5NA344nNHU.uekLYqGGWEY4ngGNjUp1jJooR5XPA-UD3yyKju36tOo"
+
+# في حال وجود التوكن الجديد في الملف يقرأه، وإلا يعتمد على التوكن الثابت بالأعلى
 if os.path.exists(TOKEN_FILE):
     with open(TOKEN_FILE, "r") as f:
-        data = json.load(f)
-        ACCESS_TOKEN = data.get("access_token", "")
+        try:
+            data = json.load(f)
+            if data.get("access_token"):
+                ACCESS_TOKEN = data.get("access_token")
+        except Exception:
+            pass
 
 SALLA_API_URL = "https://api.salla.dev/admin/v2/specialoffers"
 
