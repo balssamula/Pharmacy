@@ -39,7 +39,7 @@ SALLA_API_URL = "https://api.salla.dev/admin/v2/specialoffers"
 # --- 3. تصميم الواجهة بهوية بصرية احترافية وجمالية ---
 st.set_page_config(page_title="مدير العروض الذكي | بلسم", layout="wide", page_icon="🎁")
 
-# تم إصلاح الخيار هنا إلى unsafe_allow_html=True من أجل عمل الـ CSS بشكل سليم
+# تلوين وتنسيق الخطوط بالهوية البصرية الاحترافية لـ بلسم العلا
 st.markdown("""
     <style>
     @import url('https://fonts.googleapis.com/css2?family=Cairo:wght@300;400;700&display=swap');
@@ -51,8 +51,8 @@ st.markdown("""
     </style>
 """, unsafe_allow_html=True)
 
-# الملاحة عبر القائمة الجانبية (Sidebar)
-st.sidebar.markdown("<h2 style='text-align:center; color:#00b4d8;'>صيدليات بلسم العُلا</h2>", unsafe_allow_whitespace=True)
+# الملاحة عبر القائمة الجانبية (Sidebar) - تم تصحيح الخيار هنا إلى unsafe_allow_html=True
+st.sidebar.markdown("<h2 style='text-align:center; color:#00b4d8;'>صيدليات بلسم العُلا</h2>", unsafe_allow_html=True)
 st.sidebar.divider()
 page = st.sidebar.radio("القائمة الرئيسية للتطبيق:", [
     "🎁 إدارة العروض الجماعية (Excel Upload)", 
