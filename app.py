@@ -1,212 +1,107 @@
 import streamlit as st
-from utils.database import init_database, fetch_user, update_last_access, get_user_permissions
-from utils.helpers import get_branch_number
+import pandas as pd
+import io
+import requests
 
-# تهيئة قاعدة البيانات عند الإقلاع
-init_database()
+# إعدادات الصفحة العامة في Streamlit
+st.set_page_config(page_title="مدير العروض الذكي", layout="wide")
 
-st.set_page_config(
-    page_title="نظام بلسم العلا - مطابقة الطلبات والفواتير",
-    layout="wide",
-    initial_sidebar_state="expanded",
+st.title("📦 لوحة التحكم المتقدمة في العروض الخاصة - سلة")
+st.markdown("قم بإدارة عروض متجرك (تأسيس، تعديل، إيقاف، حذف) عبر ملفات الإكسيل المعتمدة.")
+
+# --- بيانات الربط الافتراضية مع سلة (يتم تحديثها ديناميكياً عند التثبيت) ---
+ACCESS_TOKEN = "ضع_هنا_مفتاح_الوصول_الخاص_بمتجرك"
+SALLA_API_URL = "https://api.salla.dev/admin/v2/specialoffers"
+
+# --- 1. دالة إنشاء نموذج الإكسيل الشامل والمطابق للوحة تحكم سلة ---
+def generate_advanced_template():
+    buffer = io.BytesIO()
+    
+    # بناء البيانات الافتراضية لتشمل كل المدخلات الظاهرة في لوحة تحكم المتجر
+    data = {
+        "Action": ["create"],                  # create, update, active, inactive, delete
+        "Offer_ID": [None],                    # يملأ فقط في التعديل أو الحذف أو تغيير الحالة
+        "Offer_Name": ["عرض صيف 2026 المميز"],  # عنوان العرض
+        "Start_Date": ["2026-06-21"],          # تاريخ بدء العرض
+        "Expiry_Date": ["2026-07-21"],          # تاريخ انتهاء العرض
+        "Applied_Channel": ["browser_and_application"], # منصة العرض
+        "Buy_Type": ["product"],               # منتجات مختارة (product) أو تصنيفات (category)
+        "Buy_Quantity": [2],                   # الكمية المطلوبة من X
+        "Buy_Products_IDs": ["1298176905"],     # معرفات منتجات X (تفصل بفاصلة لو كانت متعددة)
+        "Get_Type": ["product"],               # نوع حافز Y
+        "Get_Quantity": [1],                   # كمية Y التي سيحصل عليها
+        "Discount_Type": ["free-product"],     # خيارات: percentage (خصم بنسبة) أو free-product (منتج مجاني)
+        "Discount_Amount": [0],                # يكتب الرقم (مثلاً 50 لو كانت النسبة 50%، أو 0 للمنتج المجاني)
+        "Get_Products_IDs": ["1444615766"],     # معرفات منتجات Y
+        "Offer_Message": ["اشتري قطعتين واحصل على الثالثة مجاناً"] # نص رسالة العرض
+    }
+    
+    df = pd.DataFrame(data)
+    with pd.ExcelWriter(buffer, engine='openpyxl') as writer:
+        df.to_excel(writer, index=False, sheet_name='Special_Offers_Template')
+    return buffer.getvalue()
+
+# --- واجهة رفع وتحميل الملفات ---
+st.subheader("1. تحميل النموذج المعتمد")
+template_file = generate_advanced_template()
+st.download_button(
+    label="📥 تحميل نموذج ملف الإكسيل المطور (شامل لكافة المدخلات)",
+    data=template_file,
+    file_name="Salla_Advanced_Offers_Template.xlsx",
+    mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
 )
 
-# إخفاء روابط التنقل الافتراضية لـ Streamlit
-st.markdown(
-    """
-    <style>
-    [data-testid="stSidebarNav"] {
-        display: none !important;
-    }
-    </style>
-    """,
-    unsafe_allow_html=True
-)
+st.divider()
 
-# حقن التنسيقات البصرية والـ CSS المشترك
-st.markdown("""
-<style>
-    @import url('https://fonts.googleapis.com/css2?family=Tajawal:wght@300;400;500;700;800&display=swap');
-    * { font-family: 'Tajawal', sans-serif; }
-    
-    .hero {
-        background: linear-gradient(135deg, #0f4c5c 0%, #1f7a8c 50%, #16425b 100%);
-        border-radius: 24px;
-        padding: 2rem;
-        color: white;
-        margin-bottom: 1rem;
-        text-align: right;
-    }
-    .hero h1 { font-weight: 800; margin: 0 0 0.5rem 0; font-size: 2.2rem; color: white; }
-    .hero p { margin: 0; font-size: 1.1rem; opacity: 0.9; }
-    
-    div[data-testid="stMetric"] {
-        background: #ffffff;
-        border: 1px solid #e2e8f0;
-        border-radius: 16px;
-        padding: 10px 15px;
-        box-shadow: 0 4px 6px -1px rgba(0,0,0,0.02);
-        text-align: center;
-    }
-</style>
-""", unsafe_allow_html=True)
+st.subheader("2. رفع ومعالجة الملف")
+uploaded_file = st.file_uploader("📂 ارفع ملف الإكسيل المعبأ هنا", type=["xlsx"])
 
-# إدارة الجلسة الآمنة (Session State)
-if "logged_in" not in st.session_state:
-    st.session_state.logged_in = False
-if "username" not in st.session_state:
-    st.session_state.username = None
-if "user_role" not in st.session_state:
-    st.session_state.user_role = None
-if "pharmacist_name" not in st.session_state:
-    st.session_state.pharmacist_name = None
-
-# دالة ذكية وصارمة لتحويل مدخلات قاعدة البيانات الملعوبة إلى قيم Boolean حقيقية
-def parse_bool(val):
-    if val in [True, 1, "1", "True", "true", "T", "t"]:
-        return True
-    return False
-
-# 1️⃣ شاشة تسجيل الدخول
-if not st.session_state.logged_in:
-    col1, col2, col3 = st.columns([1, 2, 1])
-    with col2:
-        st.markdown("<h2 style='text-align: center; color: #0f4c5c; margin-top: 2rem;'>🔐 تسجيل الدخول للنظام</h2>", unsafe_allow_html=True)
-        with st.form("login_form"):
-            username_input = st.text_input("👤 اسم المستخدم", placeholder="أدخل اسم المستخدم...")
-            password_input = st.text_input("🔑 كلمة المرور", type="password", placeholder="أدخل كلمة المرور...")
-            submit_login = st.form_submit_button("ورود إلى لوحة التحكم", use_container_width=True)
-            
-            if submit_login:
-                user = fetch_user(username_input, password_input)
-                if user:
-                    st.session_state.logged_in = True
-                    st.session_state.username = user[0]       
-                    st.session_state.user_role = user[2]      
-                    st.session_state.pharmacist_name = user[3] if len(user) > 3 else ""
-                    
-                    update_last_access(user[0], st.session_state.pharmacist_name)
-                    st.success("👋 تم تسجيل الدخول بنجاح!")
-                    st.rerun()
-                else:
-                    st.error("❌ اسم المستخدم أو كلمة المرور غير صحيحة.")
-else:
-    # 💡 تنظيف وتوحيد نصوص الأدوار وأسماء المستخدمين لضمان كسر حساسية الحروف
-    u_role = str(st.session_state.user_role).strip().lower()
-    u_name = str(st.session_state.username).strip().lower()
-
-    # جلب الصلاحيات الفعلية من قاعدة البيانات وتحويلها بشكل صارم ومضمون
-    permissions = get_user_permissions(st.session_state.username)
-    
-    can_view_dash = parse_bool(permissions.get("can_view_dashboard")) if permissions else False
-    can_manage_users = parse_bool(permissions.get("can_manage_users")) if permissions else False
-    can_view_balances = parse_bool(permissions.get("can_view_balances")) if permissions else False
-    can_view_monitoring = parse_bool(permissions.get("can_view_monitoring")) if permissions else False
-
-    # حماية وأوفررايد أمني مطلق لحساب الـ admin الرئيسي ليملك كافة الصلاحيات دائماً
-    if u_role == "admin" or u_name == "admin":
-        can_view_dash = True
-        can_manage_users = True
-        can_view_balances = True
-        can_view_monitoring = True
-
-    # 2️⃣ بناء القائمة الجانبية (Sidebar) الديناميكية المحصنة
-    with st.sidebar:
-        st.markdown(f"### 🏥 مرحباً بك: {st.session_state.username}")
-        st.markdown(f"⚙️ الصلاحية النشطة: **{u_role.upper()}**")
-        if st.session_state.pharmacist_name:
-            st.markdown(f"👤 الاسم: {st.session_state.pharmacist_name}")
-            
-        st.markdown("---")
-        st.markdown("### 🛠️ التنقل بين الشاشات والصفحات")
+if uploaded_file is not None:
+    try:
+        df_user = pd.read_excel(uploaded_file)
+        st.success("تم قراءة الملف بنجاح! معاينة قبل الرفع إلى سلة:")
+        st.dataframe(df_user)
         
-        nav_options = []
-        
-        if can_view_dash:
-            nav_options.append("📊 لوحة مطابقات التسويات المالية")
+        # عند الضغط على الزر، تبدأ معالجة الحقول وتحويلها إلى السكيمات المطلوبة لـ API سلة
+        if st.button("🚀 بدء تنفيذ العمليات الجماعية على المتجر"):
+            HEADERS = {"Authorization": f"Bearer {ACCESS_TOKEN}", "Content-Type": "application/json"}
             
-        # 💡 [حماية مزدوجة]: التحقق من الدور أو اسم المستخدم لضمان ظهور الأزرار لـ admin و manager فوراً
-        if u_role in ["admin", "manager"] or u_name in ["admin", "manager"]:
-            nav_options.append("🎁 مركز إدارة العروض الخاصة (سلة)")
-            nav_options.append("📦 تفصيلي وجرد المنتجات")
-            nav_options.append("📈 تحليل مبيعات الشهور")
-            
-        if can_manage_users:
-            nav_options.append("👥 إدارة صلاحيات المستخدمين")
-            
-        if can_view_balances:
-            nav_options.append("💰 تحديث ورفع الأرصدة")
-            
-        if can_view_monitoring:
-            nav_options.append("🖥️ شاشة المراقبة والنظام")
-            
-        # منع انهيار الواجهة في حال كانت المصفوفة فارغة لأي سبب
-        if not nav_options:
-            nav_options = ["📊 لوحة مطابقات التسويات المالية"]
-
-        app_mode = st.radio("اختر الوجهة الحالية:", nav_options, key="main_navigation_pane")
-        st.markdown("---")
-        
-        if st.button("🚪 تسجيل الخروج", use_container_width=True, key="logout_sidebar_btn"):
-            st.session_state.logged_in = False
-            st.session_state.username = None
-            st.session_state.user_role = None
-            st.session_state.pharmacist_name = None
-            st.rerun()
-
-    # =========================================================================
-    # 🧠 [وضع الإشراف]: توجيه ومزامنة الصفحات بناءً على اختيار السايدبار
-    # =========================================================================
-    if app_mode == "📊 لوحة مطابقات التسويات المالية":
-        if u_role in ["admin", "manager"] or u_name in ["admin", "manager"]:
-            # جلب قائمة الصيدليات المتاحة للإشراف عليها
-            from utils.database import get_available_branches
-            branches = get_available_branches()
-            
-            # إضافة خيار عرض لوحة الإدارة العامة أولاً
-            supervision_options = ["🏢 لوحة الإدارة العامة الشاملة"] + list(branches)
-            
-            selected_view = st.sidebar.selectbox(
-                "👁️ وضع الإشراف (عرض كـ):",
-                supervision_options,
-                key="supervision_branch_select"
-            )
-            
-            if selected_view == "🏢 لوحة إدارة العامة الشاملة":
-                from pages import admin_dashboard
-                admin_dashboard.show()
-            else:
-                # محاكاة الدخول باسم الصيدلية المختارة وعرض شاشتها فوراً
-                st.session_state.supervised_pharmacy = selected_view
-                from pages import pharmacy_dashboard
-                st.markdown(f"### 🌐 أنت الآن تتصفح في [وضع الإشراف] على: {selected_view}")
-                pharmacy_dashboard.show()
-        else:
-            # الصيدلي العادي يرى فرعه فقط دون خيارات إشراف
-            st.session_state.supervised_pharmacy = None
-            from pages import pharmacy_dashboard
-            pharmacy_dashboard.show()
-            
-    elif app_mode == "🎁 مركز إدارة العروض الخاصة (سلة)":
-        from pages import admin_dashboard
-        admin_dashboard.show_special_offers_page()
-        
-    elif app_mode == "📦 تفصيلي وجرد المنتجات":
-        from pages import product_details
-        product_details.show()
-        
-    elif app_mode == "📈 تحليل مبيعات الشهور":
-        from pages import sales_analysis
-        sales_analysis.show()
-        
-    elif app_mode == "👥 إدارة صلاحيات المستخدمين":
-        from pages import users_management
-        users_management.show()
-        
-    elif app_mode == "💰 تحديث ورفع الأرصدة":
-        from pages import balances_updater
-        balances_updater.show()
-        
-    elif app_mode == "🖥️ شاشة المراقبة والنظام":
-        from pages import monitoring
-        monitoring.show()
+            for index, row in df_user.iterrows():
+                action = str(row['Action']).strip().lower()
+                
+                # تحويل أرقام المنتجات من نصوص تفصلها فاصلة إلى مصفوفة أرقام (Array of Integers)
+                buy_products = [int(pid.strip()) for pid in str(row['Buy_Products_IDs']).split(',') if pid.strip().isdigit()]
+                get_products = [int(pid.strip()) for pid in str(row['Get_Products_IDs']).split(',') if pid.strip().isdigit()]
+                
+                # تركيب الـ Request Body بناءً على ملفات التوثيق المرفقة (Create & Update)
+                payload = {
+                    "name": row['Offer_Name'],
+                    "message": row['Offer_Message'],
+                    "applied_channel": row['Applied_Channel'],
+                    "offer_type": "buy_x_get_y",
+                    "applied_to": row['Buy_Type'],
+                    "start_date": str(row['Start_Date']),
+                    "expiry_date": str(row['Expiry_Date']),
+                    "buy": {
+                        "type": row['Buy_Type'],
+                        "quantity": int(row['Buy_Quantity']),
+                        "products": buy_products if row['Buy_Type'] == "product" else []
+                    },
+                    "get": {
+                        "type": row['Get_Type'],
+                        "discount_type": row['Discount_Type'],
+                        "quantity": int(row['Get_Quantity']),
+                        "products": get_products if row['Get_Type'] == "product" else [],
+                        "discount_amount": str(row['Discount_Amount']) if row['Discount_Type'] == "percentage" else "0.00"
+                    }
+                }
+                
+                # توجيه الطلب برمجياً بناءً على الـ Action
+                if action == "create":
+                    res = requests.post(SALLA_API_URL, json=payload, headers=HEADERS)
+                    if res.status_code == 200:
+                        st.success(f"السطر {index+1}: تم إنشاء العرض بنجاح! المعرف: {res.json()['data']['id']}")
+                # (يمكن إضافة بقية الشروط للهدم والتحديث هنا بنفس الطريقة المتبعة سابقاً)
+                
+    except Exception as e:
+        st.error(f"تأكد من صحة البيانات المكتوبة داخل الإكسيل. تفاصيل الخطأ: {e}")
