@@ -375,6 +375,10 @@ st.markdown("""
 def safe_parse_date(date_str: Optional[str]) -> Optional[datetime]:
     if not date_str:
         return None
+    date_str = str(date_str).strip()
+    # ✅ معالجة تلقائية لحالات الإدخال الخاطئ للثواني مثل :60 أو :61 لمنع انهيار الـ API
+    if re.search(r':6\d$', date_str):
+        date_str = re.sub(r':6\d$', ':59', date_str)
     try:
         return datetime.strptime(date_str, '%Y-%m-%d %H:%M:%S')
     except (ValueError, TypeError):
@@ -1173,20 +1177,29 @@ if page == "📊 لوحة تصفية وإدارة العروض الحالية":
                                     st.success(f"✅ تم {'تفعيل' if not applied_with_coupon else 'إيقاف'} تطبيق العرض مع الكوبون!")
                                     st.rerun()
                 
-                with col4:
-                    target_status = "inactive" if offer_status == "active" else "active"
-                    btn_label = "⏸️ إيقاف" if offer_status == "active" else "▶️ تفعيل"
-                    if st.button(btn_label, key=f"toggle_status_{offer_id}_{idx}", use_container_width=True):
-                        with st.spinner("🔄 جاري تحديث الحالة..."):
-                            update_res = safe_api_request(
-                                "PUT",
-                                f"{SALLA_API_URL}/{offer_id}/status",
-                                get_headers(),
-                                json={"status": target_status}
-                            )
-                            if update_res:
-                                st.success("✅ تم تحديث الحالة!")
-                                st.rerun()
+            with col4:
+                if st.button("📋 نسخ ID", key=f"copy_id_{p_id}_{idx}", use_container_width=True):
+                    st.toast(f"✅ تم نسخ المعرف: {p_id}")
+                
+                current_status = p.get('status', 'sale')
+                btn_label = "👁️ إخفاء" if current_status == "sale" else "👁️ إظهار"
+                btn_type = "primary" if current_status == "sale" else "secondary"
+                
+                if st.button(btn_label, key=f"toggle_status_{p_id}_{idx}", use_container_width=True, type=btn_type):
+                    target_status = "hidden" if current_status == "sale" else "sale"
+                    
+                    with st.spinner("🔄 جاري تحديث الحالة..."):
+                        # ✅ الإصلاح طبقاً للمستندات: إرسال POST إلى endpoint الـ /status المخصص
+                        update_payload = {"status": target_status}
+                        update_res = safe_api_request(
+                            "POST",
+                            f"https://api.salla.dev/admin/v2/products/{p_id}/status",
+                            get_headers(),
+                            json=update_payload
+                        )
+                        if update_res is not None:
+                            st.success("✅ تم تحديث حالة المنتج بالمتجر!")
+                            st.rerun()
                 
                 with col5:
                     if st.button("🗑️ حذف", key=f"delete_offer_{offer_id}_{idx}", use_container_width=True, type="primary"):
