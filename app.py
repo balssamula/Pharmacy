@@ -576,7 +576,7 @@ st.sidebar.divider()
 
 # --- زر التحديث ---
 st.sidebar.markdown("<div class='refresh-btn-container'>", unsafe_allow_html=True)
-if st.sidebar.button("🔄 تحديث البيانات والصفحة", key="refresh_page_btn", use_container_width=True, style='color: #39FF14'):
+if st.sidebar.button("🔄 تحديث البيانات والصفحة", key="refresh_page_btn", use_container_width=True, style="color: #39FF14"):
     st.rerun()
 st.sidebar.markdown("</div>", unsafe_allow_html=True)
 
