@@ -22,7 +22,7 @@ st.set_page_config(
 )
 
 # ==========================================
-# CSS المحسّن
+# CSS المحسّن بالكامل
 # ==========================================
 st.markdown("""
     <style>
@@ -35,6 +35,7 @@ st.markdown("""
         box-sizing: border-box !important;
     }
     
+    /* ---------- شاشة الدخول ---------- */
     .login-container {
         max-width: 450px;
         margin: 80px auto;
@@ -52,11 +53,12 @@ st.markdown("""
         to { opacity: 1; transform: translateY(0); }
     }
     
+    /* ---------- الشريط العلوي ---------- */
     .top-sticky-bar {
         background: linear-gradient(135deg, #0a1628 0%, #1a2d4a 100%);
-        padding: 16px 28px;
+        padding: 14px 24px;
         border-radius: 12px;
-        margin-bottom: 25px;
+        margin-bottom: 20px;
         display: flex;
         justify-content: space-between;
         align-items: center;
@@ -70,7 +72,7 @@ st.markdown("""
     .top-sticky-bar .title {
         color: #ffffff;
         font-weight: 700;
-        font-size: 17px;
+        font-size: 16px;
         display: flex;
         align-items: center;
         gap: 10px;
@@ -79,30 +81,41 @@ st.markdown("""
     .top-sticky-bar .status {
         color: #00b4d8;
         font-weight: 600;
-        font-size: 14px;
+        font-size: 13px;
         background: rgba(0, 180, 216, 0.12);
-        padding: 5px 16px;
+        padding: 4px 14px;
         border-radius: 20px;
         border: 1px solid rgba(0, 180, 216, 0.3);
     }
     
-    /* زر تسجيل الخروج */
-    .logout-btn button {
-        background: linear-gradient(135deg, #dc3545, #c82333) !important;
+    /* ---------- أزرار التحكم العلوية ---------- */
+    .control-btn-container {
+        display: flex;
+        gap: 10px;
+        align-items: center;
+        flex-wrap: wrap;
+    }
+    
+    .control-btn-container button {
+        background: #00b4d8 !important;
         color: #ffffff !important;
         font-weight: 700 !important;
         border-radius: 8px !important;
-        height: 40px !important;
+        height: 38px !important;
         border: none !important;
-        box-shadow: 0 4px 15px rgba(220, 53, 69, 0.3) !important;
+        box-shadow: 0 4px 15px rgba(0, 180, 216, 0.3) !important;
         transition: all 0.3s ease !important;
+        font-size: 14px !important;
+        padding: 0 18px !important;
+        width: auto !important;
     }
     
-    .logout-btn button:hover {
+    .control-btn-container button:hover {
         transform: scale(1.02) !important;
-        box-shadow: 0 6px 20px rgba(220, 53, 69, 0.4) !important;
+        box-shadow: 0 6px 20px rgba(0, 180, 216, 0.4) !important;
     }
     
+    /* ---------- البطاقات ---------- */
     .product-card {
         background: #ffffff;
         padding: 0 !important;
@@ -123,7 +136,7 @@ st.markdown("""
     
     .product-card-header {
         background: linear-gradient(135deg, #0f1c2e 0%, #1a2d4a 100%);
-        padding: 14px 24px;
+        padding: 12px 20px;
         display: flex;
         justify-content: space-between;
         align-items: center;
@@ -135,33 +148,33 @@ st.markdown("""
     
     .product-card-header .product-name {
         color: #ffffff;
-        font-size: 18px;
+        font-size: 17px;
         font-weight: 700;
         margin: 0;
     }
     
     .product-card-header .product-promotion {
         color: #ffd700;
-        font-size: 14px;
+        font-size: 13px;
         font-weight: 600;
         background: rgba(255, 215, 0, 0.15);
-        padding: 4px 14px;
+        padding: 3px 12px;
         border-radius: 20px;
         border: 1px solid rgba(255, 215, 0, 0.3);
         display: inline-block;
     }
     
     .product-card-body {
-        padding: 18px 24px;
+        padding: 16px 20px;
         direction: rtl !important;
     }
     
     .offer-card {
         background: #ffffff;
-        padding: 18px 22px;
+        padding: 16px 20px;
         border-radius: 14px;
         box-shadow: 0 2px 12px rgba(0,0,0,0.07);
-        margin-bottom: 18px;
+        margin-bottom: 16px;
         border-right: 6px solid #2a9d8f;
         border-left: 1px solid #e8edf2;
         border-top: 1px solid #e8edf2;
@@ -177,16 +190,17 @@ st.markdown("""
     
     .sub-card {
         background: #f7f9fc;
-        padding: 18px 20px;
+        padding: 16px 18px;
         border-radius: 10px;
         border: 1px dashed #00b4d8;
         margin-top: 12px;
     }
     
+    /* ---------- القائمة الجانبية ---------- */
     [data-testid="stSidebar"] {
         background-color: #0f1c2e !important;
         padding: 20px 12px !important;
-        min-width: 300px !important;
+        min-width: 280px !important;
     }
     
     [data-testid="stSidebar"] * {
@@ -195,7 +209,7 @@ st.markdown("""
     
     [data-testid="stSidebar"] .stRadio label {
         color: #ffffff !important;
-        font-size: 16px !important;
+        font-size: 15px !important;
         font-weight: 500 !important;
     }
     
@@ -205,39 +219,63 @@ st.markdown("""
     
     [data-testid="stSidebar"] h2 {
         color: #00b4d8 !important;
-        font-size: 24px !important;
+        font-size: 22px !important;
         font-weight: 700 !important;
         text-align: center !important;
-        padding-bottom: 12px;
+        padding-bottom: 10px;
         border-bottom: 2px solid rgba(0, 180, 216, 0.25);
     }
     
+    /* ---------- زر تحديث الصفحة (أخضر) ---------- */
     .refresh-btn-container {
         margin-top: 10px;
     }
     
     .refresh-btn-container button {
-        background: linear-gradient(135deg, #dc3545, #c82333) !important;
+        background: linear-gradient(135deg, #28a745, #20c997) !important;
         color: #ffffff !important;
         font-weight: 700 !important;
-        font-size: 17px !important;
+        font-size: 16px !important;
         border-radius: 10px !important;
-        height: 48px !important;
+        height: 46px !important;
         border: none !important;
-        box-shadow: 0 4px 15px rgba(220, 53, 69, 0.35) !important;
+        box-shadow: 0 4px 15px rgba(40, 167, 69, 0.35) !important;
         transition: all 0.3s ease !important;
     }
     
     .refresh-btn-container button:hover {
         transform: scale(1.03) !important;
+        box-shadow: 0 6px 25px rgba(40, 167, 69, 0.5) !important;
+    }
+    
+    /* ---------- زر تسجيل الخروج (أحمر) ---------- */
+    .logout-btn {
+        margin-top: 10px;
+    }
+    
+    .logout-btn button {
+        background: linear-gradient(135deg, #dc3545, #c82333) !important;
+        color: #ffffff !important;
+        font-weight: 700 !important;
+        font-size: 16px !important;
+        border-radius: 10px !important;
+        height: 46px !important;
+        border: none !important;
+        box-shadow: 0 4px 15px rgba(220, 53, 69, 0.35) !important;
+        transition: all 0.3s ease !important;
+    }
+    
+    .logout-btn button:hover {
+        transform: scale(1.03) !important;
         box-shadow: 0 6px 25px rgba(220, 53, 69, 0.5) !important;
     }
     
+    /* ---------- الأزرار العامة ---------- */
     .stButton>button {
         width: 100% !important;
         font-weight: 700 !important;
         border-radius: 8px !important;
-        height: 44px !important;
+        height: 42px !important;
         border: none !important;
         transition: all 0.3s ease !important;
     }
@@ -251,7 +289,7 @@ st.markdown("""
         color: #00b4d8 !important;
         font-weight: 700;
         text-decoration: none;
-        font-size: 18px;
+        font-size: 17px;
         transition: all 0.3s ease;
     }
     
@@ -282,18 +320,18 @@ st.markdown("""
     
     .footer {
         text-align: center;
-        padding: 20px;
+        padding: 18px;
         color: #6c757d;
         border-top: 1px solid #e9ecef;
-        margin-top: 35px;
+        margin-top: 30px;
         font-size: 13px;
     }
     
     .offers-count {
         background: #f0f4f8;
-        padding: 10px 18px;
+        padding: 8px 16px;
         border-radius: 10px;
-        margin-bottom: 18px;
+        margin-bottom: 16px;
         border-right: 4px solid #00b4d8;
     }
     
@@ -329,7 +367,7 @@ st.markdown("""
     
     .action-buttons {
         display: flex;
-        gap: 8px;
+        gap: 6px;
         flex-wrap: wrap;
         align-items: center;
     }
@@ -341,9 +379,14 @@ st.markdown("""
     
     .action-buttons .stButton button {
         width: auto !important;
-        padding: 0 16px !important;
-        height: 34px !important;
-        font-size: 13px !important;
+        padding: 0 14px !important;
+        height: 32px !important;
+        font-size: 12px !important;
+    }
+    
+    /* ---------- تحسين عرض التوكن ---------- */
+    .token-popover {
+        direction: rtl !important;
     }
     </style>
 """, unsafe_allow_html=True)
@@ -395,7 +438,7 @@ def get_product_price(product: Dict) -> float:
         return 0.0
 
 def safe_api_request(method: str, url: str, headers: Dict, **kwargs) -> Optional[Dict]:
-    """تنفيذ طلب API مع معالجة الأخطاء التفصيلية"""
+    """تنفيذ طلب API مع معالجة الأخطاء"""
     try:
         response = requests.request(method, url, headers=headers, timeout=30, **kwargs)
         
@@ -428,7 +471,7 @@ def get_headers():
     }
 
 # ==========================================
-# دالة معالجة استيراد الإكسيل المُصححة
+# دالة معالجة استيراد الإكسيل
 # ==========================================
 
 def process_excel_import(df: pd.DataFrame) -> Dict:
@@ -446,15 +489,13 @@ def process_excel_import(df: pd.DataFrame) -> Dict:
             action = str(row.get('Action', 'create')).strip().lower()
             offer_id = row.get('Offer_ID')
             
-            # تنظيف معرف العرض
             if offer_id and isinstance(offer_id, float):
                 offer_id = int(offer_id) if offer_id.is_integer() else None
             
-            # الحصول على البيانات
             offer_name = str(row.get('Offer_Name', 'عرض جديد')).strip()
             offer_type = str(row.get('Offer_Type', 'buy_x_get_y')).strip()
             applied_channel = str(row.get('Applied_Channel', 'browser_and_application')).strip()
-            applied_to = str(row.get('Applied_To', 'product')).strip()  # ✅ إضافة الحقل المطلوب
+            applied_to = str(row.get('Applied_To', 'product')).strip()
             
             # معالجة التواريخ
             start_date = row.get('Start_Date_Time')
@@ -490,12 +531,12 @@ def process_excel_import(df: pd.DataFrame) -> Dict:
                     if p and p.isdigit():
                         get_products.append(int(p))
             
-            # بناء بيانات العرض مع جميع الحقول المطلوبة
+            # بناء بيانات العرض
             offer_data = {
                 "name": offer_name,
                 "offer_type": offer_type,
                 "applied_channel": applied_channel,
-                "applied_to": applied_to,  # ✅ إضافة الحقل المطلوب
+                "applied_to": applied_to,
                 "start_date": start_date,
                 "expiry_date": expiry_date,
                 "message": str(row.get('Offer_Message', '')).strip()
@@ -536,7 +577,6 @@ def process_excel_import(df: pd.DataFrame) -> Dict:
                 "discount_type": discount_type
             }
             
-            # إضافة مبلغ الخصم
             try:
                 discount_amount = row.get('Discount_Amount')
                 if pd.notna(discount_amount) and float(discount_amount) > 0:
@@ -635,32 +675,24 @@ def generate_salla_excel_template() -> bytes:
             "Discount_Amount", "Get_Products_IDs", "Offer_Message"
         ]
         
-        # بيانات نموذجية
         sample_data = [
             ["create", "", "عرض ترويجي جديد", "buy_x_get_y", "browser_and_application",
              "product", "لا", "2026-06-22 12:00:00", "2026-07-22 23:59:59",
              "product", 1, "1298176905", 
              "product", 1, "percentage", 50, "1298176905", "خصم 50% على الحبة الثانية"],
-            ["update", "258182085", "تحديث العرض", "percentage", "browser",
-             "order", "لا", "2026-06-22 12:00:00", "2026-07-22 23:59:59",
-             "product", 1, "1298176905", 
-             "product", 1, "percentage", 30, "1298176905", "خصم 30%"],
         ]
         
         wb = Workbook()
         ws = wb.active
         ws.title = "قائمة العروض"
         
-        # إضافة الرؤوس في الصف 2
         for col_idx, col_name in enumerate(columns, 1):
             cell = ws.cell(row=2, column=col_idx, value=col_name)
         
-        # إضافة البيانات من الصف 3
         for row_idx, row_data in enumerate(sample_data, 3):
             for col_idx, value in enumerate(row_data, 1):
                 ws.cell(row=row_idx, column=col_idx, value=value)
         
-        # تنسيق الرؤوس
         header_fill = PatternFill(start_color="1F497D", end_color="1F497D", fill_type="solid")
         header_font = Font(name="Segoe UI", size=11, bold=True, color="FFFFFF")
         header_alignment = Alignment(horizontal="center", vertical="center")
@@ -671,7 +703,6 @@ def generate_salla_excel_template() -> bytes:
             cell.font = header_font
             cell.alignment = header_alignment
         
-        # ضبط عرض الأعمدة
         for col in ws.columns:
             max_length = 0
             column = col[0].column_letter
@@ -685,7 +716,7 @@ def generate_salla_excel_template() -> bytes:
             adjusted_width = min(max_length + 2, 30)
             ws.column_dimensions[column].width = adjusted_width
         
-        # إضافة القوائم المنسدلة
+        # القوائم المنسدلة
         dv_action = DataValidation(
             type="list",
             formula1='"create,update,active,inactive,delete"',
@@ -752,13 +783,13 @@ def generate_salla_excel_template() -> bytes:
         ws.add_data_validation(dv_disc_type)
         dv_disc_type.add("O3:O100")
         
-        # تنسيق خانات التاريخ
+        # تنسيق التواريخ
         for row in range(3, 100):
-            for col in ['H', 'I']:  # Start_Date_Time و Expiry_Date_Time
+            for col in ['H', 'I']:
                 cell = ws[f"{col}{row}"]
                 cell.number_format = numbers.FORMAT_DATE_DATETIME
         
-        # إضافة تعليمات
+        # تعليمات
         ws.insert_rows(1)
         ws.merge_cells('A1:R1')
         instructions_cell = ws.cell(row=1, column=1)
@@ -769,11 +800,10 @@ def generate_salla_excel_template() -> bytes:
 - Offer_ID: مطلوب للتحديث والحذف (استخدم أرقام صحيحة بدون نقاط عشرية)
 - التواريخ: استخدم الصيغة YYYY-MM-DD HH:mm:ss
 - المنتجات: يمكن إدخال أكثر من معرف بفاصلة مثل: 123,456,789
-- للعروض من نوع percentage: يمكن إضافة Discount_Amount
 """
         instructions_cell.font = Font(name="Segoe UI", size=11, bold=True, color="1F497D")
         instructions_cell.alignment = Alignment(horizontal="center", vertical="center", wrap_text=True)
-        ws.row_dimensions[1].height = 120
+        ws.row_dimensions[1].height = 100
         
         wb.save(output)
         output.seek(0)
@@ -783,7 +813,6 @@ def generate_salla_excel_template() -> bytes:
         logger.error(f"Error generating template: {e}")
         st.error(f"⚠️ خطأ في إنشاء النموذج: {str(e)}")
         
-        # إنشاء ملف بديل
         columns = [
             "Action", "Offer_ID", "Offer_Name", "Offer_Type", "Applied_Channel",
             "Applied_To", "With_Coupon", "Start_Date_Time", "Expiry_Date_Time",
@@ -806,7 +835,7 @@ def init_session_state():
     defaults = {
         "admin_password": "admin123",
         "logged_in": False,
-        "access_token": "ory_at_ugEJJSSlUAAlAnZIEQPc_hn5cqsgxpNyG5NA344nNHU.uekLYqGGWEY4ngGNjUp1jJooR5XPA-UD3yyKju36tOo",
+        "access_token": "",
         "setup_completed": True
     }
     for key, value in defaults.items():
@@ -828,12 +857,16 @@ if not st.session_state["logged_in"]:
         </div>
     """, unsafe_allow_html=True)
     
+    # إضافة حقل التوكن في شاشة الدخول
+    st.text_input("🔑 مفتاح الربط (Access Token):", type="password", key="login_token", help="أدخل التوكن الخاص بتطبيقك")
     username = st.text_input("👤 اسم المستخدم:", value="admin", key="lg_un")
     password = st.text_input("🔒 كلمة المرور:", type="password", key="lg_pw")
     
     col1, col2, col3 = st.columns([1, 2, 1])
     with col2:
         if st.button("🚀 دخول آمن للمنظومة", key="submit_login", use_container_width=True):
+            if st.session_state.get("login_token", "").strip():
+                st.session_state["access_token"] = st.session_state["login_token"].strip()
             if username == "admin" and password == st.session_state["admin_password"]:
                 st.session_state["logged_in"] = True
                 st.rerun()
@@ -850,43 +883,41 @@ if not st.session_state["logged_in"]:
 SALLA_API_URL = "https://api.salla.dev/admin/v2/specialoffers"
 
 # ==========================================
-# الشريط العلوي مع زر تسجيل الخروج
+# الشريط العلوي مع أزرار التحكم
 # ==========================================
 
-# أعمدة للشريط العلوي
-top_col1, top_col2, top_col3 = st.columns([3, 2, 1.2])
+# الشريط العلوي
+st.markdown(f"""
+    <div class='top-sticky-bar'>
+        <div class='title'>🛡️ لوحة التحكم الإدارية لصيدليات بلسم العُلا</div>
+        <div class='status'>✅ الاتصال موثق ومستقر</div>
+    </div>
+""", unsafe_allow_html=True)
 
-with top_col1:
-    st.markdown("""
-        <div style="background: linear-gradient(135deg, #0a1628 0%, #1a2d4a 100%); 
-                    padding: 16px 24px; 
-                    border-radius: 12px; 
-                    border-bottom: 4px solid #00b4d8;
-                    display: flex; 
-                    justify-content: space-between; 
-                    align-items: center;
-                    flex-wrap: wrap;
-                    gap: 10px;">
-            <span style="color: #ffffff; font-weight: 700; font-size: 17px;">🛡️ لوحة التحكم الإدارية لصيدليات بلسم العُلا</span>
-            <span style="color: #00b4d8; font-weight: 600; font-size: 14px; background: rgba(0, 180, 216, 0.12); padding: 5px 16px; border-radius: 20px; border: 1px solid rgba(0, 180, 216, 0.3);">✅ الاتصال موثق ومستقر</span>
-        </div>
-    """, unsafe_allow_html=True)
+# أزرار التحكم العلوية (تعديل التوكن وكلمة المرور)
+col1, col2, col3 = st.columns([1.5, 1.5, 5])
 
-with top_col2:
-    # عرض معلومات المستخدم
-    st.markdown("""
-        <div style="text-align: center; padding: 8px 0;">
-            <span style="color: #0f1c2e; font-weight: 600;">👤 admin</span>
-        </div>
-    """, unsafe_allow_html=True)
+with col1:
+    with st.popover("🔑 تعديل مفتاح الربط"):
+        current_token = st.session_state.get("access_token", "")
+        new_tok = st.text_input("أدخل التوكن الجديد:", value=current_token, type="password")
+        if st.button("تحديث التوكن", use_container_width=True):
+            if new_tok.strip():
+                st.session_state["access_token"] = new_tok.strip()
+                st.success("✅ تم تحديث التوكن بنجاح!")
+                st.rerun()
+            else:
+                st.warning("⚠️ الرجاء إدخال توكن صحيح")
 
-with top_col3:
-    # زر تسجيل الخروج
-    st.markdown("<div class='logout-btn'>", unsafe_allow_html=True)
-    if st.button("🚪 تسجيل الخروج", key="logout_btn", use_container_width=True):
-        st.session_state["logged_in"] = False
-        st.rerun()
-    st.markdown("</div>", unsafe_allow_html=True)
+with col2:
+    with st.popover("🔒 تعديل كلمة المرور"):
+        new_pwd = st.text_input("أدخل كلمة المرور الجديدة:", type="password")
+        if st.button("تحديث الباسورد", use_container_width=True):
+            if new_pwd.strip():
+                st.session_state["admin_password"] = new_pwd.strip()
+                st.success("✅ تم تحديث كلمة المرور بنجاح!")
+            else:
+                st.warning("⚠️ الرجاء إدخال كلمة مرور صحيحة")
 
 st.divider()
 
@@ -914,16 +945,17 @@ page = st.sidebar.radio(
 
 st.sidebar.divider()
 
+# زر تحديث الصفحة (أخضر)
 st.sidebar.markdown("<div class='refresh-btn-container'>", unsafe_allow_html=True)
 if st.sidebar.button("🔄 تحديث البيانات والصفحة", key="refresh_page_btn", use_container_width=True):
     st.rerun()
 st.sidebar.markdown("</div>", unsafe_allow_html=True)
 
-# زر تسجيل الخروج في القائمة الجانبية
-st.sidebar.divider()
+# زر تسجيل الخروج (أحمر) - فقط في القائمة الجانبية
 st.sidebar.markdown("<div class='logout-btn'>", unsafe_allow_html=True)
 if st.sidebar.button("🚪 تسجيل الخروج", key="logout_sidebar", use_container_width=True):
     st.session_state["logged_in"] = False
+    st.session_state["access_token"] = ""
     st.rerun()
 st.sidebar.markdown("</div>", unsafe_allow_html=True)
 
@@ -938,10 +970,10 @@ with st.sidebar.expander("ℹ️ معلومات النظام", expanded=False):
 
 if page == "📊 لوحة تصفية وإدارة العروض الحالية":
     st.markdown("""
-        <h1 style='color: #0f1c2e; font-weight: 700; margin-bottom: 8px; font-size: 28px;'>
+        <h1 style='color: #0f1c2e; font-weight: 700; margin-bottom: 8px; font-size: 26px;'>
             📊 لوحة إدارة العروض الاحترافية
         </h1>
-        <p style='color: #6c757d; margin-bottom: 25px; font-size: 15px;'>
+        <p style='color: #6c757d; margin-bottom: 20px; font-size: 14px;'>
             إدارة شاملة للعروض مع إمكانية التصفية والبحث والتعديل الفوري
         </p>
     """, unsafe_allow_html=True)
@@ -967,19 +999,15 @@ if page == "📊 لوحة تصفية وإدارة العروض الحالية":
     
     if uploaded_file:
         try:
-            # قراءة الملف مع معالجة التواريخ
             df_user = pd.read_excel(uploaded_file)
             
-            # تحويل أعمدة التاريخ إلى نص
             date_columns = ['Start_Date_Time', 'Expiry_Date_Time']
             for col in date_columns:
                 if col in df_user.columns:
-                    # تحويل التواريخ إلى نص بالصيغة المطلوبة
                     df_user[col] = df_user[col].apply(
                         lambda x: x.strftime('%Y-%m-%d %H:%M:%S') if isinstance(x, (datetime, pd.Timestamp)) else str(x) if pd.notna(x) else ''
                     )
             
-            # تحويل الأعمدة الرقمية
             numeric_columns = ['Offer_ID', 'Buy_Quantity', 'Get_Quantity', 'Discount_Amount']
             for col in numeric_columns:
                 if col in df_user.columns:
@@ -992,7 +1020,6 @@ if page == "📊 لوحة تصفية وإدارة العروض الحالية":
                 with st.spinner("🔄 جاري معالجة العروض..."):
                     results = process_excel_import(df_user)
                 
-                # عرض النتائج
                 if results["success"]:
                     for msg in results["success"]:
                         st.success(msg)
@@ -1017,14 +1044,12 @@ if page == "📊 لوحة تصفية وإدارة العروض الحالية":
     if res and res.get("data"):
         raw_offers = res["data"]
         
-        # فلترة العروض
         with st.expander("🔍 خيارات البحث والفلترة المتقدمة", expanded=True):
             col1, col2, col3 = st.columns(3)
             with col1:
                 search_offer = st.text_input(
                     "🔎 بحث باسم العرض أو المعرف:",
-                    placeholder="أدخل نص البحث...",
-                    help="ابحث باسم العرض أو رقم المعرف"
+                    placeholder="أدخل نص البحث..."
                 )
             with col2:
                 offer_status_filter = st.selectbox(
@@ -1037,7 +1062,6 @@ if page == "📊 لوحة تصفية وإدارة العروض الحالية":
                     ["الكل", "buy_x_get_y", "percentage", "fixed_amount", "discounts_table", "tiered_offer", "cart_offer", "special_price"]
                 )
         
-        # تصفية العروض
         now = datetime.now()
         filtered_offers = []
         
@@ -1088,7 +1112,6 @@ if page == "📊 لوحة تصفية وإدارة العروض الحالية":
             </div>
         """, unsafe_allow_html=True)
         
-        # عرض العروض
         for idx, offer in enumerate(filtered_offers):
             with st.container():
                 st.markdown(f"<div class='offer-card'>", unsafe_allow_html=True)
@@ -1103,7 +1126,7 @@ if page == "📊 لوحة تصفية وإدارة العروض الحالية":
                     
                     st.markdown(f"""
                         <div>
-                            <h4 style="margin: 0 0 5px 0; color: #0f1c2e; font-size: 18px;">🎯 {offer_name}</h4>
+                            <h4 style="margin: 0 0 5px 0; color: #0f1c2e; font-size: 17px;">🎯 {offer_name}</h4>
                             <span style="color: #6c757d; font-size: 13px;">🆔 ID: {offer_id}</span>
                             <br>
                             <span class="offer-date">📅 {start} → {expiry}</span>
@@ -1140,7 +1163,6 @@ if page == "📊 لوحة تصفية وإدارة العروض الحالية":
                                 st.success("✅ تم حذف العرض!")
                                 st.rerun()
                 
-                # تفاصيل العرض
                 with st.expander("🔽 تفاصيل العرض المتقدمة", expanded=False):
                     st.markdown("<div class='sub-card'>", unsafe_allow_html=True)
                     
@@ -1162,7 +1184,6 @@ if page == "📊 لوحة تصفية وإدارة العروض الحالية":
                     
                     st.divider()
                     
-                    # نموذج التعديل
                     st.markdown("#### ✏️ تعديل تفاصيل العرض")
                     
                     col1, col2 = st.columns(2)
@@ -1181,7 +1202,6 @@ if page == "📊 لوحة تصفية وإدارة العروض الحالية":
                             key=f"edit_type_{offer_id}"
                         )
                         
-                        # إضافة الحقل المطلوب applied_to
                         applied_to_options = ["order", "product", "category", "paymentMethod"]
                         current_applied_to = offer.get('applied_to', 'product')
                         applied_to_index = applied_to_options.index(current_applied_to) if current_applied_to in applied_to_options else 1
@@ -1189,8 +1209,7 @@ if page == "📊 لوحة تصفية وإدارة العروض الحالية":
                             "تطبيق العرض على:",
                             applied_to_options,
                             index=applied_to_index,
-                            key=f"edit_applied_to_{offer_id}",
-                            help="order: طلب, product: منتج, category: تصنيف, paymentMethod: طريقة دفع"
+                            key=f"edit_applied_to_{offer_id}"
                         )
                     
                     col1, col2 = st.columns(2)
@@ -1235,7 +1254,7 @@ if page == "📊 لوحة تصفية وإدارة العروض الحالية":
                                 "start_date": ed_start,
                                 "expiry_date": ed_end,
                                 "offer_type": ed_type,
-                                "applied_to": ed_applied_to,  # ✅ إضافة الحقل المطلوب
+                                "applied_to": ed_applied_to,
                                 "buy": {
                                     "type": offer.get('buy', {}).get('type', 'product'),
                                     "quantity": int(ed_buy_q)
@@ -1247,7 +1266,6 @@ if page == "📊 لوحة تصفية وإدارة العروض الحالية":
                                 }
                             }
                             
-                            # إضافة المنتجات إذا كانت موجودة
                             buy_products_ids = []
                             for p in offer.get('buy', {}).get('products', []):
                                 if isinstance(p, dict):
@@ -1292,10 +1310,10 @@ if page == "📊 لوحة تصفية وإدارة العروض الحالية":
 
 elif page == "📦 مركز جرد المنتجات ومعرفات الـ IDs":
     st.markdown("""
-        <h1 style='color: #0f1c2e; font-weight: 700; margin-bottom: 8px; font-size: 28px;'>
+        <h1 style='color: #0f1c2e; font-weight: 700; margin-bottom: 8px; font-size: 26px;'>
             📦 مركز جرد المنتجات
         </h1>
-        <p style='color: #6c757d; margin-bottom: 25px; font-size: 15px;'>
+        <p style='color: #6c757d; margin-bottom: 20px; font-size: 14px;'>
             إدارة المنتجات وحالة الظهور وعرض العروض المرتبطة
         </p>
     """, unsafe_allow_html=True)
@@ -1310,7 +1328,6 @@ elif page == "📦 مركز جرد المنتجات ومعرفات الـ IDs":
         
         st.info(f"📊 عدد المنتجات: {len(products)} منتج")
         
-        # إنشاء قاموس للعروض المرتبطة
         offer_map = {}
         for offer in offers:
             buy_products = offer.get('buy', {}).get('products', [])
@@ -1323,14 +1340,11 @@ elif page == "📦 مركز جرد المنتجات ومعرفات الـ IDs":
                 else:
                     offer_map[p] = offer
         
-        # البحث عن المنتجات
         search_query = st.text_input(
             "🔍 ابحث هنا بواسطة اسم المنتج أو الـ SKU:",
-            placeholder="أدخل اسم المنتج أو SKU...",
-            help="ابحث عن منتج معين لعرض تفاصيله وإدارته"
+            placeholder="أدخل اسم المنتج أو SKU..."
         )
         
-        # تصفية المنتجات
         filtered_products = []
         if search_query:
             search_lower = search_query.lower()
@@ -1347,18 +1361,15 @@ elif page == "📦 مركز جرد المنتجات ومعرفات الـ IDs":
         if not filtered_products:
             st.warning("⚠️ لم يتم العثور على منتجات تطابق البحث")
         
-        # عرض المنتجات
         for idx, p in enumerate(filtered_products):
             p_id = p.get('id', 'N/A')
             p_name = p.get('name', 'منتج بدون اسم')
             p_sku = p.get('sku', 'لا يوجد')
             p_promotion = p.get('promotion_title', '')
             
-            # التحقق من وجود عرض
             offer = offer_map.get(p_id)
             has_offer = offer is not None
             
-            # تصميم البطاقة المحسن
             st.markdown(f"""
                 <div class='product-card'>
                     <div class='product-card-header'>
@@ -1408,7 +1419,6 @@ elif page == "📦 مركز جرد المنتجات ومعرفات الـ IDs":
                         </div>
                     """, unsafe_allow_html=True)
                     
-                    # أزرار التحكم الصغيرة
                     st.markdown("<div class='action-buttons'>", unsafe_allow_html=True)
                     
                     if offer_status == "active":
