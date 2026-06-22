@@ -86,6 +86,23 @@ st.markdown("""
         border: 1px solid rgba(0, 180, 216, 0.3);
     }
     
+    /* زر تسجيل الخروج */
+    .logout-btn button {
+        background: linear-gradient(135deg, #dc3545, #c82333) !important;
+        color: #ffffff !important;
+        font-weight: 700 !important;
+        border-radius: 8px !important;
+        height: 40px !important;
+        border: none !important;
+        box-shadow: 0 4px 15px rgba(220, 53, 69, 0.3) !important;
+        transition: all 0.3s ease !important;
+    }
+    
+    .logout-btn button:hover {
+        transform: scale(1.02) !important;
+        box-shadow: 0 6px 20px rgba(220, 53, 69, 0.4) !important;
+    }
+    
     .product-card {
         background: #ffffff;
         padding: 0 !important;
@@ -332,7 +349,7 @@ st.markdown("""
 """, unsafe_allow_html=True)
 
 # ==========================================
-# دوال مساعدة محسّنة
+# دوال مساعدة
 # ==========================================
 
 def safe_parse_date(date_str: Optional[str]) -> Optional[datetime]:
@@ -382,7 +399,6 @@ def safe_api_request(method: str, url: str, headers: Dict, **kwargs) -> Optional
     try:
         response = requests.request(method, url, headers=headers, timeout=30, **kwargs)
         
-        # محاولة تحليل الخطأ إذا كان هناك
         if response.status_code >= 400:
             error_detail = ""
             try:
@@ -416,7 +432,7 @@ def get_headers():
 # ==========================================
 
 def process_excel_import(df: pd.DataFrame) -> Dict:
-    """معالجة ملف الإكسيل واستيراد العروض مع معالجة الأخطاء"""
+    """معالجة ملف الإكسيل واستيراد العروض"""
     results = {
         "success": [],
         "errors": []
@@ -430,14 +446,15 @@ def process_excel_import(df: pd.DataFrame) -> Dict:
             action = str(row.get('Action', 'create')).strip().lower()
             offer_id = row.get('Offer_ID')
             
-            # تنظيف معرف العرض من النقطة العشرية
+            # تنظيف معرف العرض
             if offer_id and isinstance(offer_id, float):
                 offer_id = int(offer_id) if offer_id.is_integer() else None
             
-            # الحصول على البيانات مع معالجة القيم الفارغة
+            # الحصول على البيانات
             offer_name = str(row.get('Offer_Name', 'عرض جديد')).strip()
             offer_type = str(row.get('Offer_Type', 'buy_x_get_y')).strip()
             applied_channel = str(row.get('Applied_Channel', 'browser_and_application')).strip()
+            applied_to = str(row.get('Applied_To', 'product')).strip()  # ✅ إضافة الحقل المطلوب
             
             # معالجة التواريخ
             start_date = row.get('Start_Date_Time')
@@ -473,11 +490,12 @@ def process_excel_import(df: pd.DataFrame) -> Dict:
                     if p and p.isdigit():
                         get_products.append(int(p))
             
-            # بناء بيانات العرض الأساسية
+            # بناء بيانات العرض مع جميع الحقول المطلوبة
             offer_data = {
                 "name": offer_name,
                 "offer_type": offer_type,
                 "applied_channel": applied_channel,
+                "applied_to": applied_to,  # ✅ إضافة الحقل المطلوب
                 "start_date": start_date,
                 "expiry_date": expiry_date,
                 "message": str(row.get('Offer_Message', '')).strip()
@@ -518,7 +536,7 @@ def process_excel_import(df: pd.DataFrame) -> Dict:
                 "discount_type": discount_type
             }
             
-            # إضافة مبلغ الخصم إذا كان موجوداً
+            # إضافة مبلغ الخصم
             try:
                 discount_amount = row.get('Discount_Amount')
                 if pd.notna(discount_amount) and float(discount_amount) > 0:
@@ -529,7 +547,7 @@ def process_excel_import(df: pd.DataFrame) -> Dict:
             if get_products:
                 offer_data["get"]["products"] = get_products
             
-            # تنفيذ الإجراء حسب نوع العملية
+            # تنفيذ الإجراء
             if action == 'create':
                 response = safe_api_request(
                     "POST", 
@@ -543,7 +561,6 @@ def process_excel_import(df: pd.DataFrame) -> Dict:
                     results["errors"].append(f"❌ فشل إنشاء العرض: {offer_name}")
                     
             elif action == 'update' and offer_id:
-                # تحديث العرض
                 response = safe_api_request(
                     "PUT", 
                     f"https://api.salla.dev/admin/v2/specialoffers/{offer_id}", 
@@ -566,7 +583,7 @@ def process_excel_import(df: pd.DataFrame) -> Dict:
                 else:
                     results["errors"].append(f"❌ فشل حذف العرض ID: {offer_id}")
                     
-            elif action in ['active', 'inactivate'] and offer_id:
+            elif action in ['active', 'inactive'] and offer_id:
                 status = "active" if action == 'active' else "inactive"
                 response = safe_api_request(
                     "PUT", 
@@ -593,38 +610,41 @@ def process_excel_import(df: pd.DataFrame) -> Dict:
 # ==========================================
 
 def generate_salla_excel_template() -> bytes:
-    """إنشاء نموذج Excel احترافي مع تنسيق صحيح"""
+    """إنشاء نموذج Excel احترافي"""
     try:
         try:
             from openpyxl.styles import PatternFill, Font, Alignment
             from openpyxl.worksheet.datavalidation import DataValidation
             from openpyxl import Workbook
+            from openpyxl.styles import numbers
         except ImportError:
             import subprocess
             subprocess.check_call(["pip", "install", "openpyxl"])
             from openpyxl.styles import PatternFill, Font, Alignment
             from openpyxl.worksheet.datavalidation import DataValidation
             from openpyxl import Workbook
+            from openpyxl.styles import numbers
         
         output = io.BytesIO()
         
         columns = [
             "Action", "Offer_ID", "Offer_Name", "Offer_Type", "Applied_Channel",
-            "With_Coupon", "Start_Date_Time", "Expiry_Date_Time", "Buy_Type",
-            "Buy_Quantity", "Buy_Products_IDs", "Get_Type", "Get_Quantity",
-            "Discount_Type", "Discount_Amount", "Get_Products_IDs", "Offer_Message"
+            "Applied_To", "With_Coupon", "Start_Date_Time", "Expiry_Date_Time", 
+            "Buy_Type", "Buy_Quantity", "Buy_Products_IDs", 
+            "Get_Type", "Get_Quantity", "Discount_Type", 
+            "Discount_Amount", "Get_Products_IDs", "Offer_Message"
         ]
         
         # بيانات نموذجية
         sample_data = [
             ["create", "", "عرض ترويجي جديد", "buy_x_get_y", "browser_and_application",
-             "لا", "2026-06-22 12:00:00", "2026-07-22 23:59:59", "product",
-             1, "1298176905", "product", 1, "percentage", 50, "1298176905", "خصم 50% على الحبة الثانية"],
-            ["update", "258182085", "تحديد العرض", "percentage", "browser",
-             "لا", "2026-06-22 12:00:00", "2026-07-22 23:59:59", "product",
-             1, "1298176905", "product", 1, "percentage", 30, "1298176905", "خصم 30%"],
-            ["active", "258182085", "", "", "", "", "", "", "", "", "", "", "", "", "", "", ""],
-            ["delete", "258182085", "", "", "", "", "", "", "", "", "", "", "", "", "", "", ""]
+             "product", "لا", "2026-06-22 12:00:00", "2026-07-22 23:59:59",
+             "product", 1, "1298176905", 
+             "product", 1, "percentage", 50, "1298176905", "خصم 50% على الحبة الثانية"],
+            ["update", "258182085", "تحديث العرض", "percentage", "browser",
+             "order", "لا", "2026-06-22 12:00:00", "2026-07-22 23:59:59",
+             "product", 1, "1298176905", 
+             "product", 1, "percentage", 30, "1298176905", "خصم 30%"],
         ]
         
         wb = Workbook()
@@ -665,7 +685,7 @@ def generate_salla_excel_template() -> bytes:
             adjusted_width = min(max_length + 2, 30)
             ws.column_dimensions[column].width = adjusted_width
         
-        # --- إضافة القوائم المنسدلة ---
+        # إضافة القوائم المنسدلة
         dv_action = DataValidation(
             type="list",
             formula1='"create,update,active,inactive,delete"',
@@ -699,6 +719,17 @@ def generate_salla_excel_template() -> bytes:
         ws.add_data_validation(dv_channel)
         dv_channel.add("E3:E100")
         
+        dv_applied_to = DataValidation(
+            type="list",
+            formula1='"order,product,category,paymentMethod"',
+            allow_blank=True,
+            showErrorMessage=True,
+            errorTitle="نوع التطبيق غير صحيح",
+            error="الرجاء اختيار: order, product, category, paymentMethod"
+        )
+        ws.add_data_validation(dv_applied_to)
+        dv_applied_to.add("F3:F100")
+        
         dv_coupon = DataValidation(
             type="list",
             formula1='"نعم,لا"',
@@ -708,7 +739,7 @@ def generate_salla_excel_template() -> bytes:
             error="الرجاء اختيار نعم أو لا"
         )
         ws.add_data_validation(dv_coupon)
-        dv_coupon.add("F3:F100")
+        dv_coupon.add("G3:G100")
         
         dv_disc_type = DataValidation(
             type="list",
@@ -719,22 +750,22 @@ def generate_salla_excel_template() -> bytes:
             error="الرجاء اختيار: percentage أو free-product"
         )
         ws.add_data_validation(dv_disc_type)
-        dv_disc_type.add("N3:N100")
+        dv_disc_type.add("O3:O100")
         
         # تنسيق خانات التاريخ
-        from openpyxl.styles import numbers
         for row in range(3, 100):
-            for col in ['G', 'H']:
+            for col in ['H', 'I']:  # Start_Date_Time و Expiry_Date_Time
                 cell = ws[f"{col}{row}"]
                 cell.number_format = numbers.FORMAT_DATE_DATETIME
         
         # إضافة تعليمات
         ws.insert_rows(1)
-        ws.merge_cells('A1:Q1')
+        ws.merge_cells('A1:R1')
         instructions_cell = ws.cell(row=1, column=1)
         instructions_cell.value = """
 📋 تعليمات التعبئة:
 - Action: create (إنشاء), update (تحديث), delete (حذف), active (تفعيل), inactive (إيقاف)
+- Applied_To: order (طلب), product (منتج), category (تصنيف), paymentMethod (طريقة دفع) - مطلوب!
 - Offer_ID: مطلوب للتحديث والحذف (استخدم أرقام صحيحة بدون نقاط عشرية)
 - التواريخ: استخدم الصيغة YYYY-MM-DD HH:mm:ss
 - المنتجات: يمكن إدخال أكثر من معرف بفاصلة مثل: 123,456,789
@@ -742,7 +773,7 @@ def generate_salla_excel_template() -> bytes:
 """
         instructions_cell.font = Font(name="Segoe UI", size=11, bold=True, color="1F497D")
         instructions_cell.alignment = Alignment(horizontal="center", vertical="center", wrap_text=True)
-        ws.row_dimensions[1].height = 100
+        ws.row_dimensions[1].height = 120
         
         wb.save(output)
         output.seek(0)
@@ -755,9 +786,10 @@ def generate_salla_excel_template() -> bytes:
         # إنشاء ملف بديل
         columns = [
             "Action", "Offer_ID", "Offer_Name", "Offer_Type", "Applied_Channel",
-            "With_Coupon", "Start_Date_Time", "Expiry_Date_Time", "Buy_Type",
-            "Buy_Quantity", "Buy_Products_IDs", "Get_Type", "Get_Quantity",
-            "Discount_Type", "Discount_Amount", "Get_Products_IDs", "Offer_Message"
+            "Applied_To", "With_Coupon", "Start_Date_Time", "Expiry_Date_Time",
+            "Buy_Type", "Buy_Quantity", "Buy_Products_IDs",
+            "Get_Type", "Get_Quantity", "Discount_Type",
+            "Discount_Amount", "Get_Products_IDs", "Offer_Message"
         ]
         df = pd.DataFrame(columns=columns)
         buffer = io.BytesIO()
@@ -818,41 +850,43 @@ if not st.session_state["logged_in"]:
 SALLA_API_URL = "https://api.salla.dev/admin/v2/specialoffers"
 
 # ==========================================
-# الشريط العلوي
+# الشريط العلوي مع زر تسجيل الخروج
 # ==========================================
 
-st.markdown(f"""
-    <div class='top-sticky-bar'>
-        <div class='title'>🛡️ لوحة التحكم الإدارية لصيدليات بلسم العُلا</div>
-        <div class='status'>✅ الاتصال موثق ومستقر</div>
-    </div>
-""", unsafe_allow_html=True)
+# أعمدة للشريط العلوي
+top_col1, top_col2, top_col3 = st.columns([3, 2, 1.2])
 
-# ==========================================
-# أزرار التحكم العلوية
-# ==========================================
-
-top_c1, top_col2, _ = st.columns([1.5, 1.5, 4])
-with top_c1:
-    with st.popover("🔑 تعديل مفتاح الربط"):
-        new_tok = st.text_input("أدخل التوكن الجديد:", value=st.session_state["access_token"], type="password")
-        if st.button("تحديث التوكن", use_container_width=True):
-            if new_tok.strip():
-                st.session_state["access_token"] = new_tok.strip()
-                st.success("✅ تم تحديث التوكن!")
-                st.rerun()
-            else:
-                st.warning("⚠️ الرجاء إدخال توكن صحيح")
+with top_col1:
+    st.markdown("""
+        <div style="background: linear-gradient(135deg, #0a1628 0%, #1a2d4a 100%); 
+                    padding: 16px 24px; 
+                    border-radius: 12px; 
+                    border-bottom: 4px solid #00b4d8;
+                    display: flex; 
+                    justify-content: space-between; 
+                    align-items: center;
+                    flex-wrap: wrap;
+                    gap: 10px;">
+            <span style="color: #ffffff; font-weight: 700; font-size: 17px;">🛡️ لوحة التحكم الإدارية لصيدليات بلسم العُلا</span>
+            <span style="color: #00b4d8; font-weight: 600; font-size: 14px; background: rgba(0, 180, 216, 0.12); padding: 5px 16px; border-radius: 20px; border: 1px solid rgba(0, 180, 216, 0.3);">✅ الاتصال موثق ومستقر</span>
+        </div>
+    """, unsafe_allow_html=True)
 
 with top_col2:
-    with st.popover("🔒 تعديل كلمة المرور"):
-        new_pwd = st.text_input("أدخل كلمة المرور الجديدة:", type="password")
-        if st.button("تحديث الباسورد", use_container_width=True):
-            if new_pwd.strip():
-                st.session_state["admin_password"] = new_pwd.strip()
-                st.success("✅ تم تحديث كلمة المرور!")
-            else:
-                st.warning("⚠️ الرجاء إدخال كلمة مرور صحيحة")
+    # عرض معلومات المستخدم
+    st.markdown("""
+        <div style="text-align: center; padding: 8px 0;">
+            <span style="color: #0f1c2e; font-weight: 600;">👤 admin</span>
+        </div>
+    """, unsafe_allow_html=True)
+
+with top_col3:
+    # زر تسجيل الخروج
+    st.markdown("<div class='logout-btn'>", unsafe_allow_html=True)
+    if st.button("🚪 تسجيل الخروج", key="logout_btn", use_container_width=True):
+        st.session_state["logged_in"] = False
+        st.rerun()
+    st.markdown("</div>", unsafe_allow_html=True)
 
 st.divider()
 
@@ -882,6 +916,14 @@ st.sidebar.divider()
 
 st.sidebar.markdown("<div class='refresh-btn-container'>", unsafe_allow_html=True)
 if st.sidebar.button("🔄 تحديث البيانات والصفحة", key="refresh_page_btn", use_container_width=True):
+    st.rerun()
+st.sidebar.markdown("</div>", unsafe_allow_html=True)
+
+# زر تسجيل الخروج في القائمة الجانبية
+st.sidebar.divider()
+st.sidebar.markdown("<div class='logout-btn'>", unsafe_allow_html=True)
+if st.sidebar.button("🚪 تسجيل الخروج", key="logout_sidebar", use_container_width=True):
+    st.session_state["logged_in"] = False
     st.rerun()
 st.sidebar.markdown("</div>", unsafe_allow_html=True)
 
@@ -925,10 +967,19 @@ if page == "📊 لوحة تصفية وإدارة العروض الحالية":
     
     if uploaded_file:
         try:
-            # قراءة الملف مع معالجة الأنواع
+            # قراءة الملف مع معالجة التواريخ
             df_user = pd.read_excel(uploaded_file)
             
-            # تحويل الأعمدة الرقمية إلى النوع المناسب
+            # تحويل أعمدة التاريخ إلى نص
+            date_columns = ['Start_Date_Time', 'Expiry_Date_Time']
+            for col in date_columns:
+                if col in df_user.columns:
+                    # تحويل التواريخ إلى نص بالصيغة المطلوبة
+                    df_user[col] = df_user[col].apply(
+                        lambda x: x.strftime('%Y-%m-%d %H:%M:%S') if isinstance(x, (datetime, pd.Timestamp)) else str(x) if pd.notna(x) else ''
+                    )
+            
+            # تحويل الأعمدة الرقمية
             numeric_columns = ['Offer_ID', 'Buy_Quantity', 'Get_Quantity', 'Discount_Amount']
             for col in numeric_columns:
                 if col in df_user.columns:
@@ -1129,6 +1180,18 @@ if page == "📊 لوحة تصفية وإدارة العروض الحالية":
                             index=type_index,
                             key=f"edit_type_{offer_id}"
                         )
+                        
+                        # إضافة الحقل المطلوب applied_to
+                        applied_to_options = ["order", "product", "category", "paymentMethod"]
+                        current_applied_to = offer.get('applied_to', 'product')
+                        applied_to_index = applied_to_options.index(current_applied_to) if current_applied_to in applied_to_options else 1
+                        ed_applied_to = st.selectbox(
+                            "تطبيق العرض على:",
+                            applied_to_options,
+                            index=applied_to_index,
+                            key=f"edit_applied_to_{offer_id}",
+                            help="order: طلب, product: منتج, category: تصنيف, paymentMethod: طريقة دفع"
+                        )
                     
                     col1, col2 = st.columns(2)
                     with col1:
@@ -1172,6 +1235,7 @@ if page == "📊 لوحة تصفية وإدارة العروض الحالية":
                                 "start_date": ed_start,
                                 "expiry_date": ed_end,
                                 "offer_type": ed_type,
+                                "applied_to": ed_applied_to,  # ✅ إضافة الحقل المطلوب
                                 "buy": {
                                     "type": offer.get('buy', {}).get('type', 'product'),
                                     "quantity": int(ed_buy_q)
@@ -1347,7 +1411,6 @@ elif page == "📦 مركز جرد المنتجات ومعرفات الـ IDs":
                     # أزرار التحكم الصغيرة
                     st.markdown("<div class='action-buttons'>", unsafe_allow_html=True)
                     
-                    # زر إيقاف/تفعيل العرض
                     if offer_status == "active":
                         if st.button("⏸️ إيقاف العرض", key=f"pause_offer_{p_id}_{idx}", use_container_width=True):
                             with st.spinner("🔄 جاري إيقاف العرض..."):
@@ -1380,11 +1443,9 @@ elif page == "📦 مركز جرد المنتجات ومعرفات الـ IDs":
                     st.button("إضافة عرض", key=f"add_offer_{p_id}_{idx}", disabled=True, use_container_width=True)
             
             with col4:
-                # زر نسخ المعرف
                 if st.button("📋 نسخ ID", key=f"copy_id_{p_id}_{idx}", use_container_width=True):
                     st.toast(f"✅ تم نسخ المعرف: {p_id}")
                 
-                # زر تغيير حالة الظهور
                 current_status = p.get('status', 'sale')
                 btn_label = "👁️ إخفاء" if current_status == "sale" else "👁️ إظهار"
                 btn_type = "primary" if current_status == "sale" else "secondary"
