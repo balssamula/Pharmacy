@@ -22,7 +22,7 @@ st.set_page_config(
 )
 
 # ==========================================
-# CSS المحسّن بالكامل
+# CSS المحسّن
 # ==========================================
 st.markdown("""
     <style>
@@ -35,7 +35,6 @@ st.markdown("""
         box-sizing: border-box !important;
     }
     
-    /* ---------- شاشة الدخول ---------- */
     .login-container {
         max-width: 450px;
         margin: 80px auto;
@@ -53,7 +52,6 @@ st.markdown("""
         to { opacity: 1; transform: translateY(0); }
     }
     
-    /* ---------- الشريط العلوي ---------- */
     .top-sticky-bar {
         background: linear-gradient(135deg, #0a1628 0%, #1a2d4a 100%);
         padding: 14px 24px;
@@ -88,34 +86,6 @@ st.markdown("""
         border: 1px solid rgba(0, 180, 216, 0.3);
     }
     
-    /* ---------- أزرار التحكم العلوية ---------- */
-    .control-btn-container {
-        display: flex;
-        gap: 10px;
-        align-items: center;
-        flex-wrap: wrap;
-    }
-    
-    .control-btn-container button {
-        background: #00b4d8 !important;
-        color: #ffffff !important;
-        font-weight: 700 !important;
-        border-radius: 8px !important;
-        height: 38px !important;
-        border: none !important;
-        box-shadow: 0 4px 15px rgba(0, 180, 216, 0.3) !important;
-        transition: all 0.3s ease !important;
-        font-size: 14px !important;
-        padding: 0 18px !important;
-        width: auto !important;
-    }
-    
-    .control-btn-container button:hover {
-        transform: scale(1.02) !important;
-        box-shadow: 0 6px 20px rgba(0, 180, 216, 0.4) !important;
-    }
-    
-    /* ---------- البطاقات ---------- */
     .product-card {
         background: #ffffff;
         padding: 0 !important;
@@ -196,7 +166,6 @@ st.markdown("""
         margin-top: 12px;
     }
     
-    /* ---------- القائمة الجانبية ---------- */
     [data-testid="stSidebar"] {
         background-color: #0f1c2e !important;
         padding: 20px 12px !important;
@@ -226,7 +195,6 @@ st.markdown("""
         border-bottom: 2px solid rgba(0, 180, 216, 0.25);
     }
     
-    /* ---------- زر تحديث الصفحة (أخضر) ---------- */
     .refresh-btn-container {
         margin-top: 10px;
     }
@@ -248,7 +216,6 @@ st.markdown("""
         box-shadow: 0 6px 25px rgba(40, 167, 69, 0.5) !important;
     }
     
-    /* ---------- زر تسجيل الخروج (أحمر) ---------- */
     .logout-btn {
         margin-top: 10px;
     }
@@ -270,7 +237,6 @@ st.markdown("""
         box-shadow: 0 6px 25px rgba(220, 53, 69, 0.5) !important;
     }
     
-    /* ---------- الأزرار العامة ---------- */
     .stButton>button {
         width: 100% !important;
         font-weight: 700 !important;
@@ -296,26 +262,6 @@ st.markdown("""
     .product-link:hover {
         color: #0077b6 !important;
         text-decoration: underline !important;
-    }
-    
-    .badge-success {
-        background: #d4edda;
-        color: #155724;
-        padding: 3px 12px;
-        border-radius: 20px;
-        font-weight: 600;
-        font-size: 12px;
-        display: inline-block;
-    }
-    
-    .badge-danger {
-        background: #f8d7da;
-        color: #721c24;
-        padding: 3px 12px;
-        border-radius: 20px;
-        font-weight: 600;
-        font-size: 12px;
-        display: inline-block;
     }
     
     .footer {
@@ -384,9 +330,23 @@ st.markdown("""
         font-size: 12px !important;
     }
     
-    /* ---------- تحسين عرض التوكن ---------- */
-    .token-popover {
-        direction: rtl !important;
+    /* حالة الكوبون */
+    .coupon-badge {
+        display: inline-block;
+        padding: 2px 10px;
+        border-radius: 12px;
+        font-size: 11px;
+        font-weight: 600;
+    }
+    
+    .coupon-enabled {
+        background: #d4edda;
+        color: #155724;
+    }
+    
+    .coupon-disabled {
+        background: #f8d7da;
+        color: #721c24;
     }
     </style>
 """, unsafe_allow_html=True)
@@ -396,7 +356,6 @@ st.markdown("""
 # ==========================================
 
 def safe_parse_date(date_str: Optional[str]) -> Optional[datetime]:
-    """تحليل آمن للتاريخ"""
     if not date_str:
         return None
     try:
@@ -408,7 +367,6 @@ def safe_parse_date(date_str: Optional[str]) -> Optional[datetime]:
             return None
 
 def parse_products_cleanly(product_list: Optional[List]) -> str:
-    """تحليل المنتجات"""
     if not product_list or not isinstance(product_list, list):
         return "كل منتجات المتجر"
     
@@ -428,7 +386,6 @@ def parse_products_cleanly(product_list: Optional[List]) -> str:
     return "\n".join(clean_elements) if clean_elements else "لا توجد منتجات"
 
 def get_product_price(product: Dict) -> float:
-    """استخراج سعر المنتج"""
     try:
         price = product.get('price', {})
         if isinstance(price, dict):
@@ -438,7 +395,6 @@ def get_product_price(product: Dict) -> float:
         return 0.0
 
 def safe_api_request(method: str, url: str, headers: Dict, **kwargs) -> Optional[Dict]:
-    """تنفيذ طلب API مع معالجة الأخطاء"""
     try:
         response = requests.request(method, url, headers=headers, timeout=30, **kwargs)
         
@@ -475,17 +431,11 @@ def get_headers():
 # ==========================================
 
 def process_excel_import(df: pd.DataFrame) -> Dict:
-    """معالجة ملف الإكسيل واستيراد العروض"""
-    results = {
-        "success": [],
-        "errors": []
-    }
-    
+    results = {"success": [], "errors": []}
     headers = get_headers()
     
     for idx, row in df.iterrows():
         try:
-            # تنظيف البيانات
             action = str(row.get('Action', 'create')).strip().lower()
             offer_id = row.get('Offer_ID')
             
@@ -497,7 +447,6 @@ def process_excel_import(df: pd.DataFrame) -> Dict:
             applied_channel = str(row.get('Applied_Channel', 'browser_and_application')).strip()
             applied_to = str(row.get('Applied_To', 'product')).strip()
             
-            # معالجة التواريخ
             start_date = row.get('Start_Date_Time')
             if pd.isna(start_date):
                 start_date = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
@@ -541,6 +490,10 @@ def process_excel_import(df: pd.DataFrame) -> Dict:
                 "expiry_date": expiry_date,
                 "message": str(row.get('Offer_Message', '')).strip()
             }
+            
+            # إضافة applied_with_coupon إذا كان موجوداً
+            with_coupon = str(row.get('With_Coupon', 'لا')).strip()
+            offer_data["applied_with_coupon"] = with_coupon == 'نعم'
             
             # إضافة بيانات الشراء
             buy_qty = 1
@@ -650,7 +603,6 @@ def process_excel_import(df: pd.DataFrame) -> Dict:
 # ==========================================
 
 def generate_salla_excel_template() -> bytes:
-    """إنشاء نموذج Excel احترافي"""
     try:
         try:
             from openpyxl.styles import PatternFill, Font, Alignment
@@ -677,7 +629,7 @@ def generate_salla_excel_template() -> bytes:
         
         sample_data = [
             ["create", "", "عرض ترويجي جديد", "buy_x_get_y", "browser_and_application",
-             "product", "لا", "2026-06-22 12:00:00", "2026-07-22 23:59:59",
+             "product", "نعم", "2026-06-22 12:00:00", "2026-07-22 23:59:59",
              "product", 1, "1298176905", 
              "product", 1, "percentage", 50, "1298176905", "خصم 50% على الحبة الثانية"],
         ]
@@ -797,13 +749,14 @@ def generate_salla_excel_template() -> bytes:
 📋 تعليمات التعبئة:
 - Action: create (إنشاء), update (تحديث), delete (حذف), active (تفعيل), inactive (إيقاف)
 - Applied_To: order (طلب), product (منتج), category (تصنيف), paymentMethod (طريقة دفع) - مطلوب!
+- With_Coupon: نعم (تطبيق مع كوبون) أو لا (بدون كوبون)
 - Offer_ID: مطلوب للتحديث والحذف (استخدم أرقام صحيحة بدون نقاط عشرية)
 - التواريخ: استخدم الصيغة YYYY-MM-DD HH:mm:ss
 - المنتجات: يمكن إدخال أكثر من معرف بفاصلة مثل: 123,456,789
 """
         instructions_cell.font = Font(name="Segoe UI", size=11, bold=True, color="1F497D")
         instructions_cell.alignment = Alignment(horizontal="center", vertical="center", wrap_text=True)
-        ws.row_dimensions[1].height = 100
+        ws.row_dimensions[1].height = 110
         
         wb.save(output)
         output.seek(0)
@@ -857,7 +810,6 @@ if not st.session_state["logged_in"]:
         </div>
     """, unsafe_allow_html=True)
     
-    # إضافة حقل التوكن في شاشة الدخول
     st.text_input("🔑 مفتاح الربط (Access Token):", type="password", key="login_token", help="أدخل التوكن الخاص بتطبيقك")
     username = st.text_input("👤 اسم المستخدم:", value="admin", key="lg_un")
     password = st.text_input("🔒 كلمة المرور:", type="password", key="lg_pw")
@@ -883,10 +835,9 @@ if not st.session_state["logged_in"]:
 SALLA_API_URL = "https://api.salla.dev/admin/v2/specialoffers"
 
 # ==========================================
-# الشريط العلوي مع أزرار التحكم
+# الشريط العلوي
 # ==========================================
 
-# الشريط العلوي
 st.markdown(f"""
     <div class='top-sticky-bar'>
         <div class='title'>🛡️ لوحة التحكم الإدارية لصيدليات بلسم العُلا</div>
@@ -894,7 +845,6 @@ st.markdown(f"""
     </div>
 """, unsafe_allow_html=True)
 
-# أزرار التحكم العلوية (تعديل التوكن وكلمة المرور)
 col1, col2, col3 = st.columns([1.5, 1.5, 5])
 
 with col1:
@@ -945,13 +895,11 @@ page = st.sidebar.radio(
 
 st.sidebar.divider()
 
-# زر تحديث الصفحة (أخضر)
 st.sidebar.markdown("<div class='refresh-btn-container'>", unsafe_allow_html=True)
 if st.sidebar.button("🔄 تحديث البيانات والصفحة", key="refresh_page_btn", use_container_width=True):
     st.rerun()
 st.sidebar.markdown("</div>", unsafe_allow_html=True)
 
-# زر تسجيل الخروج (أحمر) - فقط في القائمة الجانبية
 st.sidebar.markdown("<div class='logout-btn'>", unsafe_allow_html=True)
 if st.sidebar.button("🚪 تسجيل الخروج", key="logout_sidebar", use_container_width=True):
     st.session_state["logged_in"] = False
@@ -1116,7 +1064,12 @@ if page == "📊 لوحة تصفية وإدارة العروض الحالية":
             with st.container():
                 st.markdown(f"<div class='offer-card'>", unsafe_allow_html=True)
                 
-                col1, col2, col3, col4 = st.columns([3, 1.2, 1.2, 1.2])
+                # الحصول على حالة الكوبون
+                applied_with_coupon = offer.get('applied_with_coupon', False)
+                coupon_status = "🟢 مع كوبون" if applied_with_coupon else "🔴 بدون كوبون"
+                coupon_class = "coupon-enabled" if applied_with_coupon else "coupon-disabled"
+                
+                col1, col2, col3, col4, col5 = st.columns([2.5, 1.2, 1.2, 1.2, 1.2])
                 
                 with col1:
                     offer_name = offer.get('name', 'عرض بدون اسم')
@@ -1130,6 +1083,8 @@ if page == "📊 لوحة تصفية وإدارة العروض الحالية":
                             <span style="color: #6c757d; font-size: 13px;">🆔 ID: {offer_id}</span>
                             <br>
                             <span class="offer-date">📅 {start} → {expiry}</span>
+                            <br>
+                            <span class="coupon-badge {coupon_class}">🔖 {coupon_status}</span>
                         </div>
                     """, unsafe_allow_html=True)
                 
@@ -1141,6 +1096,32 @@ if page == "📊 لوحة تصفية وإدارة العروض الحالية":
                     st.caption(f"🏷️ {offer.get('offer_type', 'نوع غير محدد')}")
                 
                 with col3:
+                    # زر تبديل حالة الكوبون
+                    coupon_label = "🔖 مع كوبون" if not applied_with_coupon else "🔖 بدون كوبون"
+                    coupon_type = "secondary" if not applied_with_coupon else "primary"
+                    if st.button(coupon_label, key=f"toggle_coupon_{offer_id}_{idx}", use_container_width=True, type=coupon_type):
+                        with st.spinner("🔄 جاري تحديث حالة الكوبون..."):
+                            # جلب العرض الحالي أولاً
+                            current_offer = safe_api_request("GET", f"{SALLA_API_URL}/{offer_id}", get_headers())
+                            if current_offer and current_offer.get('data'):
+                                offer_data = current_offer['data']
+                                # تحديث حالة الكوبون
+                                offer_data['applied_with_coupon'] = not applied_with_coupon
+                                # إزالة الحقول غير القابلة للتعديل
+                                for key in ['id', 'status', 'created_at', 'updated_at']:
+                                    offer_data.pop(key, None)
+                                
+                                update_res = safe_api_request(
+                                    "PUT",
+                                    f"{SALLA_API_URL}/{offer_id}",
+                                    get_headers(),
+                                    json=offer_data
+                                )
+                                if update_res:
+                                    st.success(f"✅ تم {'تفعيل' if not applied_with_coupon else 'إيقاف'} تطبيق العرض مع الكوبون!")
+                                    st.rerun()
+                
+                with col4:
                     target_status = "inactive" if status == "active" else "active"
                     btn_label = "⏸️ إيقاف" if status == "active" else "▶️ تفعيل"
                     if st.button(btn_label, key=f"toggle_status_{offer_id}_{idx}", use_container_width=True):
@@ -1155,7 +1136,7 @@ if page == "📊 لوحة تصفية وإدارة العروض الحالية":
                                 st.success("✅ تم تحديث الحالة!")
                                 st.rerun()
                 
-                with col4:
+                with col5:
                     if st.button("🗑️ حذف", key=f"delete_offer_{offer_id}_{idx}", use_container_width=True, type="primary"):
                         with st.spinner("🔄 جاري الحذف..."):
                             del_res = safe_api_request("DELETE", f"{SALLA_API_URL}/{offer_id}", get_headers())
@@ -1211,6 +1192,13 @@ if page == "📊 لوحة تصفية وإدارة العروض الحالية":
                             index=applied_to_index,
                             key=f"edit_applied_to_{offer_id}"
                         )
+                        
+                        ed_coupon = st.selectbox(
+                            "تطبيق مع كوبون:",
+                            ["نعم", "لا"],
+                            index=0 if offer.get('applied_with_coupon', False) else 1,
+                            key=f"edit_coupon_{offer_id}"
+                        )
                     
                     col1, col2 = st.columns(2)
                     with col1:
@@ -1255,6 +1243,7 @@ if page == "📊 لوحة تصفية وإدارة العروض الحالية":
                                 "expiry_date": ed_end,
                                 "offer_type": ed_type,
                                 "applied_to": ed_applied_to,
+                                "applied_with_coupon": ed_coupon == "نعم",
                                 "buy": {
                                     "type": offer.get('buy', {}).get('type', 'product'),
                                     "quantity": int(ed_buy_q)
@@ -1365,7 +1354,14 @@ elif page == "📦 مركز جرد المنتجات ومعرفات الـ IDs":
             p_id = p.get('id', 'N/A')
             p_name = p.get('name', 'منتج بدون اسم')
             p_sku = p.get('sku', 'لا يوجد')
+            
+            # ✅ الحصول على العنوان الترويجي بشكل صحيح
             p_promotion = p.get('promotion_title', '')
+            if not p_promotion:
+                # محاولة الحصول من كائن promotion
+                promotion = p.get('promotion', {})
+                if isinstance(promotion, dict):
+                    p_promotion = promotion.get('title', '')
             
             offer = offer_map.get(p_id)
             has_offer = offer is not None
@@ -1408,6 +1404,7 @@ elif page == "📦 مركز جرد المنتجات ومعرفات الـ IDs":
                     offer_id = offer.get('id', '')
                     status_color = "🟢" if offer_status == "active" else "🔴"
                     status_text = "نشط" if offer_status == "active" else "غير نشط"
+                    coupon_status = "مع كوبون" if offer.get('applied_with_coupon', False) else "بدون كوبون"
                     
                     st.markdown(f"""
                         <div style="border: 1px solid #e8edf2; border-radius: 8px; padding: 10px; background: #f8f9fa;">
@@ -1416,6 +1413,8 @@ elif page == "📦 مركز جرد المنتجات ومعرفات الـ IDs":
                             <span style="font-size: 12px;">🆔 {offer_id}</span>
                             <br>
                             <span style="font-size: 12px;">{status_color} {status_text}</span>
+                            <br>
+                            <span style="font-size: 11px; color: #6c757d;">🔖 {coupon_status}</span>
                         </div>
                     """, unsafe_allow_html=True)
                     
