@@ -19,7 +19,7 @@ st.set_page_config(
     initial_sidebar_state="expanded"
 )
 
-# --- تحسين CSS مع متغيرات وإضافات جديدة ---
+# --- تحسين CSS ---
 st.markdown("""
     <style>
     @import url('https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700&display=swap');
@@ -42,7 +42,6 @@ st.markdown("""
         text-align: right !important;
     }
     
-    /* شاشة قفل الدخول الأمنية */
     .login-container {
         max-width: 450px;
         margin: 80px auto;
@@ -60,7 +59,6 @@ st.markdown("""
         to { opacity: 1; transform: translateY(0); }
     }
     
-    /* الشريط العلوي الثابت */
     .top-sticky-bar {
         background: linear-gradient(135deg, #0f1c2e 0%, #1a2d3f 100%);
         padding: 18px 30px;
@@ -93,7 +91,6 @@ st.markdown("""
         border: 1px solid var(--primary-color);
     }
     
-    /* بطاقات الجرد والعروض المحسنة */
     .product-card, .offer-card {
         background: #ffffff;
         padding: 25px;
@@ -122,7 +119,6 @@ st.markdown("""
         margin-top: 15px;
     }
     
-    /* تحسين القائمة الجانبية */
     [data-testid="stSidebar"] {
         background-color: var(--secondary-color) !important;
         padding: 20px 10px !important;
@@ -143,7 +139,6 @@ st.markdown("""
         border-bottom: 2px solid rgba(0, 180, 216, 0.3);
     }
     
-    /* تحسين الأزرار */
     .stButton>button {
         width: 100% !important;
         font-weight: 700 !important;
@@ -158,7 +153,6 @@ st.markdown("""
         box-shadow: 0 6px 20px rgba(0,0,0,0.15) !important;
     }
     
-    /* زر التحديث الجانبي */
     .refresh-btn-container button {
         background: linear-gradient(135deg, var(--danger-color), #c1121f) !important;
         color: #ffffff !important;
@@ -169,7 +163,6 @@ st.markdown("""
         box-shadow: 0 4px 15px rgba(230, 57, 70, 0.4) !important;
     }
     
-    /* روابط المنتجات */
     .product-link {
         color: var(--primary-color) !important;
         font-weight: 700;
@@ -183,7 +176,6 @@ st.markdown("""
         color: #0077b6 !important;
     }
     
-    /* تذييل الصفحة */
     .footer {
         text-align: center;
         padding: 20px;
@@ -193,13 +185,11 @@ st.markdown("""
         font-size: 14px;
     }
     
-    /* تنسيق الإشعارات */
     .stAlert {
         border-radius: 10px !important;
         direction: rtl !important;
     }
     
-    /* تحسين حقول الإدخال */
     .stTextInput>div>div>input {
         border-radius: 8px !important;
         border: 2px solid #e0e0e0 !important;
@@ -211,7 +201,6 @@ st.markdown("""
         box-shadow: 0 0 0 3px rgba(0, 180, 216, 0.2) !important;
     }
     
-    /* علامات الحالة */
     .badge {
         display: inline-block;
         padding: 4px 12px;
@@ -237,7 +226,7 @@ st.markdown("""
     </style>
 """, unsafe_allow_html=True)
 
-# --- 2. دوال مساعدة محسنة ---
+# --- 2. دوال مساعدة ---
 def safe_parse_date(date_str: Optional[str]) -> Optional[datetime]:
     """تحليل آمن للتاريخ مع معالجة الأخطاء"""
     if not date_str:
@@ -297,7 +286,188 @@ def safe_api_request(method: str, url: str, headers: Dict, **kwargs) -> Optional
         logger.error(f"JSON Error: {e}")
         return None
 
-# --- 3. إدارة جلسة الدخول المحسنة ---
+# --- 3. دالة إنشاء نموذج الإكسيل (المفقودة) ---
+def generate_salla_excel_template() -> bytes:
+    """
+    إنشاء نموذج Excel احترافي لاستيراد العروض مع قوائم منسدلة
+    """
+    try:
+        # محاولة استيراد openpyxl
+        try:
+            from openpyxl.styles import PatternFill, Font, Alignment
+            from openpyxl.worksheet.datavalidation import DataValidation
+            from openpyxl import Workbook
+        except ImportError:
+            st.warning("⚠️ جاري تثبيت مكتبة openpyxl...")
+            import subprocess
+            subprocess.check_call(["pip", "install", "openpyxl"])
+            from openpyxl.styles import PatternFill, Font, Alignment
+            from openpyxl.worksheet.datavalidation import DataValidation
+            from openpyxl import Workbook
+        
+        # إنشاء ملف Excel في الذاكرة
+        output = io.BytesIO()
+        
+        # تعريف الأعمدة
+        columns = [
+            "Action", "Offer_ID", "Offer_Name", "Offer_Type", "Applied_Channel", 
+            "With_Coupon", "Start_Date_Time", "Expiry_Date_Time", "Buy_Type", 
+            "Buy_Quantity", "Buy_Products_IDs", "Get_Type", "Get_Quantity", 
+            "Discount_Type", "Discount_Amount", "Get_Products_IDs", "Offer_Message"
+        ]
+        
+        # بيانات نموذجية
+        sample_data = [
+            ["create", None, "عرض ترويجي جديد", "buy_x_get_y", "browser_and_application", 
+             "لا", "2026-06-22 12:00:00", "2026-07-22 23:59:59", "product", 
+             1, "1298176905", "product", 1, "percentage", 50, "1298176905", "خصم 50% على الحبة الثانية"]
+        ]
+        
+        # إنشاء DataFrame
+        df = pd.DataFrame(sample_data, columns=columns)
+        
+        # إنشاء ملف Excel باستخدام openpyxl مباشرة
+        wb = Workbook()
+        ws = wb.active
+        ws.title = "قائمة العروض"
+        
+        # إضافة رؤوس الأعمدة
+        for col_idx, col_name in enumerate(columns, 1):
+            cell = ws.cell(row=1, column=col_idx, value=col_name)
+        
+        # إضافة البيانات
+        for row_idx, row_data in enumerate(sample_data, 2):
+            for col_idx, value in enumerate(row_data, 1):
+                ws.cell(row=row_idx, column=col_idx, value=value)
+        
+        # تنسيق الرؤوس
+        header_fill = PatternFill(start_color="1F497D", end_color="1F497D", fill_type="solid")
+        header_font = Font(name="Segoe UI", size=11, bold=True, color="FFFFFF")
+        header_alignment = Alignment(horizontal="center", vertical="center")
+        
+        for col_idx in range(1, len(columns) + 1):
+            cell = ws.cell(row=1, column=col_idx)
+            cell.fill = header_fill
+            cell.font = header_font
+            cell.alignment = header_alignment
+        
+        # ضبط عرض الأعمدة
+        for col in ws.columns:
+            max_length = 0
+            column = col[0].column_letter
+            for cell in col:
+                try:
+                    if len(str(cell.value)) > max_length:
+                        max_length = len(str(cell.value))
+                except:
+                    pass
+            adjusted_width = min(max_length + 2, 30)
+            ws.column_dimensions[column].width = adjusted_width
+        
+        # --- إضافة القوائم المنسدلة (Data Validation) ---
+        # قائمة الإجراءات
+        dv_action = DataValidation(
+            type="list", 
+            formula1='"create,update,active,inactive,delete"', 
+            allow_blank=True,
+            showErrorMessage=True,
+            errorTitle="قيمة غير صحيحة",
+            errorMessage="الرجاء اختيار أحد الإجراءات المتاحة"
+        )
+        ws.add_data_validation(dv_action)
+        dv_action.add("A2:A100")
+        
+        # قائمة أنواع العروض
+        dv_offer_type = DataValidation(
+            type="list", 
+            formula1='"buy_x_get_y,percentage,fixed_amount,discounts_table,tiered_offer"', 
+            allow_blank=True,
+            showErrorMessage=True,
+            errorTitle="نوع عرض غير صحيح",
+            errorMessage="الرجاء اختيار نوع العرض المناسب"
+        )
+        ws.add_data_validation(dv_offer_type)
+        dv_offer_type.add("D2:D100")
+        
+        # قائمة القنوات
+        dv_channel = DataValidation(
+            type="list", 
+            formula1='"browser,browser_and_application"', 
+            allow_blank=True,
+            showErrorMessage=True,
+            errorTitle="قناة غير صحيحة",
+            errorMessage="الرجاء اختيار القناة المناسبة"
+        )
+        ws.add_data_validation(dv_channel)
+        dv_channel.add("E2:E100")
+        
+        # قائمة الكوبون
+        dv_coupon = DataValidation(
+            type="list", 
+            formula1='"نعم,لا"', 
+            allow_blank=True,
+            showErrorMessage=True,
+            errorTitle="قيمة غير صحيحة",
+            errorMessage="الرجاء اختيار نعم أو لا"
+        )
+        ws.add_data_validation(dv_coupon)
+        dv_coupon.add("F2:F100")
+        
+        # قائمة أنواع الخصم
+        dv_disc_type = DataValidation(
+            type="list", 
+            formula1='"percentage,free-product"', 
+            allow_blank=True,
+            showErrorMessage=True,
+            errorTitle="نوع خصم غير صحيح",
+            errorMessage="الرجاء اختيار نوع الخصم المناسب"
+        )
+        ws.add_data_validation(dv_disc_type)
+        dv_disc_type.add("N2:N100")
+        
+        # إضافة تعليمات في الصف الأول (وصف الأعمدة)
+        ws.insert_rows(1)
+        ws.merge_cells('A1:Q1')
+        instructions_cell = ws.cell(row=1, column=1)
+        instructions_cell.value = "📋 تعليمات التعبئة: املأ البيانات في الصفوف التالية. القوائم المنسدلة متاحة في الأعمدة المحددة"
+        instructions_cell.font = Font(name="Segoe UI", size=12, bold=True, color="1F497D")
+        instructions_cell.alignment = Alignment(horizontal="center", vertical="center")
+        
+        # حفظ الملف
+        wb.save(output)
+        output.seek(0)
+        
+        return output.getvalue()
+        
+    except Exception as e:
+        logger.error(f"Error generating Excel template: {e}")
+        st.error(f"⚠️ حدث خطأ أثناء إنشاء النموذج: {str(e)}")
+        
+        # إنشاء ملف Excel بديل باستخدام pandas فقط
+        try:
+            columns = [
+                "Action", "Offer_ID", "Offer_Name", "Offer_Type", "Applied_Channel", 
+                "With_Coupon", "Start_Date_Time", "Expiry_Date_Time", "Buy_Type", 
+                "Buy_Quantity", "Buy_Products_IDs", "Get_Type", "Get_Quantity", 
+                "Discount_Type", "Discount_Amount", "Get_Products_IDs", "Offer_Message"
+            ]
+            sample_data = [
+                ["create", None, "عرض ترويجي جديد", "buy_x_get_y", "browser_and_application", 
+                 "لا", "2026-06-22 12:00:00", "2026-07-22 23:59:59", "product", 
+                 1, "1298176905", "product", 1, "percentage", 50, "1298176905", "خصم 50% على الحبة الثانية"]
+            ]
+            df = pd.DataFrame(sample_data, columns=columns)
+            buffer = io.BytesIO()
+            with pd.ExcelWriter(buffer, engine='openpyxl') as writer:
+                df.to_excel(writer, index=False, sheet_name='قائمة العروض')
+            buffer.seek(0)
+            return buffer.getvalue()
+        except Exception as e2:
+            logger.error(f"Fallback error: {e2}")
+            # في حالة فشل كل شيء، إرجاع DataFrame فارغ على هيئة CSV
+            return pd.DataFrame(columns=columns).to_csv(index=False).encode('utf-8')
+
+# --- 4. إدارة جلسة الدخول ---
 def init_session_state():
     """تهيئة حالة الجلسة مع القيم الافتراضية"""
     defaults = {
@@ -312,7 +482,7 @@ def init_session_state():
 
 init_session_state()
 
-# --- شاشة الدخول المحسنة ---
+# --- شاشة الدخول ---
 if not st.session_state["logged_in"]:
     st.markdown("<div class='login-container'>", unsafe_allow_html=True)
     st.markdown("""
@@ -344,7 +514,7 @@ HEADERS = {
     "Content-Type": "application/json"
 }
 
-# --- الشريط العلوي المحسن ---
+# --- الشريط العلوي ---
 st.markdown(f"""
     <div class='top-sticky-bar'>
         <div class='title'>
@@ -364,6 +534,8 @@ with top_c1:
         if st.button("تحديث التوكن", use_container_width=True):
             if new_tok.strip():
                 st.session_state["access_token"] = new_tok.strip()
+                # تحديث HEADERS
+                HEADERS["Authorization"] = f"Bearer {new_tok.strip()}"
                 st.success("✅ تم تحديث التوكن بنجاح!")
                 st.rerun()
             else:
@@ -381,7 +553,7 @@ with top_col2:
 
 st.divider()
 
-# --- القائمة الجانبية المحسنة ---
+# --- القائمة الجانبية ---
 st.sidebar.markdown("""
     <div style="text-align: center; padding: 10px 0;">
         <h2>🏥 بوابة بلسم الرقمية</h2>
@@ -402,13 +574,13 @@ page = st.sidebar.radio(
 
 st.sidebar.divider()
 
-# --- زر التحديث المحسن ---
+# --- زر التحديث ---
 st.sidebar.markdown("<div class='refresh-btn-container'>", unsafe_allow_html=True)
 if st.sidebar.button("🔄 تحديث البيانات والصفحة", key="refresh_page_btn", use_container_width=True):
     st.rerun()
 st.sidebar.markdown("</div>", unsafe_allow_html=True)
 
-# --- معلومات إضافية في الجانب ---
+# --- معلومات إضافية ---
 with st.sidebar.expander("ℹ️ معلومات النظام", expanded=False):
     st.caption(f"📅 التاريخ: {datetime.now().strftime('%Y-%m-%d %H:%M')}")
     st.caption(f"🔗 API Base: {SALLA_API_URL.split('/admin')[0]}")
@@ -437,7 +609,8 @@ if page == "📊 لوحة تصفية وإدارة العروض الحالية":
             data=generate_salla_excel_template(),
             file_name="Salla_Offers_Template.xlsx",
             mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-            use_container_width=True
+            use_container_width=True,
+            help="تحميل نموذج Excel مع قوائم منسدلة لسهولة التعبئة"
         )
     
     # --- رفع الملف ---
@@ -468,7 +641,7 @@ if page == "📊 لوحة تصفية وإدارة العروض الحالية":
     if res and res.get("data"):
         raw_offers = res["data"]
         
-        # --- فلترة العروض المحسنة ---
+        # --- فلترة العروض ---
         with st.expander("🔍 خيارات البحث والفلترة المتقدمة", expanded=True):
             col1, col2, col3 = st.columns(3)
             with col1:
@@ -591,7 +764,7 @@ if page == "📊 لوحة تصفية وإدارة العروض الحالية":
                                 st.success("✅ تم حذف العرض بنجاح!")
                                 st.rerun()
                 
-                # --- تفاصيل العرض القابلة للتوسيع ---
+                # --- تفاصيل العرض ---
                 with st.expander(f"🔽 تفاصيل العرض المتقدمة", expanded=False):
                     st.markdown("<div class='sub-card'>", unsafe_allow_html=True)
                     
@@ -755,7 +928,7 @@ elif page == "📦 مركز جرد المنتجات ومعرفات الـ IDs":
             # عرض أول 20 منتج إذا لم يكن هناك بحث
             filtered_products = products[:20]
             if len(products) > 20:
-                st.info(f"📌 عرض أول 20 منتج. استخدم البحث لعرض المزيد.")
+                st.info("📌 عرض أول 20 منتج. استخدم البحث لعرض المزيد.")
         
         if not filtered_products:
             st.warning("⚠️ لم يتم العثور على منتجات تطابق البحث")
