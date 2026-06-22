@@ -13,7 +13,7 @@ logger = logging.getLogger(__name__)
 
 # --- 1. إعدادات المنظومة وتصميم الهوية البصرية الاحترافية الفاخرة ---
 st.set_page_config(
-    page_title="منظومة بلسم الرقمية لإدارة العروض", 
+    page_title="منظومة بلسم العلا لإدارة العروض", 
     layout="wide", 
     page_icon="🎁",
     initial_sidebar_state="expanded"
@@ -576,7 +576,7 @@ st.sidebar.divider()
 
 # --- زر التحديث ---
 st.sidebar.markdown("<div class='refresh-btn-container'>", unsafe_allow_html=True)
-if st.sidebar.button("🔄 تحديث البيانات والصفحة", key="refresh_page_btn", use_container_width=True):
+if st.sidebar.button("🔄 تحديث البيانات والصفحة", key="refresh_page_btn", use_container_width=True, style='color: #39FF14'):
     st.rerun()
 st.sidebar.markdown("</div>", unsafe_allow_html=True)
 
@@ -600,10 +600,10 @@ if page == "📊 لوحة تصفية وإدارة العروض الحالية":
     """, unsafe_allow_html=True)
     
     # --- نموذج الاستيراد ---
-    col_info, col_btn = st.columns([3, 1])
-    with col_info:
+    c_info, c_btn = st.columns([3, 1])
+    with c_info:
         st.info("📥 قم بتنزيل النموذج الاحترافي وتعبئة البيانات بالصيغ المحددة")
-    with col_btn:
+    with c_btn:
         st.download_button(
             label="📥 تحميل النموذج",
             data=generate_salla_excel_template(),
