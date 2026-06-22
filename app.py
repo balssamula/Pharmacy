@@ -7,6 +7,7 @@ from datetime import datetime
 from typing import Optional, List, Dict, Any
 import logging
 import traceback
+import re
 
 # --- إعدادات التسجيل ---
 logging.basicConfig(level=logging.INFO)
@@ -21,7 +22,7 @@ st.set_page_config(
 )
 
 # ==========================================
-# CSS المحسّن بالكامل
+# CSS المحسّن
 # ==========================================
 st.markdown("""
     <style>
@@ -34,7 +35,6 @@ st.markdown("""
         box-sizing: border-box !important;
     }
     
-    /* ---------- شاشة الدخول ---------- */
     .login-container {
         max-width: 450px;
         margin: 80px auto;
@@ -52,7 +52,6 @@ st.markdown("""
         to { opacity: 1; transform: translateY(0); }
     }
     
-    /* ---------- الشريط العلوي ---------- */
     .top-sticky-bar {
         background: linear-gradient(135deg, #0a1628 0%, #1a2d4a 100%);
         padding: 16px 28px;
@@ -87,7 +86,6 @@ st.markdown("""
         border: 1px solid rgba(0, 180, 216, 0.3);
     }
     
-    /* ---------- البطاقات المحسّنة ---------- */
     .product-card {
         background: #ffffff;
         padding: 0 !important;
@@ -106,7 +104,6 @@ st.markdown("""
         transform: translateY(-2px);
     }
     
-    /* رأس البطاقة مع العنوان الترويجي */
     .product-card-header {
         background: linear-gradient(135deg, #0f1c2e 0%, #1a2d4a 100%);
         padding: 14px 24px;
@@ -142,7 +139,6 @@ st.markdown("""
         direction: rtl !important;
     }
     
-    /* بطاقات العروض المحسّنة */
     .offer-card {
         background: #ffffff;
         padding: 18px 22px;
@@ -170,7 +166,6 @@ st.markdown("""
         margin-top: 12px;
     }
     
-    /* ---------- القائمة الجانبية ---------- */
     [data-testid="stSidebar"] {
         background-color: #0f1c2e !important;
         padding: 20px 12px !important;
@@ -200,7 +195,6 @@ st.markdown("""
         border-bottom: 2px solid rgba(0, 180, 216, 0.25);
     }
     
-    /* ---------- زر التحديث ---------- */
     .refresh-btn-container {
         margin-top: 10px;
     }
@@ -222,7 +216,6 @@ st.markdown("""
         box-shadow: 0 6px 25px rgba(220, 53, 69, 0.5) !important;
     }
     
-    /* ---------- الأزرار العامة ---------- */
     .stButton>button {
         width: 100% !important;
         font-weight: 700 !important;
@@ -237,15 +230,6 @@ st.markdown("""
         box-shadow: 0 4px 15px rgba(0,0,0,0.12) !important;
     }
     
-    /* أزرار صغيرة للتحكم السريع */
-    .small-btn button {
-        height: 32px !important;
-        font-size: 12px !important;
-        padding: 0 12px !important;
-        min-width: 70px !important;
-    }
-    
-    /* ---------- روابط المنتجات ---------- */
     .product-link {
         color: #00b4d8 !important;
         font-weight: 700;
@@ -259,7 +243,6 @@ st.markdown("""
         text-decoration: underline !important;
     }
     
-    /* ---------- شارات الحالة ---------- */
     .badge-success {
         background: #d4edda;
         color: #155724;
@@ -280,17 +263,6 @@ st.markdown("""
         display: inline-block;
     }
     
-    .badge-warning {
-        background: #fff3cd;
-        color: #856404;
-        padding: 3px 12px;
-        border-radius: 20px;
-        font-weight: 600;
-        font-size: 12px;
-        display: inline-block;
-    }
-    
-    /* ---------- التذييل ---------- */
     .footer {
         text-align: center;
         padding: 20px;
@@ -300,7 +272,6 @@ st.markdown("""
         font-size: 13px;
     }
     
-    /* ---------- عرض العروض ---------- */
     .offers-count {
         background: #f0f4f8;
         padding: 10px 18px;
@@ -314,13 +285,11 @@ st.markdown("""
         font-size: 13px;
     }
     
-    /* ---------- تنسيق الإشعارات ---------- */
     .stAlert {
         border-radius: 10px !important;
         direction: rtl !important;
     }
     
-    /* ---------- حقول الإدخال ---------- */
     .stTextInput>div>div>input,
     .stNumberInput>div>div>input {
         border-radius: 8px !important;
@@ -341,31 +310,6 @@ st.markdown("""
         background: #ffffff !important;
     }
     
-    /* ---------- تحسين الصفوف في البطاقات ---------- */
-    .product-info {
-        font-size: 14px;
-        line-height: 1.8;
-    }
-    
-    .product-detail-row {
-        display: flex;
-        align-items: center;
-        gap: 8px;
-        flex-wrap: wrap;
-        margin-bottom: 4px;
-    }
-    
-    .product-detail-row .label {
-        font-weight: 600;
-        color: #4a5568;
-        min-width: 80px;
-    }
-    
-    .product-detail-row .value {
-        color: #2d3748;
-    }
-    
-    /* تحسين عرض الأزرار الصغيرة */
     .action-buttons {
         display: flex;
         gap: 8px;
@@ -388,7 +332,7 @@ st.markdown("""
 """, unsafe_allow_html=True)
 
 # ==========================================
-# دوال مساعدة
+# دوال مساعدة محسّنة
 # ==========================================
 
 def safe_parse_date(date_str: Optional[str]) -> Optional[datetime]:
@@ -434,21 +378,28 @@ def get_product_price(product: Dict) -> float:
         return 0.0
 
 def safe_api_request(method: str, url: str, headers: Dict, **kwargs) -> Optional[Dict]:
-    """تنفيذ طلب API مع معالجة الأخطاء"""
+    """تنفيذ طلب API مع معالجة الأخطاء التفصيلية"""
     try:
         response = requests.request(method, url, headers=headers, timeout=30, **kwargs)
-        response.raise_for_status()
-        return response.json()
-    except requests.exceptions.RequestException as e:
-        error_msg = str(e)
-        if hasattr(e, 'response') and e.response:
+        
+        # محاولة تحليل الخطأ إذا كان هناك
+        if response.status_code >= 400:
+            error_detail = ""
             try:
-                error_data = e.response.json()
-                error_msg = error_data.get('error', {}).get('message', str(e))
+                error_data = response.json()
+                error_detail = json.dumps(error_data, ensure_ascii=False)
             except:
-                pass
-        st.error(f"⚠️ خطأ: {error_msg}")
-        logger.error(f"API Error: {e}")
+                error_detail = response.text[:500]
+            
+            st.error(f"⚠️ خطأ {response.status_code}: {error_detail}")
+            logger.error(f"API Error {response.status_code}: {error_detail}")
+            return None
+        
+        return response.json()
+        
+    except requests.exceptions.RequestException as e:
+        st.error(f"⚠️ خطأ في الاتصال: {str(e)}")
+        logger.error(f"Request Error: {e}")
         return None
     except json.JSONDecodeError as e:
         st.error(f"⚠️ خطأ في تحليل البيانات: {str(e)}")
@@ -461,11 +412,11 @@ def get_headers():
     }
 
 # ==========================================
-# دالة معالجة استيراد الإكسيل
+# دالة معالجة استيراد الإكسيل المُصححة
 # ==========================================
 
 def process_excel_import(df: pd.DataFrame) -> Dict:
-    """معالجة ملف الإكسيل واستيراد العروض"""
+    """معالجة ملف الإكسيل واستيراد العروض مع معالجة الأخطاء"""
     results = {
         "success": [],
         "errors": []
@@ -475,25 +426,73 @@ def process_excel_import(df: pd.DataFrame) -> Dict:
     
     for idx, row in df.iterrows():
         try:
+            # تنظيف البيانات
             action = str(row.get('Action', 'create')).strip().lower()
             offer_id = row.get('Offer_ID')
             
-            # بناء بيانات العرض
+            # تنظيف معرف العرض من النقطة العشرية
+            if offer_id and isinstance(offer_id, float):
+                offer_id = int(offer_id) if offer_id.is_integer() else None
+            
+            # الحصول على البيانات مع معالجة القيم الفارغة
+            offer_name = str(row.get('Offer_Name', 'عرض جديد')).strip()
+            offer_type = str(row.get('Offer_Type', 'buy_x_get_y')).strip()
+            applied_channel = str(row.get('Applied_Channel', 'browser_and_application')).strip()
+            
+            # معالجة التواريخ
+            start_date = row.get('Start_Date_Time')
+            if pd.isna(start_date):
+                start_date = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+            elif isinstance(start_date, datetime):
+                start_date = start_date.strftime('%Y-%m-%d %H:%M:%S')
+            else:
+                start_date = str(start_date)
+            
+            expiry_date = row.get('Expiry_Date_Time')
+            if pd.isna(expiry_date):
+                expiry_date = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+            elif isinstance(expiry_date, datetime):
+                expiry_date = expiry_date.strftime('%Y-%m-%d %H:%M:%S')
+            else:
+                expiry_date = str(expiry_date)
+            
+            # معالجة المنتجات
+            buy_products_str = str(row.get('Buy_Products_IDs', '')).strip()
+            buy_products = []
+            if buy_products_str and buy_products_str != 'nan':
+                for p in re.split(r'[,\s;]+', buy_products_str):
+                    p = p.strip()
+                    if p and p.isdigit():
+                        buy_products.append(int(p))
+            
+            get_products_str = str(row.get('Get_Products_IDs', '')).strip()
+            get_products = []
+            if get_products_str and get_products_str != 'nan':
+                for p in re.split(r'[,\s;]+', get_products_str):
+                    p = p.strip()
+                    if p and p.isdigit():
+                        get_products.append(int(p))
+            
+            # بناء بيانات العرض الأساسية
             offer_data = {
-                "name": str(row.get('Offer_Name', 'عرض جديد')),
-                "offer_type": str(row.get('Offer_Type', 'buy_x_get_y')),
-                "applied_channel": str(row.get('Applied_Channel', 'browser_and_application')),
-                "start_date": str(row.get('Start_Date_Time', datetime.now().strftime('%Y-%m-%d %H:%M:%S'))),
-                "expiry_date": str(row.get('Expiry_Date_Time', datetime.now().strftime('%Y-%m-%d %H:%M:%S'))),
-                "message": str(row.get('Offer_Message', ''))
+                "name": offer_name,
+                "offer_type": offer_type,
+                "applied_channel": applied_channel,
+                "start_date": start_date,
+                "expiry_date": expiry_date,
+                "message": str(row.get('Offer_Message', '')).strip()
             }
             
             # إضافة بيانات الشراء
-            buy_type = str(row.get('Buy_Type', 'product'))
-            buy_qty = int(row.get('Buy_Quantity', 1)) if pd.notna(row.get('Buy_Quantity')) else 1
-            buy_products = str(row.get('Buy_Products_IDs', '')).split(',') if pd.notna(row.get('Buy_Products_IDs')) else []
-            buy_products = [int(p.strip()) for p in buy_products if p.strip().isdigit()]
+            buy_qty = 1
+            try:
+                buy_qty_val = row.get('Buy_Quantity')
+                if pd.notna(buy_qty_val):
+                    buy_qty = int(float(buy_qty_val))
+            except:
+                pass
             
+            buy_type = str(row.get('Buy_Type', 'product')).strip()
             offer_data["buy"] = {
                 "type": buy_type,
                 "quantity": buy_qty
@@ -502,55 +501,86 @@ def process_excel_import(df: pd.DataFrame) -> Dict:
                 offer_data["buy"]["products"] = buy_products
             
             # إضافة بيانات الهدية
-            get_type = str(row.get('Get_Type', 'product'))
-            get_qty = int(row.get('Get_Quantity', 1)) if pd.notna(row.get('Get_Quantity')) else 1
-            discount_type = str(row.get('Discount_Type', 'percentage'))
-            discount_amount = float(row.get('Discount_Amount', 0)) if pd.notna(row.get('Discount_Amount')) else 0
-            get_products = str(row.get('Get_Products_IDs', '')).split(',') if pd.notna(row.get('Get_Products_IDs')) else []
-            get_products = [int(p.strip()) for p in get_products if p.strip().isdigit()]
+            get_qty = 1
+            try:
+                get_qty_val = row.get('Get_Quantity')
+                if pd.notna(get_qty_val):
+                    get_qty = int(float(get_qty_val))
+            except:
+                pass
+            
+            get_type = str(row.get('Get_Type', 'product')).strip()
+            discount_type = str(row.get('Discount_Type', 'percentage')).strip()
             
             offer_data["get"] = {
                 "type": get_type,
                 "quantity": get_qty,
                 "discount_type": discount_type
             }
-            if discount_amount > 0:
-                offer_data["get"]["discount_amount"] = discount_amount
+            
+            # إضافة مبلغ الخصم إذا كان موجوداً
+            try:
+                discount_amount = row.get('Discount_Amount')
+                if pd.notna(discount_amount) and float(discount_amount) > 0:
+                    offer_data["get"]["discount_amount"] = float(discount_amount)
+            except:
+                pass
+            
             if get_products:
                 offer_data["get"]["products"] = get_products
             
-            # تنفيذ الإجراء
-            if action in ['create', 'update']:
-                if action == 'create':
-                    response = safe_api_request("POST", "https://api.salla.dev/admin/v2/specialoffers", headers, json=offer_data)
-                    if response:
-                        results["success"].append(f"✅ تم إنشاء العرض: {offer_data['name']}")
-                    else:
-                        results["errors"].append(f"❌ فشل إنشاء العرض: {offer_data['name']}")
-                elif action == 'update' and offer_id:
-                    response = safe_api_request("PUT", f"https://api.salla.dev/admin/v2/specialoffers/{offer_id}", headers, json=offer_data)
-                    if response:
-                        results["success"].append(f"✅ تم تحديث العرض ID: {offer_id}")
-                    else:
-                        results["errors"].append(f"❌ فشل تحديث العرض ID: {offer_id}")
-            
+            # تنفيذ الإجراء حسب نوع العملية
+            if action == 'create':
+                response = safe_api_request(
+                    "POST", 
+                    "https://api.salla.dev/admin/v2/specialoffers", 
+                    headers, 
+                    json=offer_data
+                )
+                if response:
+                    results["success"].append(f"✅ تم إنشاء العرض: {offer_name}")
+                else:
+                    results["errors"].append(f"❌ فشل إنشاء العرض: {offer_name}")
+                    
+            elif action == 'update' and offer_id:
+                # تحديث العرض
+                response = safe_api_request(
+                    "PUT", 
+                    f"https://api.salla.dev/admin/v2/specialoffers/{offer_id}", 
+                    headers, 
+                    json=offer_data
+                )
+                if response:
+                    results["success"].append(f"✅ تم تحديث العرض ID: {offer_id}")
+                else:
+                    results["errors"].append(f"❌ فشل تحديث العرض ID: {offer_id}")
+                    
             elif action == 'delete' and offer_id:
-                response = safe_api_request("DELETE", f"https://api.salla.dev/admin/v2/specialoffers/{offer_id}", headers)
+                response = safe_api_request(
+                    "DELETE", 
+                    f"https://api.salla.dev/admin/v2/specialoffers/{offer_id}", 
+                    headers
+                )
                 if response:
                     results["success"].append(f"✅ تم حذف العرض ID: {offer_id}")
                 else:
                     results["errors"].append(f"❌ فشل حذف العرض ID: {offer_id}")
-            
-            elif action in ['active', 'inactive'] and offer_id:
+                    
+            elif action in ['active', 'inactivate'] and offer_id:
                 status = "active" if action == 'active' else "inactive"
-                response = safe_api_request("PUT", f"https://api.salla.dev/admin/v2/specialoffers/{offer_id}/status", headers, json={"status": status})
+                response = safe_api_request(
+                    "PUT", 
+                    f"https://api.salla.dev/admin/v2/specialoffers/{offer_id}/status", 
+                    headers, 
+                    json={"status": status}
+                )
                 if response:
                     results["success"].append(f"✅ تم تغيير حالة العرض ID: {offer_id} إلى {status}")
                 else:
                     results["errors"].append(f"❌ فشل تغيير حالة العرض ID: {offer_id}")
-            
+                    
             else:
-                results["errors"].append(f"⚠️ إجراء غير معروف: {action} لـ {offer_id}")
+                results["errors"].append(f"⚠️ إجراء غير معروف: {action}")
                 
         except Exception as e:
             results["errors"].append(f"❌ خطأ في الصف {idx+1}: {str(e)}")
@@ -563,7 +593,7 @@ def process_excel_import(df: pd.DataFrame) -> Dict:
 # ==========================================
 
 def generate_salla_excel_template() -> bytes:
-    """إنشاء نموذج Excel احترافي"""
+    """إنشاء نموذج Excel احترافي مع تنسيق صحيح"""
     try:
         try:
             from openpyxl.styles import PatternFill, Font, Alignment
@@ -585,21 +615,27 @@ def generate_salla_excel_template() -> bytes:
             "Discount_Type", "Discount_Amount", "Get_Products_IDs", "Offer_Message"
         ]
         
+        # بيانات نموذجية
         sample_data = [
-            ["create", None, "عرض ترويجي جديد", "buy_x_get_y", "browser_and_application",
+            ["create", "", "عرض ترويجي جديد", "buy_x_get_y", "browser_and_application",
              "لا", "2026-06-22 12:00:00", "2026-07-22 23:59:59", "product",
-             1, "1298176905", "product", 1, "percentage", 50, "1298176905", "خصم 50% على الحبة الثانية"]
+             1, "1298176905", "product", 1, "percentage", 50, "1298176905", "خصم 50% على الحبة الثانية"],
+            ["update", "258182085", "تحديد العرض", "percentage", "browser",
+             "لا", "2026-06-22 12:00:00", "2026-07-22 23:59:59", "product",
+             1, "1298176905", "product", 1, "percentage", 30, "1298176905", "خصم 30%"],
+            ["active", "258182085", "", "", "", "", "", "", "", "", "", "", "", "", "", "", ""],
+            ["delete", "258182085", "", "", "", "", "", "", "", "", "", "", "", "", "", "", ""]
         ]
         
         wb = Workbook()
         ws = wb.active
         ws.title = "قائمة العروض"
         
-        # إضافة الرؤوس
+        # إضافة الرؤوس في الصف 2
         for col_idx, col_name in enumerate(columns, 1):
             cell = ws.cell(row=2, column=col_idx, value=col_name)
         
-        # إضافة البيانات
+        # إضافة البيانات من الصف 3
         for row_idx, row_data in enumerate(sample_data, 3):
             for col_idx, value in enumerate(row_data, 1):
                 ws.cell(row=row_idx, column=col_idx, value=value)
@@ -636,7 +672,7 @@ def generate_salla_excel_template() -> bytes:
             allow_blank=True,
             showErrorMessage=True,
             errorTitle="قيمة غير صحيحة",
-            error="الرجاء اختيار أحد الإجراءات المتاحة"
+            error="الرجاء اختيار: create, update, active, inactive, delete"
         )
         ws.add_data_validation(dv_action)
         dv_action.add("A3:A100")
@@ -658,7 +694,7 @@ def generate_salla_excel_template() -> bytes:
             allow_blank=True,
             showErrorMessage=True,
             errorTitle="قناة غير صحيحة",
-            error="الرجاء اختيار القناة المناسبة"
+            error="الرجاء اختيار: browser أو browser_and_application"
         )
         ws.add_data_validation(dv_channel)
         dv_channel.add("E3:E100")
@@ -680,7 +716,7 @@ def generate_salla_excel_template() -> bytes:
             allow_blank=True,
             showErrorMessage=True,
             errorTitle="نوع خصم غير صحيح",
-            error="الرجاء اختيار نوع الخصم المناسب"
+            error="الرجاء اختيار: percentage أو free-product"
         )
         ws.add_data_validation(dv_disc_type)
         dv_disc_type.add("N3:N100")
@@ -688,7 +724,7 @@ def generate_salla_excel_template() -> bytes:
         # تنسيق خانات التاريخ
         from openpyxl.styles import numbers
         for row in range(3, 100):
-            for col in ['G', 'H']:  # عمودي التاريخ
+            for col in ['G', 'H']:
                 cell = ws[f"{col}{row}"]
                 cell.number_format = numbers.FORMAT_DATE_DATETIME
         
@@ -696,9 +732,17 @@ def generate_salla_excel_template() -> bytes:
         ws.insert_rows(1)
         ws.merge_cells('A1:Q1')
         instructions_cell = ws.cell(row=1, column=1)
-        instructions_cell.value = "📋 تعليمات التعبئة: استخدم Action=create للإضافة، update للتحديث، delete للحذف، active/inactive لتغيير الحالة"
-        instructions_cell.font = Font(name="Segoe UI", size=12, bold=True, color="1F497D")
-        instructions_cell.alignment = Alignment(horizontal="center", vertical="center")
+        instructions_cell.value = """
+📋 تعليمات التعبئة:
+- Action: create (إنشاء), update (تحديث), delete (حذف), active (تفعيل), inactive (إيقاف)
+- Offer_ID: مطلوب للتحديث والحذف (استخدم أرقام صحيحة بدون نقاط عشرية)
+- التواريخ: استخدم الصيغة YYYY-MM-DD HH:mm:ss
+- المنتجات: يمكن إدخال أكثر من معرف بفاصلة مثل: 123,456,789
+- للعروض من نوع percentage: يمكن إضافة Discount_Amount
+"""
+        instructions_cell.font = Font(name="Segoe UI", size=11, bold=True, color="1F497D")
+        instructions_cell.alignment = Alignment(horizontal="center", vertical="center", wrap_text=True)
+        ws.row_dimensions[1].height = 100
         
         wb.save(output)
         output.seek(0)
@@ -881,7 +925,15 @@ if page == "📊 لوحة تصفية وإدارة العروض الحالية":
     
     if uploaded_file:
         try:
+            # قراءة الملف مع معالجة الأنواع
             df_user = pd.read_excel(uploaded_file)
+            
+            # تحويل الأعمدة الرقمية إلى النوع المناسب
+            numeric_columns = ['Offer_ID', 'Buy_Quantity', 'Get_Quantity', 'Discount_Amount']
+            for col in numeric_columns:
+                if col in df_user.columns:
+                    df_user[col] = pd.to_numeric(df_user[col], errors='coerce')
+            
             st.success(f"✅ تم تحميل الملف! يحتوي على {len(df_user)} عرض")
             st.dataframe(df_user, use_container_width=True)
             
@@ -903,6 +955,7 @@ if page == "📊 لوحة تصفية وإدارة العروض الحالية":
                     
         except Exception as e:
             st.error(f"⚠️ خطأ في قراءة الملف: {str(e)}")
+            st.code(traceback.format_exc())
     
     st.divider()
     
@@ -1077,8 +1130,6 @@ if page == "📊 لوحة تصفية وإدارة العروض الحالية":
                             key=f"edit_type_{offer_id}"
                         )
                     
-                    # خانات التاريخ مع مساعد
-                    st.markdown("**📅 التواريخ:**")
                     col1, col2 = st.columns(2)
                     with col1:
                         ed_start = st.text_input(
@@ -1333,7 +1384,7 @@ elif page == "📦 مركز جرد المنتجات ومعرفات الـ IDs":
                 if st.button("📋 نسخ ID", key=f"copy_id_{p_id}_{idx}", use_container_width=True):
                     st.toast(f"✅ تم نسخ المعرف: {p_id}")
                 
-                # زر تغيير حالة الظهور (المُصحح)
+                # زر تغيير حالة الظهور
                 current_status = p.get('status', 'sale')
                 btn_label = "👁️ إخفاء" if current_status == "sale" else "👁️ إظهار"
                 btn_type = "primary" if current_status == "sale" else "secondary"
@@ -1342,7 +1393,6 @@ elif page == "📦 مركز جرد المنتجات ومعرفات الـ IDs":
                     target_status = "hidden" if current_status == "sale" else "sale"
                     
                     with st.spinner("🔄 جاري تحديث الحالة..."):
-                        # استخدام PUT مع تحديث المنتج مباشرة بدلاً من تغيير الحالة
                         update_payload = {"status": target_status}
                         update_res = safe_api_request(
                             "PUT",
