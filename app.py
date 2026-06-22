@@ -330,7 +330,6 @@ st.markdown("""
         font-size: 12px !important;
     }
     
-    /* حالة الكوبون */
     .coupon-badge {
         display: inline-block;
         padding: 2px 10px;
@@ -345,6 +344,24 @@ st.markdown("""
     }
     
     .coupon-disabled {
+        background: #f8d7da;
+        color: #721c24;
+    }
+    
+    .status-badge {
+        display: inline-block;
+        padding: 2px 10px;
+        border-radius: 12px;
+        font-size: 11px;
+        font-weight: 600;
+    }
+    
+    .status-active {
+        background: #d4edda;
+        color: #155724;
+    }
+    
+    .status-inactive {
         background: #f8d7da;
         color: #721c24;
     }
@@ -427,10 +444,11 @@ def get_headers():
     }
 
 # ==========================================
-# دالة معالجة استيراد الإكسيل
+# دالة معالجة استيراد الإكسيل (مع دعم حالة العرض)
 # ==========================================
 
 def process_excel_import(df: pd.DataFrame) -> Dict:
+    """معالجة ملف الإكسيل واستيراد العروض مع دعم حالة العرض"""
     results = {"success": [], "errors": []}
     headers = get_headers()
     
@@ -447,6 +465,12 @@ def process_excel_import(df: pd.DataFrame) -> Dict:
             applied_channel = str(row.get('Applied_Channel', 'browser_and_application')).strip()
             applied_to = str(row.get('Applied_To', 'product')).strip()
             
+            # ✅ حالة العرض من الإكسيل (مفعل/غير مفعل)
+            offer_status = str(row.get('Offer_Status', 'active')).strip().lower()
+            if offer_status not in ['active', 'inactive']:
+                offer_status = 'active'
+            
+            # معالجة التواريخ
             start_date = row.get('Start_Date_Time')
             if pd.isna(start_date):
                 start_date = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
@@ -488,10 +512,11 @@ def process_excel_import(df: pd.DataFrame) -> Dict:
                 "applied_to": applied_to,
                 "start_date": start_date,
                 "expiry_date": expiry_date,
-                "message": str(row.get('Offer_Message', '')).strip()
+                "message": str(row.get('Offer_Message', '')).strip(),
+                "status": offer_status  # ✅ إضافة حالة العرض
             }
             
-            # إضافة applied_with_coupon إذا كان موجوداً
+            # إضافة applied_with_coupon
             with_coupon = str(row.get('With_Coupon', 'لا')).strip()
             offer_data["applied_with_coupon"] = with_coupon == 'نعم'
             
@@ -549,11 +574,13 @@ def process_excel_import(df: pd.DataFrame) -> Dict:
                     json=offer_data
                 )
                 if response:
-                    results["success"].append(f"✅ تم إنشاء العرض: {offer_name}")
+                    status_text = "مفعل" if offer_status == "active" else "غير مفعل"
+                    results["success"].append(f"✅ تم إنشاء العرض: {offer_name} (الحالة: {status_text})")
                 else:
                     results["errors"].append(f"❌ فشل إنشاء العرض: {offer_name}")
                     
             elif action == 'update' and offer_id:
+                # ✅ تحديث حالة العرض مع البيانات الأخرى
                 response = safe_api_request(
                     "PUT", 
                     f"https://api.salla.dev/admin/v2/specialoffers/{offer_id}", 
@@ -577,6 +604,7 @@ def process_excel_import(df: pd.DataFrame) -> Dict:
                     results["errors"].append(f"❌ فشل حذف العرض ID: {offer_id}")
                     
             elif action in ['active', 'inactive'] and offer_id:
+                # ✅ تغيير حالة العرض فقط
                 status = "active" if action == 'active' else "inactive"
                 response = safe_api_request(
                     "PUT", 
@@ -599,10 +627,11 @@ def process_excel_import(df: pd.DataFrame) -> Dict:
     return results
 
 # ==========================================
-# دالة إنشاء نموذج الإكسيل
+# دالة إنشاء نموذج الإكسيل (مع دعم حالة العرض)
 # ==========================================
 
 def generate_salla_excel_template() -> bytes:
+    """إنشاء نموذج Excel مع دعم حالة العرض (مفعل/غير مفعل)"""
     try:
         try:
             from openpyxl.styles import PatternFill, Font, Alignment
@@ -619,9 +648,10 @@ def generate_salla_excel_template() -> bytes:
         
         output = io.BytesIO()
         
+        # ✅ إضافة عمود Offer_Status لحالة العرض
         columns = [
             "Action", "Offer_ID", "Offer_Name", "Offer_Type", "Applied_Channel",
-            "Applied_To", "With_Coupon", "Start_Date_Time", "Expiry_Date_Time", 
+            "Applied_To", "With_Coupon", "Offer_Status", "Start_Date_Time", "Expiry_Date_Time", 
             "Buy_Type", "Buy_Quantity", "Buy_Products_IDs", 
             "Get_Type", "Get_Quantity", "Discount_Type", 
             "Discount_Amount", "Get_Products_IDs", "Offer_Message"
@@ -629,9 +659,19 @@ def generate_salla_excel_template() -> bytes:
         
         sample_data = [
             ["create", "", "عرض ترويجي جديد", "buy_x_get_y", "browser_and_application",
-             "product", "نعم", "2026-06-22 12:00:00", "2026-07-22 23:59:59",
+             "product", "نعم", "active", "2026-06-22 12:00:00", "2026-07-22 23:59:59",
              "product", 1, "1298176905", 
              "product", 1, "percentage", 50, "1298176905", "خصم 50% على الحبة الثانية"],
+            ["create", "", "عرض غير مفعل", "percentage", "browser",
+             "order", "لا", "inactive", "2026-06-22 12:00:00", "2026-07-22 23:59:59",
+             "product", 1, "1298176905", 
+             "product", 1, "percentage", 30, "1298176905", "خصم 30% غير مفعل"],
+            ["update", "258182085", "تحديث العرض", "buy_x_get_y", "browser_and_application",
+             "product", "نعم", "active", "2026-06-22 12:00:00", "2026-07-22 23:59:59",
+             "product", 2, "1298176905", 
+             "product", 1, "free-product", 0, "1298176905", "تحديث العرض"],
+            ["inactive", "258182085", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", ""],
+            ["active", "258182085", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", ""],
         ]
         
         wb = Workbook()
@@ -724,6 +764,18 @@ def generate_salla_excel_template() -> bytes:
         ws.add_data_validation(dv_coupon)
         dv_coupon.add("G3:G100")
         
+        # ✅ قائمة منسدلة لحالة العرض (مفعل/غير مفعل)
+        dv_offer_status = DataValidation(
+            type="list",
+            formula1='"active,inactive"',
+            allow_blank=True,
+            showErrorMessage=True,
+            errorTitle="حالة العرض غير صحيحة",
+            error="الرجاء اختيار: active (مفعل) أو inactive (غير مفعل)"
+        )
+        ws.add_data_validation(dv_offer_status)
+        dv_offer_status.add("H3:H100")
+        
         dv_disc_type = DataValidation(
             type="list",
             formula1='"percentage,free-product"',
@@ -733,30 +785,31 @@ def generate_salla_excel_template() -> bytes:
             error="الرجاء اختيار: percentage أو free-product"
         )
         ws.add_data_validation(dv_disc_type)
-        dv_disc_type.add("O3:O100")
+        dv_disc_type.add("P3:P100")
         
         # تنسيق التواريخ
         for row in range(3, 100):
-            for col in ['H', 'I']:
+            for col in ['I', 'J']:  # Start_Date_Time و Expiry_Date_Time
                 cell = ws[f"{col}{row}"]
                 cell.number_format = numbers.FORMAT_DATE_DATETIME
         
         # تعليمات
         ws.insert_rows(1)
-        ws.merge_cells('A1:R1')
+        ws.merge_cells('A1:S1')
         instructions_cell = ws.cell(row=1, column=1)
         instructions_cell.value = """
 📋 تعليمات التعبئة:
 - Action: create (إنشاء), update (تحديث), delete (حذف), active (تفعيل), inactive (إيقاف)
 - Applied_To: order (طلب), product (منتج), category (تصنيف), paymentMethod (طريقة دفع) - مطلوب!
 - With_Coupon: نعم (تطبيق مع كوبون) أو لا (بدون كوبون)
+- Offer_Status: active (مفعل) أو inactive (غير مفعل) - حالة العرض
 - Offer_ID: مطلوب للتحديث والحذف (استخدم أرقام صحيحة بدون نقاط عشرية)
 - التواريخ: استخدم الصيغة YYYY-MM-DD HH:mm:ss
 - المنتجات: يمكن إدخال أكثر من معرف بفاصلة مثل: 123,456,789
 """
         instructions_cell.font = Font(name="Segoe UI", size=11, bold=True, color="1F497D")
         instructions_cell.alignment = Alignment(horizontal="center", vertical="center", wrap_text=True)
-        ws.row_dimensions[1].height = 110
+        ws.row_dimensions[1].height = 140
         
         wb.save(output)
         output.seek(0)
@@ -768,7 +821,7 @@ def generate_salla_excel_template() -> bytes:
         
         columns = [
             "Action", "Offer_ID", "Offer_Name", "Offer_Type", "Applied_Channel",
-            "Applied_To", "With_Coupon", "Start_Date_Time", "Expiry_Date_Time",
+            "Applied_To", "With_Coupon", "Offer_Status", "Start_Date_Time", "Expiry_Date_Time",
             "Buy_Type", "Buy_Quantity", "Buy_Products_IDs",
             "Get_Type", "Get_Quantity", "Discount_Type",
             "Discount_Amount", "Get_Products_IDs", "Offer_Message"
@@ -1064,10 +1117,15 @@ if page == "📊 لوحة تصفية وإدارة العروض الحالية":
             with st.container():
                 st.markdown(f"<div class='offer-card'>", unsafe_allow_html=True)
                 
-                # الحصول على حالة الكوبون
                 applied_with_coupon = offer.get('applied_with_coupon', False)
                 coupon_status = "🟢 مع كوبون" if applied_with_coupon else "🔴 بدون كوبون"
                 coupon_class = "coupon-enabled" if applied_with_coupon else "coupon-disabled"
+                
+                # ✅ حالة العرض
+                offer_status = offer.get('status', 'inactive')
+                status_icon = "🟢" if offer_status == "active" else "🔴"
+                status_text = "مفعل" if offer_status == "active" else "غير مفعل"
+                status_class = "status-active" if offer_status == "active" else "status-inactive"
                 
                 col1, col2, col3, col4, col5 = st.columns([2.5, 1.2, 1.2, 1.2, 1.2])
                 
@@ -1085,29 +1143,23 @@ if page == "📊 لوحة تصفية وإدارة العروض الحالية":
                             <span class="offer-date">📅 {start} → {expiry}</span>
                             <br>
                             <span class="coupon-badge {coupon_class}">🔖 {coupon_status}</span>
+                            <span class="status-badge {status_class}" style="margin-right: 5px;">{status_icon} {status_text}</span>
                         </div>
                     """, unsafe_allow_html=True)
                 
                 with col2:
-                    status = offer.get('status', 'inactive')
-                    status_icon = "🟢" if status == "active" else "🔴"
-                    status_text = "نشط" if status == "active" else "غير نشط"
-                    st.markdown(f"**الحالة:** {status_icon} {status_text}")
-                    st.caption(f"🏷️ {offer.get('offer_type', 'نوع غير محدد')}")
+                    st.markdown(f"**🏷️ النوع:** {offer.get('offer_type', 'غير محدد')}")
+                    st.caption(f"📌 {offer.get('applied_to', 'غير محدد')}")
                 
                 with col3:
-                    # زر تبديل حالة الكوبون
                     coupon_label = "🔖 مع كوبون" if not applied_with_coupon else "🔖 بدون كوبون"
                     coupon_type = "secondary" if not applied_with_coupon else "primary"
                     if st.button(coupon_label, key=f"toggle_coupon_{offer_id}_{idx}", use_container_width=True, type=coupon_type):
                         with st.spinner("🔄 جاري تحديث حالة الكوبون..."):
-                            # جلب العرض الحالي أولاً
                             current_offer = safe_api_request("GET", f"{SALLA_API_URL}/{offer_id}", get_headers())
                             if current_offer and current_offer.get('data'):
                                 offer_data = current_offer['data']
-                                # تحديث حالة الكوبون
                                 offer_data['applied_with_coupon'] = not applied_with_coupon
-                                # إزالة الحقول غير القابلة للتعديل
                                 for key in ['id', 'status', 'created_at', 'updated_at']:
                                     offer_data.pop(key, None)
                                 
@@ -1122,8 +1174,8 @@ if page == "📊 لوحة تصفية وإدارة العروض الحالية":
                                     st.rerun()
                 
                 with col4:
-                    target_status = "inactive" if status == "active" else "active"
-                    btn_label = "⏸️ إيقاف" if status == "active" else "▶️ تفعيل"
+                    target_status = "inactive" if offer_status == "active" else "active"
+                    btn_label = "⏸️ إيقاف" if offer_status == "active" else "▶️ تفعيل"
                     if st.button(btn_label, key=f"toggle_status_{offer_id}_{idx}", use_container_width=True):
                         with st.spinner("🔄 جاري تحديث الحالة..."):
                             update_res = safe_api_request(
@@ -1199,6 +1251,15 @@ if page == "📊 لوحة تصفية وإدارة العروض الحالية":
                             index=0 if offer.get('applied_with_coupon', False) else 1,
                             key=f"edit_coupon_{offer_id}"
                         )
+                        
+                        # ✅ إضافة التحكم بحالة العرض
+                        ed_offer_status = st.selectbox(
+                            "حالة العرض:",
+                            ["active", "inactive"],
+                            index=0 if offer.get('status') == 'active' else 1,
+                            key=f"edit_offer_status_{offer_id}",
+                            help="active: مفعل, inactive: غير مفعل"
+                        )
                     
                     col1, col2 = st.columns(2)
                     with col1:
@@ -1244,6 +1305,7 @@ if page == "📊 لوحة تصفية وإدارة العروض الحالية":
                                 "offer_type": ed_type,
                                 "applied_to": ed_applied_to,
                                 "applied_with_coupon": ed_coupon == "نعم",
+                                "status": ed_offer_status,  # ✅ إضافة حالة العرض
                                 "buy": {
                                     "type": offer.get('buy', {}).get('type', 'product'),
                                     "quantity": int(ed_buy_q)
@@ -1355,10 +1417,8 @@ elif page == "📦 مركز جرد المنتجات ومعرفات الـ IDs":
             p_name = p.get('name', 'منتج بدون اسم')
             p_sku = p.get('sku', 'لا يوجد')
             
-            # ✅ الحصول على العنوان الترويجي بشكل صحيح
             p_promotion = p.get('promotion_title', '')
             if not p_promotion:
-                # محاولة الحصول من كائن promotion
                 promotion = p.get('promotion', {})
                 if isinstance(promotion, dict):
                     p_promotion = promotion.get('title', '')
@@ -1403,7 +1463,7 @@ elif page == "📦 مركز جرد المنتجات ومعرفات الـ IDs":
                     offer_status = offer.get('status', '')
                     offer_id = offer.get('id', '')
                     status_color = "🟢" if offer_status == "active" else "🔴"
-                    status_text = "نشط" if offer_status == "active" else "غير نشط"
+                    status_text = "مفعل" if offer_status == "active" else "غير مفعل"
                     coupon_status = "مع كوبون" if offer.get('applied_with_coupon', False) else "بدون كوبون"
                     
                     st.markdown(f"""
