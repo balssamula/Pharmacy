@@ -6,7 +6,7 @@ import json
 import logging
 import re
 from datetime import datetime
-from typing import Optional, List, Dict
+from typing import Optional, List, Dict, Any
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -15,27 +15,51 @@ SALLA_API_URL = "https://api.salla.dev/admin/v2/specialoffers"
 
 def safe_parse_date(date_str: Optional[str]) -> Optional[datetime]:
     if not date_str: return None
-    for fmt in ('%Y-%m-%d %H:%M:%S', '%Y-%m-%d'):
-        try: return datetime.strptime(date_str, fmt)
+    for fmt in ('%Y-%m-%d %H:%M:%S', '%Y-%m-%d', '%a %b %d %Y %H:%M:%S'):
+        try:
+            # تنظيف السلسلة النصية من صيغ المناطق الزمنية الزائدة إن وجدت
+            clean_str = re.sub(r' GMT.*$', '', str(date_str))
+            return datetime.strptime(clean_str, fmt)
         except (ValueError, TypeError): pass
     return None
 
-def parse_products_cleanly(product_list: Optional[List]) -> str:
-    if not product_list or not isinstance(product_list, list):
+def parse_products_cleanly(offer_section: Dict) -> str:
+    """تحليل شامل وقراءة ذكية للمنتجات أو التصنيفات المشمولة بالعرض بناءً على وثائق سلة"""
+    if not offer_section or not isinstance(offer_section, dict):
         return "كل منتجات المتجر"
+    
     clean_elements = []
-    for p in product_list:
-        if isinstance(p, dict):
-            clean_elements.append(f"• {p.get('name', 'منتج مشمول')} (SKU: {p.get('sku', 'بدون SKU')}) [ID: {p.get('id', 'بدون ID')}]")
-        else:
-            clean_elements.append(f"• معرف منتج رقم: {p}")
-    return "\n".join(clean_elements)
+    
+    # 1. التحقق من وجود منتجات مباشرة
+    products = offer_section.get('products', [])
+    if products and isinstance(products, list):
+        for p in products:
+            if isinstance(p, dict):
+                clean_elements.append(f"• منتج: {p.get('name', 'غير معرف')} [ID: {p.get('id', 'N/A')}]")
+            else:
+                clean_elements.append(f"• معرف منتج رقم: {p}")
+                
+    # 2. التحقق من وجود تصنيفات (Categories) كما هو موضح في ملف Special Offer.md
+    categories = offer_section.get('categories', [])
+    if categories and isinstance(categories, list):
+        for c in categories:
+            if isinstance(c, dict):
+                clean_elements.append(f"• تصنيف: {c.get('name', 'غير معرف')} [ID: {c.get('id', 'N/A')}]")
+            else:
+                clean_elements.append(f"• معرف تصنيف رقم: {c}")
+                
+    return "\n".join(clean_elements) if clean_elements else "كل المنتجات / غير محدد بدقة"
 
-def get_product_price(product: Dict) -> float:
+def get_flat_price(price_field: Any) -> float:
+    """استخراج القيمة الرقمية للسعر سواء كان رقماً مباشراً أو كائناً يحتوي على amount وفقاً لـ Product.md"""
+    if not price_field:
+        return 0.0
+    if isinstance(price_field, dict):
+        return float(price_field.get('amount', 0.0))
     try:
-        price = product.get('price', 0)
-        return float(price.get('amount', 0)) if isinstance(price, dict) else float(price or 0)
-    except (ValueError, TypeError): return 0.0
+        return float(price_field)
+    except (ValueError, TypeError):
+        return 0.0
 
 def safe_api_request(method: str, url: str, headers: Dict, **kwargs) -> Optional[Dict]:
     try:
@@ -86,12 +110,11 @@ def export_products_to_excel(products: List[Dict]) -> bytes:
     try:
         data = []
         for p in products:
-            price = get_product_price(p)
-            sale_price = p.get('sale_price', {})
-            sale_amt = sale_price.get('amount', 0) if isinstance(sale_price, dict) else (sale_price or 0)
+            price = get_flat_price(p.get('price', 0))
+            sale_price = get_flat_price(p.get('sale_price', 0))
             data.append({
                 'المعرف': p.get('id', ''), 'الاسم': p.get('name', ''), 'SKU': p.get('sku', ''),
-                'السعر الأصل': price, 'السعر المخفض': sale_amt if sale_amt > 0 else '',
+                'السعر الأساسي': price, 'السعر المخفض': sale_price if sale_price > 0 else 'لا يوجد',
                 'المخزون': p.get('quantity', 0), 'المبيعات': p.get('sold_quantity', 0),
                 'الحالة': 'معروض' if p.get('status') == 'sale' else 'مخفي'
             })
@@ -166,25 +189,28 @@ def process_excel_import(df: pd.DataFrame) -> Dict:
     return results
 
 def update_product_status(product_id: int, status: str) -> bool:
+    """تحديث حالة ظهور المنتج بالمتجر بشكل سليم وتفادي خطأ 422"""
     headers = get_headers()
     if not headers: return False
     current = safe_api_request("GET", f"https://api.salla.dev/admin/v2/products/{product_id}", headers)
     if not current or not current.get('data'): return False
     p_data = current['data']
     
-    # بناء كائن مسطح ومتوافق مع متطلبات سلة لمنع خطأ الـ 422
+    # بناء كائن مسطح ومتوافق تماماً مع متطلبات تحديث سلة
     update_payload = {
         "status": status,
         "name": p_data.get('name'),
-        "channels": p_data.get('channels', ["app", "browser"])
+        "price": get_flat_price(p_data.get('price', 0))
     }
     
-    price_val = p_data.get('price')
-    update_payload['price'] = float(price_val.get('amount', 0)) if isinstance(price_val, dict) else float(price_val or 0)
-    
-    sale_val = p_data.get('sale_price')
-    if sale_val:
-        update_payload['sale_price'] = float(sale_val.get('amount', 0)) if isinstance(sale_val, dict) else float(sale_val or 0)
+    # قنوات العرض مطلوبة عند النشر مجدداً للمتجر الإلكتروني والتطبيق
+    update_payload["channels"] = p_data.get('channels', ["app", "browser"])
+    if not update_payload["channels"]:
+        update_payload["channels"] = ["app", "browser"]
+        
+    sale_amt = get_flat_price(p_data.get('sale_price', 0))
+    if sale_amt > 0:
+        update_payload['sale_price'] = sale_amt
         
     res = safe_api_request("PUT", f"https://api.salla.dev/admin/v2/products/{product_id}", headers, json=update_payload)
     return res is not None
