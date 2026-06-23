@@ -26,15 +26,12 @@ st.set_page_config(
 # ==========================================
 st.markdown("""
     <style>
-    /* استيراد الخط */
     @import url('https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700&display=swap');
     
-    /* تطبيق الخط على كل العناصر */
     * {
         font-family: 'Cairo', sans-serif !important;
     }
     
-    /* تنسيق القائمة الجانبية */
     [data-testid="stSidebar"] {
         background-color: #0f1c2e !important;
         padding: 20px 15px !important;
@@ -50,12 +47,6 @@ st.markdown("""
         color: #00b4d8 !important;
     }
     
-    /* تنسيق البطاقات */
-    .stAlert {
-        border-radius: 10px !important;
-    }
-    
-    /* تنسيق الأزرار */
     .stButton button {
         border-radius: 8px !important;
         font-weight: 600 !important;
@@ -67,7 +58,6 @@ st.markdown("""
         box-shadow: 0 4px 15px rgba(0,0,0,0.15) !important;
     }
     
-    /* تنسيق حقول الإدخال */
     .stTextInput input, .stNumberInput input {
         border-radius: 8px !important;
         border: 2px solid #e2e8f0 !important;
@@ -78,93 +68,19 @@ st.markdown("""
         box-shadow: 0 0 0 3px rgba(0, 180, 216, 0.15) !important;
     }
     
-    /* تنسيق المحددات */
     .stSelectbox select {
         border-radius: 8px !important;
         border: 2px solid #e2e8f0 !important;
     }
     
-    /* تنسيق التبويبات */
     .stExpander {
         border-radius: 10px !important;
         border: 1px solid #e8edf2 !important;
     }
     
-    /* تنسيق الجداول */
     .stDataFrame {
         border-radius: 10px !important;
         overflow: hidden !important;
-    }
-    
-    /* تنسيق شارات الحالة */
-    .status-badge {
-        display: inline-block;
-        padding: 2px 12px;
-        border-radius: 12px;
-        font-size: 12px;
-        font-weight: 600;
-        margin: 2px;
-    }
-    
-    .status-active {
-        background: #d4edda;
-        color: #155724;
-    }
-    
-    .status-inactive {
-        background: #f8d7da;
-        color: #721c24;
-    }
-    
-    .coupon-enabled {
-        background: #d4edda;
-        color: #155724;
-    }
-    
-    .coupon-disabled {
-        background: #f8d7da;
-        color: #721c24;
-    }
-    
-    /* تنسيق الأسعار */
-    .price-container {
-        display: flex;
-        align-items: center;
-        gap: 10px;
-        flex-wrap: wrap;
-    }
-    
-    .price-current {
-        font-size: 20px;
-        font-weight: 700;
-        color: #0f1c2e;
-    }
-    
-    .price-original {
-        font-size: 16px;
-        color: #6c757d;
-        text-decoration: line-through;
-    }
-    
-    .price-sale {
-        font-size: 20px;
-        font-weight: 700;
-        color: #dc3545;
-    }
-    
-    .price-discount {
-        background: #dc3545;
-        color: #ffffff;
-        padding: 2px 10px;
-        border-radius: 12px;
-        font-size: 12px;
-        font-weight: 600;
-    }
-    
-    /* تنسيق أزرار التصدير */
-    .export-btn {
-        background: linear-gradient(135deg, #0077b6, #00b4d8) !important;
-        color: #ffffff !important;
     }
     
     /* تنسيق شريط الحالة */
@@ -197,88 +113,12 @@ st.markdown("""
         border: 1px solid rgba(0, 180, 216, 0.3);
     }
     
-    /* تنسيق بطاقات المنتجات */
-    .product-card {
-        background: #ffffff;
-        border-radius: 12px;
-        border: 1px solid #e8edf2;
-        overflow: hidden;
-        margin-bottom: 16px;
-        box-shadow: 0 2px 8px rgba(0,0,0,0.05);
-        transition: all 0.3s ease;
-    }
-    
-    .product-card:hover {
-        box-shadow: 0 4px 20px rgba(0,0,0,0.08);
-        transform: translateY(-2px);
-    }
-    
-    .product-card-header {
-        background: linear-gradient(135deg, #0f1c2e 0%, #1a2d4a 100%);
-        padding: 10px 18px;
+    /* تنسيق حالة المنتج في منتصف الحاوية */
+    .status-center {
         display: flex;
-        justify-content: space-between;
+        justify-content: center;
         align-items: center;
-        border-bottom: 3px solid #00b4d8;
-        flex-wrap: wrap;
-        gap: 8px;
-    }
-    
-    .product-card-header .name {
-        color: #ffffff;
-        font-size: 16px;
-        font-weight: 700;
-    }
-    
-    .product-card-header .promotion {
-        color: #ffd700;
-        font-size: 13px;
-        font-weight: 600;
-        background: rgba(255, 215, 0, 0.12);
-        padding: 3px 12px;
-        border-radius: 20px;
-        border: 1px solid rgba(255, 215, 0, 0.2);
-    }
-    
-    .product-card-body {
-        padding: 14px 18px;
-    }
-    
-    /* تنسيق بطاقات العروض */
-    .offer-card {
-        background: #ffffff;
-        padding: 14px 18px;
-        border-radius: 12px;
-        border-right: 5px solid #2a9d8f;
-        border-left: 1px solid #e8edf2;
-        border-top: 1px solid #e8edf2;
-        border-bottom: 1px solid #e8edf2;
-        margin-bottom: 14px;
-        box-shadow: 0 2px 8px rgba(0,0,0,0.04);
-        transition: all 0.3s ease;
-    }
-    
-    .offer-card:hover {
-        box-shadow: 0 4px 16px rgba(0,0,0,0.08);
-        transform: translateY(-1px);
-    }
-    
-    /* تنسيق عدد العروض */
-    .offers-count {
-        background: #f0f4f8;
-        padding: 8px 16px;
-        border-radius: 8px;
-        margin-bottom: 14px;
-        border-right: 4px solid #00b4d8;
-    }
-    
-    .footer {
-        text-align: center;
-        padding: 16px;
-        color: #6c757d;
-        border-top: 1px solid #e9ecef;
-        margin-top: 30px;
-        font-size: 13px;
+        height: 100%;
     }
     </style>
 """, unsafe_allow_html=True)
@@ -849,16 +689,16 @@ def create_new_offer(offer_data: Dict) -> bool:
     return response is not None
 
 # ==========================================
-# دالة تحديث حالة المنتج (مع دعم القنوات)
+# دالة تحديث حالة المنتج
 # ==========================================
 
 def update_product_status(product_id: int, status: str) -> bool:
-    """تحديث حالة المنتج باستخدام PUT /products/{id}"""
+    """تحديث حالة المنتج - إصلاح مشكلة price و sale_price"""
     headers = get_headers()
     if not headers:
         return False
     
-    # جلب المنتج الحالي أولاً
+    # جلب المنتج الحالي
     current = safe_api_request("GET", f"https://api.salla.dev/admin/v2/products/{product_id}", headers)
     if not current or not current.get('data'):
         st.error("❌ فشل في جلب بيانات المنتج")
@@ -866,19 +706,32 @@ def update_product_status(product_id: int, status: str) -> bool:
     
     product_data = current['data']
     
-    # تحديث الحالة
-    product_data['status'] = status
+    # تحديث الحالة فقط - لا نغير الأسعار
+    update_payload = {
+        "status": status
+    }
     
-    # إزالة الحقول التي لا يمكن تحديثها
-    for key in ['id', 'created_at', 'updated_at', 'urls', 'images', 'options', 'skus']:
-        product_data.pop(key, None)
+    # إضافة الأسعار الحالية لتجنب خطأ 422
+    if 'price' in product_data:
+        price_val = product_data.get('price')
+        if isinstance(price_val, dict):
+            update_payload['price'] = price_val.get('amount', 0)
+        else:
+            update_payload['price'] = float(price_val) if price_val else 0
+    
+    if 'sale_price' in product_data:
+        sale_val = product_data.get('sale_price')
+        if isinstance(sale_val, dict):
+            update_payload['sale_price'] = sale_val.get('amount', 0)
+        else:
+            update_payload['sale_price'] = float(sale_val) if sale_val else 0
     
     # إرسال التحديث
     response = safe_api_request(
         "PUT",
         f"https://api.salla.dev/admin/v2/products/{product_id}",
         headers,
-        json=product_data
+        json=update_payload
     )
     
     return response is not None
@@ -888,12 +741,12 @@ def update_product_status(product_id: int, status: str) -> bool:
 # ==========================================
 
 def update_product_promotion(product_id: int, promotion_title: str) -> bool:
-    """تحديث العنوان الترويجي للمنتج"""
+    """تحديث العنوان الترويجي للمنتج - إصلاح مشكلة price و sale_price"""
     headers = get_headers()
     if not headers:
         return False
     
-    # جلب المنتج الحالي أولاً
+    # جلب المنتج الحالي
     current = safe_api_request("GET", f"https://api.salla.dev/admin/v2/products/{product_id}", headers)
     if not current or not current.get('data'):
         st.error("❌ فشل في جلب بيانات المنتج")
@@ -901,19 +754,33 @@ def update_product_promotion(product_id: int, promotion_title: str) -> bool:
     
     product_data = current['data']
     
-    # تحديث العنوان الترويجي
-    product_data['promotion_title'] = promotion_title
+    # بناء payload التحديث
+    update_payload = {
+        "promotion_title": promotion_title,
+        "status": product_data.get('status', 'sale')
+    }
     
-    # إزالة الحقول التي لا يمكن تحديثها
-    for key in ['id', 'created_at', 'updated_at', 'urls', 'images', 'options', 'skus']:
-        product_data.pop(key, None)
+    # إضافة الأسعار الحالية لتجنب خطأ 422
+    if 'price' in product_data:
+        price_val = product_data.get('price')
+        if isinstance(price_val, dict):
+            update_payload['price'] = price_val.get('amount', 0)
+        else:
+            update_payload['price'] = float(price_val) if price_val else 0
+    
+    if 'sale_price' in product_data:
+        sale_val = product_data.get('sale_price')
+        if isinstance(sale_val, dict):
+            update_payload['sale_price'] = sale_val.get('amount', 0)
+        else:
+            update_payload['sale_price'] = float(sale_val) if sale_val else 0
     
     # إرسال التحديث
     response = safe_api_request(
         "PUT",
         f"https://api.salla.dev/admin/v2/products/{product_id}",
         headers,
-        json=product_data
+        json=update_payload
     )
     
     return response is not None
@@ -940,21 +807,19 @@ init_session_state()
 # ==========================================
 
 if not st.session_state["logged_in"]:
-    st.markdown("""
-        <div style="max-width: 450px; margin: 60px auto; background: #ffffff; padding: 40px 30px; 
-                    border-radius: 16px; box-shadow: 0 8px 30px rgba(0,0,0,0.1); 
-                    border-top: 5px solid #00b4d8; text-align: center;">
-            <h1 style="color: #0f1c2e; font-weight: 700; font-size: 24px; margin-bottom: 8px;">🛡️ منظومة بلسم</h1>
-            <p style="color: #6c757d; font-size: 14px; margin-bottom: 25px;">تسجيل الدخول الآمن إلى لوحة التحكم</p>
-    """, unsafe_allow_html=True)
-    
-    st.text_input("🔑 مفتاح الربط (Access Token):", type="password", key="login_token", help="أدخل التوكن الخاص بتطبيقك")
-    st.text_input("👤 اسم المستخدم:", value="admin", key="lg_un")
-    st.text_input("🔒 كلمة المرور:", type="password", key="lg_pw")
-    
+    # استخدام st.columns لتوسيط المحتوى بدلاً من HTML
     col1, col2, col3 = st.columns([1, 2, 1])
     with col2:
-        if st.button("🚀 دخول آمن للمنظومة", key="submit_login", use_container_width=True):
+        st.markdown("---")
+        st.markdown("## 🛡️ منظومة بلسم")
+        st.markdown("##### تسجيل الدخول الآمن إلى لوحة التحكم")
+        st.markdown("---")
+        
+        st.text_input("🔑 مفتاح الربط (Access Token):", type="password", key="login_token", help="أدخل التوكن الخاص بتطبيقك")
+        st.text_input("👤 اسم المستخدم:", value="admin", key="lg_un")
+        st.text_input("🔒 كلمة المرور:", type="password", key="lg_pw")
+        
+        if st.button("🚀 دخول آمن للمنظومة", use_container_width=True, key="submit_login"):
             token = st.session_state.get("login_token", "").strip()
             if token:
                 st.session_state["access_token"] = token
@@ -963,8 +828,6 @@ if not st.session_state["logged_in"]:
                 st.rerun()
             else:
                 st.error("❌ بيانات الدخول خاطئة.")
-    
-    st.markdown("</div>", unsafe_allow_html=True)
     st.stop()
 
 # ==========================================
@@ -974,19 +837,13 @@ if not st.session_state["logged_in"]:
 SALLA_API_URL = "https://api.salla.dev/admin/v2/specialoffers"
 
 # ==========================================
-# الشريط العلوي (باستخدام st.columns بدلاً من HTML)
+# الشريط العلوي
 # ==========================================
 
-st.markdown("""
-    <div style="background: linear-gradient(135deg, #0a1628 0%, #1a2d4a 100%); 
-                padding: 12px 20px; border-radius: 10px; margin-bottom: 18px;
-                border-bottom: 3px solid #00b4d8;
-                display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 10px;">
-        <span style="color: #ffffff; font-weight: 700; font-size: 15px;">🛡️ لوحة التحكم الإدارية لصيدليات بلسم العُلا</span>
-        <span style="color: #00b4d8; font-weight: 600; font-size: 13px; background: rgba(0, 180, 216, 0.12); 
-                   padding: 4px 14px; border-radius: 20px; border: 1px solid rgba(0, 180, 216, 0.3);">✅ الاتصال موثق ومستقر</span>
-    </div>
-""", unsafe_allow_html=True)
+st.markdown("---")
+st.markdown("### 🛡️ لوحة التحكم الإدارية لصيدليات بلسم العُلا")
+st.markdown("✅ الاتصال موثق ومستقر")
+st.markdown("---")
 
 # أزرار التحكم العلوية
 col1, col2, col3 = st.columns([1.5, 1.5, 5])
@@ -1019,17 +876,10 @@ st.divider()
 # القائمة الجانبية
 # ==========================================
 
-st.sidebar.markdown("""
-    <div style="text-align: center; padding: 10px 0;">
-        <h2 style="color: #00b4d8; font-size: 22px; font-weight: 700; text-align: center; 
-                   padding-bottom: 10px; border-bottom: 2px solid rgba(0, 180, 216, 0.25);">
-            🏥 بوابة بلسم الرقمية
-        </h2>
-        <p style="color: #8c9aa8; font-size: 13px; margin-top: 5px;">منظومة إدارة العروض والمنتجات</p>
-    </div>
-""", unsafe_allow_html=True)
-
-st.sidebar.divider()
+st.sidebar.markdown("---")
+st.sidebar.markdown("### 🏥 بوابة بلسم الرقمية")
+st.sidebar.markdown("منظومة إدارة العروض والمنتجات")
+st.sidebar.markdown("---")
 
 page = st.sidebar.radio(
     "📋 تصفح الأقسام التنفيذية:",
@@ -1040,13 +890,11 @@ page = st.sidebar.radio(
     index=0
 )
 
-st.sidebar.divider()
+st.sidebar.markdown("---")
 
-# زر تحديث الصفحة
 if st.sidebar.button("🔄 تحديث البيانات والصفحة", use_container_width=True, key="refresh_page_btn"):
     st.rerun()
 
-# زر تسجيل الخروج
 if st.sidebar.button("🚪 تسجيل الخروج", use_container_width=True, key="logout_sidebar"):
     st.session_state["logged_in"] = False
     st.session_state["access_token"] = ""
@@ -1063,13 +911,9 @@ with st.sidebar.expander("ℹ️ معلومات النظام", expanded=False):
 
 if page == "📊 لوحة تصفية وإدارة العروض الحالية":
     st.markdown("""
-        <h1 style='color: #0f1c2e; font-weight: 700; margin-bottom: 5px; font-size: 24px;'>
-            📊 لوحة إدارة العروض الاحترافية
-        </h1>
-        <p style='color: #6c757d; margin-bottom: 18px; font-size: 14px;'>
-            إدارة شاملة للعروض مع إمكانية التصفية والبحث والتعديل الفوري
-        </p>
-    """, unsafe_allow_html=True)
+        ## 📊 لوحة إدارة العروض الاحترافية
+        إدارة شاملة للعروض مع إمكانية التصفية والبحث والتعديل الفوري
+    """)
     
     # --- نموذج الاستيراد ---
     col_info, col_btn = st.columns([3, 1])
@@ -1427,22 +1271,16 @@ if page == "📊 لوحة تصفية وإدارة العروض الحالية":
                 with col3:
                     if st.button("🔄 تبديل الكوبون", key=f"toggle_coupon_{offer_id}_{idx}", use_container_width=True):
                         with st.spinner("🔄 جاري تحديث..."):
-                            current_offer = safe_api_request("GET", f"{SALLA_API_URL}/{offer_id}", get_headers())
-                            if current_offer and current_offer.get('data'):
-                                offer_data = current_offer['data']
-                                offer_data['applied_with_coupon'] = not applied_with_coupon
-                                for key in ['id', 'status', 'created_at', 'updated_at']:
-                                    offer_data.pop(key, None)
-                                
-                                update_res = safe_api_request(
-                                    "PUT",
-                                    f"{SALLA_API_URL}/{offer_id}",
-                                    get_headers(),
-                                    json=offer_data
-                                )
-                                if update_res:
-                                    st.success(f"✅ تم تحديث حالة الكوبون!")
-                                    st.rerun()
+                            # استخدام PATCH بدلاً من PUT لتجنب مشاكل الحقول المطلوبة
+                            update_res = safe_api_request(
+                                "PUT",
+                                f"{SALLA_API_URL}/{offer_id}",
+                                get_headers(),
+                                json={"applied_with_coupon": not applied_with_coupon}
+                            )
+                            if update_res:
+                                st.success(f"✅ تم تحديث حالة الكوبون!")
+                                st.rerun()
                 
                 with col4:
                     target_status = "inactive" if offer_status == "active" else "active"
@@ -1620,13 +1458,9 @@ if page == "📊 لوحة تصفية وإدارة العروض الحالية":
 
 elif page == "📦 مركز جرد المنتجات ومعرفات الـ IDs":
     st.markdown("""
-        <h1 style='color: #0f1c2e; font-weight: 700; margin-bottom: 5px; font-size: 24px;'>
-            📦 مركز جرد المنتجات
-        </h1>
-        <p style='color: #6c757d; margin-bottom: 18px; font-size: 14px;'>
-            إدارة المنتجات وحالة الظهور وعرض العروض المرتبطة
-        </p>
-    """, unsafe_allow_html=True)
+        ## 📦 مركز جرد المنتجات
+        إدارة المنتجات وحالة الظهور وعرض العروض المرتبطة
+    """)
     
     # --- زر تصدير المنتجات ---
     if st.button("📥 تصدير المنتجات", use_container_width=False):
@@ -1720,147 +1554,132 @@ elif page == "📦 مركز جرد المنتجات ومعرفات الـ IDs":
                 offer = offer_map.get(p_id)
                 has_offer = offer is not None
                 
-                # عرض المنتج باستخدام HTML بسيط
-                st.markdown(f"""
-                    <div style="background: #ffffff; border-radius: 12px; border: 1px solid #e8edf2; 
-                                overflow: hidden; margin-bottom: 14px; box-shadow: 0 2px 8px rgba(0,0,0,0.05);">
-                        <div style="background: linear-gradient(135deg, #0f1c2e 0%, #1a2d4a 100%); 
-                                    padding: 10px 18px; display: flex; justify-content: space-between; 
-                                    align-items: center; border-bottom: 3px solid #00b4d8; flex-wrap: wrap; gap: 8px;">
-                            <span style="color: #ffffff; font-size: 16px; font-weight: 700;">📦 {p_name}</span>
-                            <span style="color: #ffd700; font-size: 13px; font-weight: 600; 
-                                      background: rgba(255, 215, 0, 0.12); padding: 3px 12px; 
-                                      border-radius: 20px; border: 1px solid rgba(255, 215, 0, 0.2);">
-                                🏷️ {p_promotion if p_promotion else 'لا يوجد عنوان ترويجي'}
-                            </span>
-                        </div>
-                        <div style="padding: 14px 18px;">
-                """, unsafe_allow_html=True)
-                
-                col1, col2, col3, col4 = st.columns([2.5, 2.2, 1.8, 2])
-                
-                with col1:
-                    product_url = p.get('url', '#')
-                    st.markdown(f"<a href='{product_url}' target='_blank' style='color: #00b4d8; font-weight: 700; text-decoration: none; font-size: 16px;'>{p_name}</a>", unsafe_allow_html=True)
-                    st.caption(f"🏷️ SKU: `{p_sku}`")
-                    st.caption(f"🆔 ID: `{p_id}`")
+                # عرض المنتج باستخدام st.columns بدلاً من HTML
+                with st.container():
+                    col_title1, col_title2 = st.columns([3, 1])
+                    with col_title1:
+                        st.markdown(f"### 📦 {p_name}")
+                    with col_title2:
+                        # حالة المنتج في منتصف الحاوية
+                        status = p.get('status', 'sale')
+                        status_text = "🟢 معروض" if status == "sale" else "🔴 مخفي"
+                        st.markdown(f"<div style='text-align: center; margin-top: 8px;'>{status_text}</div>", unsafe_allow_html=True)
                     
-                    if p.get('thumbnail') or p.get('main_image'):
-                        st.markdown("<span style='color: #2a9d8f;'>✅ يحتوي على صورة</span>", unsafe_allow_html=True)
-                    else:
-                        st.markdown("<span style='color: #e76f51;'>⚠️ يحتاج لصورة</span>", unsafe_allow_html=True)
-                
-                with col2:
-                    st.markdown("**💰 السعر:**")
-                    if has_discount:
-                        st.markdown(f"""
-                            <div style="display: flex; align-items: center; gap: 10px; flex-wrap: wrap;">
-                                <span style="font-size: 18px; font-weight: 700; color: #dc3545;">{sale_price:,.2f} SAR</span>
-                                <span style="font-size: 15px; color: #6c757d; text-decoration: line-through;">{price:,.2f} SAR</span>
-                                <span style="background: #dc3545; color: #ffffff; padding: 2px 10px; border-radius: 12px; font-size: 12px; font-weight: 600;">-{discount_percent}%</span>
-                            </div>
-                        """, unsafe_allow_html=True)
-                    else:
-                        st.markdown(f"""
-                            <div style="display: flex; align-items: center; gap: 10px; flex-wrap: wrap;">
-                                <span style="font-size: 20px; font-weight: 700; color: #0f1c2e;">{price:,.2f} SAR</span>
-                            </div>
-                        """, unsafe_allow_html=True)
+                    st.markdown(f"🏷️ **العنوان الترويجي:** {p_promotion if p_promotion else 'لا يوجد'}")
+                    st.markdown(f"🏷️ **SKU:** `{p_sku}` | 🆔 **ID:** `{p_id}`")
                     
-                    st.markdown(f"**📦 المخزون:** {p.get('quantity', 0)} حبة")
-                    st.markdown(f"**📈 المبيعات:** {p.get('sold_quantity', 0)}")
+                    col1, col2, col3, col4 = st.columns([2, 2, 2, 2])
                     
-                    status = p.get('status', 'sale')
-                    status_text = "🟢 معروض" if status == "sale" else "🔴 مخفي"
-                    st.markdown(f"**👁️ الحالة:** {status_text}")
-                
-                with col3:
-                    if has_offer:
-                        offer_status = offer.get('status', '')
-                        offer_id = offer.get('id', '')
-                        status_color = "🟢" if offer_status == "active" else "🔴"
-                        status_text = "مفعل" if offer_status == "active" else "غير مفعل"
-                        coupon_status = "مع كوبون" if offer.get('applied_with_coupon', False) else "بدون كوبون"
+                    with col1:
+                        product_url = p.get('url', '#')
+                        st.markdown(f"🔗 [رابط المنتج]({product_url})")
+                        if p.get('thumbnail') or p.get('main_image'):
+                            st.success("✅ يحتوي على صورة")
+                        else:
+                            st.warning("⚠️ يحتاج لصورة")
+                    
+                    with col2:
+                        st.markdown("**💰 السعر:**")
+                        if has_discount:
+                            st.markdown(f"""
+                                **السعر المخفض:** {sale_price:,.2f} SAR
+                                ~~{price:,.2f} SAR~~
+                                **-{discount_percent}%**
+                            """)
+                        else:
+                            st.markdown(f"**{price:,.2f} SAR**")
                         
-                        st.markdown(f"""
-                            <div style="border: 1px solid #e8edf2; border-radius: 8px; padding: 10px; background: #f8f9fa;">
-                                <strong>🎯 عرض:</strong> {offer.get('name', 'عرض')}
-                                <br>
-                                <span style="font-size: 12px;">🆔 {offer_id}</span>
-                                <br>
-                                <span style="font-size: 12px;">{status_color} {status_text}</span>
-                                <br>
-                                <span style="font-size: 11px; color: #6c757d;">🔖 {coupon_status}</span>
-                            </div>
-                        """, unsafe_allow_html=True)
+                        st.markdown(f"**📦 المخزون:** {p.get('quantity', 0)} حبة")
+                        st.markdown(f"**📈 المبيعات:** {p.get('sold_quantity', 0)}")
+                    
+                    with col3:
+                        if has_offer:
+                            offer_status = offer.get('status', '')
+                            offer_id = offer.get('id', '')
+                            status_color = "🟢" if offer_status == "active" else "🔴"
+                            status_text = "مفعل" if offer_status == "active" else "غير مفعل"
+                            coupon_status = "مع كوبون" if offer.get('applied_with_coupon', False) else "بدون كوبون"
+                            
+                            st.markdown(f"""
+                                **🎯 عرض:** {offer.get('name', 'عرض')}
+                                🆔 {offer_id}
+                                {status_color} {status_text}
+                                🔖 {coupon_status}
+                            """)
+                            
+                            col_a, col_b = st.columns(2)
+                            with col_a:
+                                if offer_status == "active":
+                                    if st.button("⏸️ إيقاف", key=f"pause_offer_{p_id}_{idx}", use_container_width=True):
+                                        with st.spinner("🔄 جاري إيقاف العرض..."):
+                                            update_res = safe_api_request(
+                                                "PUT",
+                                                f"{SALLA_API_URL}/{offer_id}/status",
+                                                get_headers(),
+                                                json={"status": "inactive"}
+                                            )
+                                            if update_res:
+                                                st.success("✅ تم إيقاف العرض!")
+                                                st.rerun()
+                                else:
+                                    if st.button("▶️ تفعيل", key=f"activate_offer_{p_id}_{idx}", use_container_width=True):
+                                        with st.spinner("🔄 جاري تفعيل العرض..."):
+                                            update_res = safe_api_request(
+                                                "PUT",
+                                                f"{SALLA_API_URL}/{offer_id}/status",
+                                                get_headers(),
+                                                json={"status": "active"}
+                                            )
+                                            if update_res:
+                                                st.success("✅ تم تفعيل العرض!")
+                                                st.rerun()
+                        else:
+                            st.markdown("**⚪ لا يوجد عرض**")
+                            st.button("إضافة عرض", key=f"add_offer_{p_id}_{idx}", disabled=True, use_container_width=True)
+                    
+                    with col4:
+                        if st.button("📋 نسخ ID", key=f"copy_id_{p_id}_{idx}", use_container_width=True):
+                            st.toast(f"✅ تم نسخ المعرف: {p_id}")
                         
-                        col_a, col_b = st.columns(2)
-                        with col_a:
-                            if offer_status == "active":
-                                if st.button("⏸️ إيقاف", key=f"pause_offer_{p_id}_{idx}", use_container_width=True):
-                                    with st.spinner("🔄 جاري إيقاف العرض..."):
-                                        update_res = safe_api_request(
-                                            "PUT",
-                                            f"{SALLA_API_URL}/{offer_id}/status",
-                                            get_headers(),
-                                            json={"status": "inactive"}
-                                        )
-                                        if update_res:
-                                            st.success("✅ تم إيقاف العرض!")
-                                            st.rerun()
-                            else:
-                                if st.button("▶️ تفعيل", key=f"activate_offer_{p_id}_{idx}", use_container_width=True):
-                                    with st.spinner("🔄 جاري تفعيل العرض..."):
-                                        update_res = safe_api_request(
-                                            "PUT",
-                                            f"{SALLA_API_URL}/{offer_id}/status",
-                                            get_headers(),
-                                            json={"status": "active"}
-                                        )
-                                        if update_res:
-                                            st.success("✅ تم تفعيل العرض!")
-                                            st.rerun()
-                    else:
-                        st.markdown("**⚪ لا يوجد عرض**")
-                        st.button("إضافة عرض", key=f"add_offer_{p_id}_{idx}", disabled=True, use_container_width=True)
-                
-                with col4:
-                    if st.button("📋 نسخ ID", key=f"copy_id_{p_id}_{idx}", use_container_width=True):
-                        st.toast(f"✅ تم نسخ المعرف: {p_id}")
+                        # زر تغيير حالة الظهور
+                        current_status = p.get('status', 'sale')
+                        btn_label = "👁️ إخفاء" if current_status == "sale" else "👁️ إظهار"
+                        btn_type = "primary" if current_status == "sale" else "secondary"
+                        
+                        if st.button(btn_label, key=f"toggle_status_{p_id}_{idx}", use_container_width=True, type=btn_type):
+                            target_status = "hidden" if current_status == "sale" else "sale"
+                            with st.spinner("🔄 جاري تحديث الحالة..."):
+                                if update_product_status(p_id, target_status):
+                                    st.success("✅ تم تحديث حالة المنتج!")
+                                    st.rerun()
+                                else:
+                                    st.error("❌ فشل تحديث حالة المنتج")
+                        
+                        # زر تعديل العنوان الترويجي
+                        if st.button("✏️ تعديل العنوان", key=f"edit_promotion_{p_id}_{idx}", use_container_width=True):
+                            st.session_state[f"edit_promotion_{p_id}"] = True
+                        
+                        if st.session_state.get(f"edit_promotion_{p_id}", False):
+                            new_promotion = st.text_input(
+                                "العنوان الترويجي الجديد:",
+                                value=p_promotion,
+                                key=f"promotion_input_{p_id}"
+                            )
+                            col_save1, col_save2 = st.columns(2)
+                            with col_save1:
+                                if st.button("💾 حفظ", key=f"save_promotion_{p_id}", use_container_width=True):
+                                    if update_product_promotion(p_id, new_promotion):
+                                        st.success("✅ تم تحديث العنوان الترويجي!")
+                                        st.session_state[f"edit_promotion_{p_id}"] = False
+                                        st.rerun()
+                                    else:
+                                        st.error("❌ فشل تحديث العنوان الترويجي")
+                            with col_save2:
+                                if st.button("❌ إلغاء", key=f"cancel_promotion_{p_id}", use_container_width=True):
+                                    st.session_state[f"edit_promotion_{p_id}"] = False
+                                    st.rerun()
                     
-                    # زر تغيير حالة الظهور
-                    current_status = p.get('status', 'sale')
-                    btn_label = "👁️ إخفاء" if current_status == "sale" else "👁️ إظهار"
-                    btn_type = "primary" if current_status == "sale" else "secondary"
-                    
-                    if st.button(btn_label, key=f"toggle_status_{p_id}_{idx}", use_container_width=True, type=btn_type):
-                        target_status = "hidden" if current_status == "sale" else "sale"
-                        with st.spinner("🔄 جاري تحديث الحالة..."):
-                            if update_product_status(p_id, target_status):
-                                st.success("✅ تم تحديث حالة المنتج!")
-                                st.rerun()
-                            else:
-                                st.error("❌ فشل تحديث حالة المنتج")
-                    
-                    # زر تعديل العنوان الترويجي
-                    if st.button("✏️ تعديل العنوان", key=f"edit_promotion_{p_id}_{idx}", use_container_width=True):
-                        st.session_state[f"edit_promotion_{p_id}"] = True
-                    
-                    if st.session_state.get(f"edit_promotion_{p_id}", False):
-                        new_promotion = st.text_input(
-                            "العنوان الترويجي الجديد:",
-                            value=p_promotion,
-                            key=f"promotion_input_{p_id}"
-                        )
-                        if st.button("💾 حفظ", key=f"save_promotion_{p_id}"):
-                            if update_product_promotion(p_id, new_promotion):
-                                st.success("✅ تم تحديث العنوان الترويجي!")
-                                st.session_state[f"edit_promotion_{p_id}"] = False
-                                st.rerun()
-                            else:
-                                st.error("❌ فشل تحديث العنوان الترويجي")
-                
-                st.markdown("</div></div>", unsafe_allow_html=True)
+                    st.divider()
     
     else:
         if headers:
@@ -1872,8 +1691,9 @@ elif page == "📦 مركز جرد المنتجات ومعرفات الـ IDs":
 # التذييل
 # ==========================================
 
+st.markdown("---")
 st.markdown("""
-    <div style="text-align: center; padding: 16px; color: #6c757d; border-top: 1px solid #e9ecef; margin-top: 30px; font-size: 13px;">
+    <div style="text-align: center; padding: 16px; color: #6c757d; font-size: 13px;">
         <p>© 2026 منظومة بلسم الرقمية | جميع الحقوق محفوظة</p>
         <p style="font-size: 11px; color: #adb5bd;">تم التطوير باستخدام Streamlit</p>
     </div>
