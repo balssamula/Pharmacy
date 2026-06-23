@@ -143,7 +143,7 @@ def render_offers_page():
         # التصفية والمطابقة الدقيقة للتاريخ المكتوب بالكامل (وليس قبله أو بعده)
         if filter_date_str.strip():
             try:
-                target_date = datetime.strptime(filter_date_str.strip(), "%d-%m-%y").date()
+                target_date = datetime.strptime(filter_date_str.strip(), "%y-%m-%d").date()
                 if not exp_date or exp_date.date() != target_date: continue
             except ValueError:
                 st.warning("⚠️ يرجى كتابة صيغة التاريخ بشكل سليم المطابق تماماً: YYYY-MM-DD")
