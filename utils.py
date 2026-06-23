@@ -17,20 +17,16 @@ def safe_parse_date(date_str: Optional[str]) -> Optional[datetime]:
     if not date_str: return None
     for fmt in ('%Y-%m-%d %H:%M:%S', '%Y-%m-%d', '%a %b %d %Y %H:%M:%S'):
         try:
-            # تنظيف السلسلة النصية من صيغ المناطق الزمنية الزائدة إن وجدت
             clean_str = re.sub(r' GMT.*$', '', str(date_str))
             return datetime.strptime(clean_str, fmt)
         except (ValueError, TypeError): pass
     return None
 
 def parse_products_cleanly(offer_section: Dict) -> str:
-    """تحليل شامل وقراءة ذكية للمنتجات أو التصنيفات المشمولة بالعرض بناءً على وثائق سلة"""
     if not offer_section or not isinstance(offer_section, dict):
         return "كل منتجات المتجر"
-    
     clean_elements = []
     
-    # 1. التحقق من وجود منتجات مباشرة
     products = offer_section.get('products', [])
     if products and isinstance(products, list):
         for p in products:
@@ -39,7 +35,6 @@ def parse_products_cleanly(offer_section: Dict) -> str:
             else:
                 clean_elements.append(f"• معرف منتج رقم: {p}")
                 
-    # 2. التحقق من وجود تصنيفات (Categories) كما هو موضح في ملف Special Offer.md
     categories = offer_section.get('categories', [])
     if categories and isinstance(categories, list):
         for c in categories:
@@ -48,18 +43,14 @@ def parse_products_cleanly(offer_section: Dict) -> str:
             else:
                 clean_elements.append(f"• معرف تصنيف رقم: {c}")
                 
-    return "\n".join(clean_elements) if clean_elements else "كل المنتجات / غير محدد بدقة"
+    return "\n".join(clean_elements) if clean_elements else "كل المنتجات المشمولة بالعرض"
 
 def get_flat_price(price_field: Any) -> float:
-    """استخراج القيمة الرقمية للسعر سواء كان رقماً مباشراً أو كائناً يحتوي على amount وفقاً لـ Product.md"""
-    if not price_field:
-        return 0.0
+    if not price_field: return 0.0
     if isinstance(price_field, dict):
         return float(price_field.get('amount', 0.0))
-    try:
-        return float(price_field)
-    except (ValueError, TypeError):
-        return 0.0
+    try: return float(price_field)
+    except (ValueError, TypeError): return 0.0
 
 def safe_api_request(method: str, url: str, headers: Dict, **kwargs) -> Optional[Dict]:
     try:
@@ -158,7 +149,7 @@ def process_excel_import(df: pd.DataFrame) -> Dict:
             offer_data = {
                 "name": offer_name,
                 "offer_type": str(row.get('Offer_Type', 'buy_x_get_y')).strip(),
-                "applied_channel": str(row.get('Applied_Channel', 'browser_and_application')).strip(),
+                "applied_channel": "browser_and_application",
                 "applied_to": str(row.get('Applied_To', 'product')).strip(),
                 "start_date": str(row.get('Start_Date_Time', datetime.now().strftime('%Y-%m-%d %H:%M:%S'))),
                 "expiry_date": str(row.get('Expiry_Date_Time', datetime.now().strftime('%Y-%m-%d %H:%M:%S'))),
@@ -189,24 +180,21 @@ def process_excel_import(df: pd.DataFrame) -> Dict:
     return results
 
 def update_product_status(product_id: int, status: str) -> bool:
-    """تحديث حالة ظهور المنتج بالمتجر بشكل سليم وتفادي خطأ 422"""
     headers = get_headers()
     if not headers: return False
     current = safe_api_request("GET", f"https://api.salla.dev/admin/v2/products/{product_id}", headers)
     if not current or not current.get('data'): return False
     p_data = current['data']
     
-    # بناء كائن مسطح ومتوافق تماماً مع متطلبات تحديث سلة
+    # بناء حمولة البيانات وإرجاع القنوات الصحيحة والمقبولة لدى سلة لتفادي خطأ 422
     update_payload = {
         "status": status,
         "name": p_data.get('name'),
         "price": get_flat_price(p_data.get('price', 0))
     }
     
-    # قنوات العرض مطلوبة عند النشر مجدداً للمتجر الإلكتروني والتطبيق
-    update_payload["channels"] = p_data.get('channels', ["app", "browser"])
-    if not update_payload["channels"]:
-        update_payload["channels"] = ["app", "browser"]
+    # تصحيح قنوات العرض واستبدال المتغيرات غير الصالحة بـ "store" و "app"
+    update_payload["channels"] = ["store", "app"]
         
     sale_amt = get_flat_price(p_data.get('sale_price', 0))
     if sale_amt > 0:
