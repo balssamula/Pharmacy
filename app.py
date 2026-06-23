@@ -1,7 +1,7 @@
 import streamlit as st
 
 st.set_page_config(
-    page_title="منظومة إدارة العروض الخاصة والمنتجات",
+    page_title="منظومة بلسم الرقمية لإدارة العروض",
     layout="wide",
     page_icon="🎁",
     initial_sidebar_state="expanded"
@@ -45,7 +45,7 @@ st.markdown("""
         transform: scale(1.02) !important;
     }
     
-    /* تلوين أزرار الـ popover الفرعية للتوكن والباسورد لتتوافق مع اللون الأخضر الغامق */
+    /* تلوين أزرار الـ popover الفرعية للتوكن والباسورد لتتوافق مع اللون الأخضر الغامق المعياري */
     div[data-testid="stPopover"] button {
         background-color: #0f5132 !important;
         color: #ffffff !important;
@@ -98,7 +98,7 @@ with c_tok:
             st.success("تم التحديث!")
             st.rerun()
 with c_pwd:
-    with st.popover("🔒 تعديل كلمة مرور النظام", type="primary"):
+    with st.popover("🔒 تعديل كلمة مرور النظام"):
         new_p = st.text_input("أدخل الباسورد الجديد:", type="password")
         if st.button("حفظ الباسورد الجديد", type="primary", use_container_width=True):
             st.session_state["admin_password"] = new_p
@@ -113,14 +113,14 @@ page = st.sidebar.radio(
 )
 
 st.sidebar.divider()
-if st.sidebar.button("🔄 تحديث البيانات", use_container_width=True, type="primary"):
+if st.sidebar.button("🔄 تحديث البيانات والصفحة فوراً", use_container_width=True):
     st.rerun()
 
-if st.sidebar.button("🚪 تسجيل الخروج", use_container_width=True, type="primary"):
+if st.sidebar.button("🚪 تسجيل الخروج من النظام", use_container_width=True):
     st.session_state["logged_in"] = False
     st.rerun()
 
-if page == "لوحة إدارة العروض الخاصة الحالية":
+if page == "لوحة إدارة وتصفية العروض الحالية":
     render_offers_page()
 else:
     render_products_page()
