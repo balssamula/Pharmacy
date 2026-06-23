@@ -26,7 +26,6 @@ def safe_parse_date(date_str: Optional[str]) -> Optional[datetime]:
     return None
 
 def parse_products_cleanly(offer_section: Dict) -> str:
-    """تحليل شامل وعرض اسم المنتج مع الـ ID ورقم الصنف SKU معاً"""
     if not offer_section or not isinstance(offer_section, dict):
         return "كل منتجات المتجر"
     clean_elements = []
@@ -50,7 +49,7 @@ def parse_products_cleanly(offer_section: Dict) -> str:
             else:
                 clean_elements.append(f"• معرف تصنيف رقم: {c}")
                 
-    return "\n".join(clean_elements) if clean_elements else "كل المنتجات المشمولة بالعرض"
+    return "\n".join(clean_elements) if clean_elements else "كل المنتجات المشمولة"
 
 def get_flat_price(price_field: Any) -> float:
     if not price_field: return 0.0
@@ -81,8 +80,8 @@ def get_headers():
     return {"Authorization": f"Bearer {token}", "Content-Type": "application/json"}
 
 def style_excel_file(ws, is_template=False):
-    """تطبيق تنسيقات احترافية جذابة متناسقة مع الفلترة التلقائية للأعمدة"""
-    header_fill = PatternFill(start_color="0F1C2E", end_color="0F1C2E", fill_type="solid")
+    """تطبيق تنسيق احترافي فاخر مع الفلاتر التلقائية للأعمدة"""
+    header_fill = PatternFill(start_color="0F1C2E", end_color="1F3A60", fill_type="solid")
     header_font = Font(name="Segoe UI", size=11, bold=True, color="FFFFFF")
     center_alignment = Alignment(horizontal="center", vertical="center", wrap_text=True)
     thin_border = Border(
@@ -91,8 +90,8 @@ def style_excel_file(ws, is_template=False):
     )
     
     start_row = 2 if is_template else 1
+    ws.row_dimensions[start_row].height = 26
     
-    # تنسيق العناوين
     for col in range(1, ws.max_column + 1):
         cell = ws.cell(row=start_row, column=col)
         cell.fill = header_fill
@@ -100,15 +99,13 @@ def style_excel_file(ws, is_template=False):
         cell.alignment = center_alignment
         cell.border = thin_border
         
-    # إضافة الفلترة التلقائية لجميع الأعمدة بشكل احترافي
     last_letter = get_column_letter(ws.max_column)
     ws.auto_filter.ref = f"A{start_row}:{last_letter}{ws.max_row}"
     
-    # ضبط العرض التلقائي للأعمدة
     for col in ws.columns:
         max_len = max(len(str(cell.value or '')) for cell in col)
         col_letter = get_column_letter(col[0].column)
-        ws.column_dimensions[col_letter].width = min(max(max_len + 3, 12), 30)
+        ws.column_dimensions[col_letter].width = min(max(max_len + 4, 14), 32)
 
 def export_offers_to_excel(offers: List[Dict]) -> bytes:
     try:
@@ -141,10 +138,26 @@ def export_products_to_excel(products: List[Dict]) -> bytes:
         for p in products:
             price = get_flat_price(p.get('price', 0))
             sale_price = get_flat_price(p.get('sale_price', 0))
+            
+            promo = p.get('promotion', {})
+            promo_title = p.get('promotion_title') or (promo.get('title') if isinstance(promo, dict) else '') or "لا يوجد"
+            promo_sub = (promo.get('sub_title') if isinstance(promo, dict) else '') or "لا يوجد"
+            
+            # جلب تواريخ التخفيض المحددة للصنف
+            sale_end_val = p.get('sale_end') or p.get('sale_price', {}).get('expired_at') if isinstance(p.get('sale_price'), dict) else None
+            
             data.append({
-                'المعرف': p.get('id', ''), 'الاسم': p.get('name', ''), 'SKU': p.get('sku', ''),
-                'السعر الأساسي': price, 'السعر المخفض': sale_price if sale_price > 0 else 'لا يوجد',
-                'المخزون': p.get('quantity', 0), 'المبيعات': p.get('sold_quantity', 0),
+                'المعرف': p.get('id', ''), 
+                'الاسم': p.get('name', ''), 
+                'SKU': p.get('sku', ''),
+                'السعر الأساسي': price, 
+                'السعر المخفض': sale_price if sale_price > 0 else 'لا يوجد',
+                'خاضع للضريبة': 'نعم' if p.get('with_tax', True) else 'لا',
+                'العنوان الترويجي': promo_title,
+                'العنوان الفرعي': promo_sub,
+                'تاريخ نهاية التخفيض': sale_end_val if sale_end_val else 'غير محدد',
+                'المخزون': p.get('quantity', 0), 
+                'المبيعات': p.get('sold_quantity', 0),
                 'الحالة': 'معروض' if p.get('status') == 'sale' else 'مخفي'
             })
         df = pd.DataFrame(data)
@@ -158,17 +171,15 @@ def export_products_to_excel(products: List[Dict]) -> bytes:
         return b""
 
 def generate_salla_excel_template() -> bytes:
-    """توليد كشف استيراد احترافي مع حقن قوائم منسدلة وخانات اختيار منسقة"""
     from openpyxl import Workbook
     output = io.BytesIO()
     wb = Workbook()
     ws = wb.active
     ws.title = "قائمة العروض"
     
-    # إدراج سطر التعليمات العلوي
-    ws.append(["📋 تعليمات: Action (create, update, delete) | With_Coupon (نعم, لا) | Offer_Status (active, inactive)"])
+    ws.append(["📋 تعليمات الاستيراد: يرجى استخدام القوائم المنسدلة الظاهرة للاختيار لمنع أي أخطاء في الحقول المرفوعة."])
     ws.merge_cells('A1:S1')
-    ws.row_dimensions[1].height = 30
+    ws.row_dimensions[1].height = 24
     
     columns = [
         "Action", "Offer_ID", "Offer_Name", "Offer_Type", "Applied_Channel",
@@ -177,13 +188,10 @@ def generate_salla_excel_template() -> bytes:
         "Discount_Type", "Discount_Amount", "Get_Products_IDs", "Offer_Message"
     ]
     ws.append(columns)
-    
-    # إضافة صف عينة بيانات افتراضي
-    ws.append(["create", "", "عرض ترويجي تجريبي", "buy_x_get_y", "browser_and_application", "product", "لا", "active", "2026-06-23 12:00:00", "2026-07-23 12:00:00", "product", 1, "112233", "product", 1, "free-product", 0, "445566", "خصم مميز"])
+    ws.append(["create", "", "عرض بلسم الجديد", "buy_x_get_y", "browser_and_application", "product", "لا", "active", "2026-06-23 12:00:00", "2026-07-23 12:00:00", "product", 1, "12345", "product", 1, "free-product", 0, "67890", "خصم خاص"])
     
     style_excel_file(ws, is_template=True)
     
-    # إضافة القوائم المنسدلة للنموذج
     dv_action = DataValidation(type="list", formula1='"create,update,delete"', allow_blank=True)
     ws.add_data_validation(dv_action)
     dv_action.add("A3:A100")
@@ -199,73 +207,14 @@ def generate_salla_excel_template() -> bytes:
     wb.save(output)
     return output.getvalue()
 
-def process_excel_import(df: pd.DataFrame) -> Dict:
-    results = {"success": [], "errors": []}
-    headers = get_headers()
-    if not headers:
-        results["errors"].append("❌ الرجاء إدخال مفتاح الربط أولاً")
-        return results
-    
-    for idx, row in df.iterrows():
-        if row.isna().all() or str(row.iloc[0]).strip().startswith("📋"): continue
-        try:
-            action = str(row.get('Action', 'create')).strip().lower()
-            offer_name = str(row.get('Offer_Name', 'عرض جديد')).strip()
-            offer_id = row.get('Offer_ID')
-            if offer_id and pd.notna(offer_id):
-                offer_id = int(float(offer_id))
-            
-            offer_data = {
-                "name": offer_name,
-                "offer_type": str(row.get('Offer_Type', 'buy_x_get_y')).strip(),
-                "applied_channel": "browser_and_application",
-                "applied_to": str(row.get('Applied_To', 'product')).strip(),
-                "start_date": str(row.get('Start_Date_Time', datetime.now().strftime('%Y-%m-%d %H:%M:%S'))),
-                "expiry_date": str(row.get('Expiry_Date_Time', datetime.now().strftime('%Y-%m-%d %H:%M:%S'))),
-                "message": str(row.get('Offer_Message', '')).strip(),
-                "status": str(row.get('Offer_Status', 'active')).strip().lower(),
-                "applied_with_coupon": str(row.get('With_Coupon', 'لا')).strip() == 'نعم',
-                "buy": {"type": str(row.get('Buy_Type', 'product')).strip(), "quantity": int(row.get('Buy_Quantity', 1))},
-                "get": {"type": str(row.get('Get_Type', 'product')).strip(), "quantity": int(row.get('Get_Quantity', 1)), "discount_type": str(row.get('Discount_Type', 'percentage')).strip()}
-            }
-            
-            for key, col_name in [("buy", "Buy_Products_IDs"), ("get", "Get_Products_IDs")]:
-                p_str = str(row.get(col_name, '')).strip()
-                if p_str and p_str != 'nan':
-                    ids = [int(p) for p in re.split(r'[,\s;]+', p_str) if p.strip().isdigit()]
-                    if ids: offer_data[key]["products"] = ids
-
-            if action == 'create':
-                res = safe_api_request("POST", SALLA_API_URL, headers, json=offer_data)
-                if res: results["success"].append(f"✅ تم إنشاء العرض: {offer_name}")
-            elif action == 'update' and offer_id:
-                res = safe_api_request("PUT", f"{SALLA_API_URL}/{offer_id}", headers, json=offer_data)
-                if res: results["success"].append(f"✅ تم تحديث العرض ID: {offer_id}")
-            elif action == 'delete' and offer_id:
-                res = safe_api_request("DELETE", f"{SALLA_API_URL}/{offer_id}", headers)
-                if res: results["success"].append(f"✅ تم حذف العرض ID: {offer_id}")
-        except Exception as e:
-            results["errors"].append(f"❌ خطأ في الصف {idx+1}: {str(e)}")
-    return results
-
 def update_product_status(product_id: int, status: str) -> bool:
-    """تحديث مفعول ظهور المنتج بحذف حقل القنوات تماماً لتفادي الأخطاء البرمجية للمنصة"""
+    """تحديث حالة الصنف باستخدام الرابط والطلب الصحيح لمنع التداخل وخطأ 422"""
     headers = get_headers()
     if not headers: return False
-    current = safe_api_request("GET", f"https://api.salla.dev/admin/v2/products/{product_id}", headers)
-    if not current or not current.get('data'): return False
-    p_data = current['data']
     
-    # نكتفي بإرسال القيمة المسطحة للسعر والحالة الجديدة دون إرسال القنوات لتجنب خطأ 422
-    update_payload = {
-        "status": status,
-        "name": p_data.get('name'),
-        "price": get_flat_price(p_data.get('price', 0))
-    }
-        
-    sale_amt = get_flat_price(p_data.get('sale_price', 0))
-    if sale_amt > 0:
-        update_payload['sale_price'] = sale_amt
-        
-    res = safe_api_request("PUT", f"https://api.salla.dev/admin/v2/products/{product_id}", headers, json=update_payload)
+    # استخدام طلب POST الصارم والمباشر المخصص للحالة لمنع تداخل الأسعار
+    url = f"https://api.salla.dev/admin/v2/products/{product_id}/status"
+    payload = {"status": status}
+    
+    res = safe_api_request("POST", url, headers, json=payload)
     return res is not None
