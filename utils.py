@@ -118,7 +118,7 @@ def export_offers_to_excel(offers: List[Dict]) -> bytes:
                 'مع كوبون': 'نعم' if offer.get('applied_with_coupon', False) else 'لا',
                 'تاريخ البدء': offer.get('start_date', ''), 'تاريخ الانتهاء': offer.get('expiry_date', ''),
                 'منتجات الشراء': ', '.join(buy_p), 'كمية الشراء': offer.get('buy', {}).get('quantity', 1),
-                'منتجات الهدية': ', '.join(get_p), 'كمية الهدية': offer.get('get', {}).get('quantity', 1),
+                'منتجات العرض': ', '.join(get_p), 'كمية العرض': offer.get('get', {}).get('quantity', 1),
                 'الرسالة': offer.get('message', '')
             })
         df = pd.DataFrame(data)
@@ -149,7 +149,7 @@ def export_products_to_excel(products: List[Dict]) -> bytes:
             
             data.append({
                 'المعرف': p.get('id', ''), 'الاسم': p.get('name', ''), 'SKU': p.get('sku', ''),
-                'السعر الأساسي الأصل': base_price, 'السعر المخفض الحالي': sale_price if sale_price > 0 else 'لا يوجد',
+                'السعر الأساسي': base_price, 'السعر المخفض': sale_price if sale_price > 0 else 'لا يوجد',
                 'خاضع للضريبة': 'نعم' if p.get('with_tax', True) else 'لا',
                 'العنوان الترويجي': promo_title, 'العنوان الفرعي': promo_sub,
                 'تاريخ بداية التخفيض': sale_start, 'تاريخ نهاية التخفيض': sale_end,
@@ -184,7 +184,7 @@ def generate_salla_excel_template() -> bytes:
         "Discount_Type", "Discount_Amount", "Get_Products_IDs", "Offer_Message"
     ]
     ws.append(columns)
-    ws.append(["create", "", "عرض بلسم الحصري", "buy_x_get_y", "browser_and_application", "product", "لا", "active", "2026-06-23 12:00:00", "2026-12-31 23:59:59", "product", 1, "12345", "product", 1, "free-product", 0, "67890", "خصم رائع"])
+    ws.append(["create", "", "1000 / عرض 1+1 مجاناً", "buy_x_get_y", "browser_and_application", "product", "لا", "active", "2026-06-23 12:00:00", "2026-12-31 23:59:59", "product", 1, "12345", "product", 1, "free-product", 0, "67890", "عرض 1+1 مجاناً"])
     
     style_excel_file(ws, is_template=True)
     
