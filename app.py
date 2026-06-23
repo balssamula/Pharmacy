@@ -11,39 +11,31 @@ from offers_page import render_offers_page
 from products_page import render_products_page
 
 # ==============================================================================================
-# CSS الجذري والحاسم لتثبيت خط كايرو وحل تداخل الرموز + صباغة الأزرار المحددة بالأخضر الغامق والأبيض
+# CSS الذكي المطور لحل مشكلة تداخل نصوص الرموز والـ Ligatures (expand_more و arrow_down) بشكل نهائي
 # ==============================================================================================
 st.markdown("""
     <style>
     @import url('https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700&display=swap');
     
-    html, body, [data-testid="stAppViewContainer"] p, 
-    [data-testid="stAppViewContainer"] span, 
-    [data-testid="stAppViewContainer"] h1, 
-    [data-testid="stAppViewContainer"] h2, 
-    [data-testid="stAppViewContainer"] h3, 
-    [data-testid="stAppViewContainer"] h4, 
-    [data-testid="stAppViewContainer"] h5, 
-    [data-testid="stAppViewContainer"] h6, 
-    [data-testid="stAppViewContainer"] label, 
-    [data-testid="stAppViewContainer"] button, 
-    [data-testid="stAppViewContainer"] input, 
-    [data-testid="stAppViewContainer"] select {
+    /* حصر وسم خط كايرو على العناصر والكتل النصية المكتوبة الصافية وتجنب الـ span العام */
+    html, body, .stApp, h1, h2, h3, h4, h5, h6, p, label, button, input, select, textarea {
         font-family: 'Cairo', sans-serif !important;
     }
     
-    /* استثناء كامل وحاسم للأيقونات الافتراضية لمنع تداخل الكلمات البرمجية */
-    .stIcon, [data-testid="stIcon"], [class^="st-"] svg, .material-icons, i, 
-    [data-testid="stPopover"]::after, [data-testid="stExpander"]::after {
+    /* منع وإلغاء تطبيق خط كايرو على أيقونات نظام Streamlit الداخلية والـ SVG لمنع تداخل نصوصها */
+    .stIcon, [data-testid="stIcon"], [class^="st-"] svg, .material-icons, i,
+    span[data-testid="stIconVisibility"], summary svg, button svg,
+    [data-base-ui="icon"], [class*="Icon"] {
         font-family: inherit !important;
     }
     
-    /* صباغة وتلوين أزرار التعديل، الإنشاء، وإعدادات النظام لتصبح باللون الأخضر الغامق والنص الأبيض المطلوب */
+    /* تخصيص وصباغة أزرار التعديل والإنشاء وإعدادات التوكن باللون الأخضر الغامق الكريستالي والنص الأبيض */
     div.stButton > button[data-testid="baseButton-primary"] {
         background-color: #0f5132 !important;
         color: #ffffff !important;
         border: 1px solid #0f5132 !important;
-        box-shadow: 0 4px 6px rgba(0,0,0,0.1) !important;
+        box-shadow: 0 4px 6px rgba(0,0,0,0.08) !important;
+        font-size: 14px !important;
     }
     div.stButton > button[data-testid="baseButton-primary"]:hover {
         background-color: #146c43 !important;
@@ -51,7 +43,7 @@ st.markdown("""
         transform: scale(1.02) !important;
     }
     
-    /* عزل وضمان بقاء أزرار الحذف باللون الأحمر لعدم التداخل الإداري */
+    /* الحفاظ على أزرار الحذف باللون الأحمر لعزلها إدارياً ومنع الأخطاء البصرية */
     div.stButton > button[key*="t_dl_"] {
         background-color: #dc3545 !important;
         color: #ffffff !important;
@@ -92,14 +84,14 @@ c_tok, c_pwd, _ = st.columns([2, 2, 4])
 with c_tok:
     with st.popover("⚙️ إعدادات مفتاح الربط"):
         new_t = st.text_input("أدخل توكن الربط الجديد:", value=st.session_state["access_token"], type="password")
-        if st.button("تحديث التوكن", type="primary", use_container_width=True):
+        if st.button("تحديث التوكن والربط", type="primary", use_container_width=True):
             st.session_state["access_token"] = new_t
             st.success("تم التحديث!")
             st.rerun()
 with c_pwd:
     with st.popover("🔒 تعديل كلمة مرور النظام"):
         new_p = st.text_input("أدخل الباسورد الجديد:", type="password")
-        if st.button("حفظ الباسورد", type="primary", use_container_width=True):
+        if st.button("حفظ الباسورد الجديد", type="primary", use_container_width=True):
             st.session_state["admin_password"] = new_p
             st.success("تم الحفظ بنجاح!")
 
