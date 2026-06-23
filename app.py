@@ -1,7 +1,7 @@
 import streamlit as st
 
 st.set_page_config(
-    page_title="منظومة بلسم الرقمية لإدارة العروض",
+    page_title="منظومة بلسم العلا لإدارة العروض",
     layout="wide",
     page_icon="🎁",
     initial_sidebar_state="expanded"
@@ -63,7 +63,7 @@ if "admin_password" not in st.session_state: st.session_state["admin_password"] 
 if not st.session_state["logged_in"]:
     _, col2, _ = st.columns([1, 2, 1])
     with col2:
-        st.markdown("<h3 style='text-align:center;'>🏥 تسجيل الدخول - منظومة بلسم الرقمية</h3>", unsafe_allow_html=True)
+        st.markdown("<h3 style='text-align:center;'>🏥 تسجيل الدخول - منظومة العروض المتطورة</h3>", unsafe_allow_html=True)
         st.divider()
         token = st.text_input("🔑 مفتاح الربط (Access Token):", type="password")
         un = st.text_input("👤 اسم المستخدم:")
@@ -77,7 +77,7 @@ if not st.session_state["logged_in"]:
                 st.error("❌ عذراً، تأكد من صحة البيانات والتوكن المرفق!")
     st.stop()
 
-st.markdown("<h1 style='color:#0f1c2e;'>🏥 لوحة التحكم الإدارية لصيدليات بلسم العُلا</h1>", unsafe_allow_html=True)
+st.markdown("<h1 style='color:#0f1c2e;'>🏥 لوحة التحكم الإدارية للعروض والمنتجات</h1>", unsafe_allow_html=True)
 st.markdown("---")
 
 c_tok, c_pwd, _ = st.columns([2, 2, 4])
@@ -89,7 +89,7 @@ with c_tok:
             st.success("تم التحديث!")
             st.rerun()
 with c_pwd:
-    with st.popover("🔒 تعديل كلمة مرور النظام"):
+    with st.popover("🔒 تعديل كلمة مرور النظام", type="primary"):
         new_p = st.text_input("أدخل الباسورد الجديد:", type="password")
         if st.button("حفظ الباسورد الجديد", type="primary", use_container_width=True):
             st.session_state["admin_password"] = new_p
@@ -100,18 +100,18 @@ st.divider()
 st.sidebar.markdown("### 🏪 أقسام المنظومة")
 page = st.sidebar.radio(
     "انتقل بين الواجهات الفنية:",
-    ["لوحة إدارة وتصفية العروض الحالية", "مركز جرد وفحص مستودع المنتجات"]
+    ["لوحة إدارة العروض الخاصة الحالية", "مركز جرد وفحص المنتجات"]
 )
 
 st.sidebar.divider()
-if st.sidebar.button("🔄 تحديث البيانات والصفحة فوراً", use_container_width=True):
+if st.sidebar.button("🔄 تحديث البيانات", use_container_width=True, type="primary"):
     st.rerun()
 
-if st.sidebar.button("🚪 تسجيل الخروج من النظام", use_container_width=True):
+if st.sidebar.button("🚪 تسجيل الخروج", use_container_width=True, type="primary"):
     st.session_state["logged_in"] = False
     st.rerun()
 
-if page == "لوحة إدارة وتصفية العروض الحالية":
+if page == "لوحة إدارة العروض الخاصة الحالية":
     render_offers_page()
 else:
     render_products_page()
