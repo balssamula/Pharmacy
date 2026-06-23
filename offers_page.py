@@ -7,7 +7,7 @@ from utils import (
 )
 
 def render_offers_page():
-    st.markdown("<h2 style='color:#0f1c2e;'>📊 لوحة إدارة وتصفية العروض الحالية</h2>", unsafe_allow_html=True)
+    st.markdown("<h2 style='color:#0f1c2e;'>📊 لوحة إدارة العروض الخاصة الحالية</h2>", unsafe_allow_html=True)
     
     headers = get_headers()
     if not headers: return
@@ -15,7 +15,7 @@ def render_offers_page():
     col_dl, col_ex = st.columns([1, 1])
     with col_dl:
         st.download_button(
-            label="📥 تنزيل نموذج الاستيراد المنسق الاحترافي",
+            label="📥 تنزيل نموذج استيراد العروض الخاصة",
             data=generate_salla_excel_template(),
             file_name="Salla_Offers_Template.xlsx",
             mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
@@ -29,19 +29,20 @@ def render_offers_page():
     with col_ex:
         if raw_offers:
             st.download_button(
-                label="📥 تصدير قائمة العروض الحالية إلى Excel",
+                label="📥 تصدير العروض الحالية إلى Excel",
                 data=export_offers_to_excel(raw_offers),
                 file_name=f"offers_export_{datetime.now().strftime('%Y%m%d')}.xlsx",
                 mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-                use_container_width=True
+                use_container_width=True,
+                type="primary"
             )
 
-    uploaded_file = st.file_uploader("📂 تحميل ملف عروض جماعي (XLSX) للاستيراد:", type=["xlsx"])
+    uploaded_file = st.file_uploader("📂 تحميل ملف العروض المجمع (XLSX) للاستيراد:", type=["xlsx"])
     if uploaded_file:
         try:
             df_user = pd.read_excel(uploaded_file)
             st.dataframe(df_user, use_container_width=True)
-            if st.button("🚀 تأكيد معالجة ونشر الملف الجماعي", use_container_width=True):
+            if st.button("🚀 تأكيد معالجة ونشر العروض", use_container_width=True):
                 res = process_excel_import(df_user)
                 for m in res["success"]: st.success(m)
                 for m in res["errors"]: st.error(m)
@@ -52,21 +53,21 @@ def render_offers_page():
     st.divider()
 
     # --- حقول ديناميكية تتغير كلياً حسب نوع العرض لإنشاء عرض جديد ---
-    with st.expander("➕ إنشاء عرض ترويجي جديد متكامل", expanded=False):
+    with st.expander("➕ إنشاء عرض ترويجي جديد", expanded=False):
         st.markdown("### 📝 تفاصيل العرض الأساسية")
         c1, c2 = st.columns(2)
         with c1:
             new_offer_name = st.text_input("اسم العرض الجديد:")
-            new_offer_type = st.selectbox("نوع وهيكل العرض المعتمد:", ["buy_x_get_y", "percentage", "fixed_amount"], key="creation_type_box")
-            new_applied_to = st.selectbox("تطبيق نطاق العرض على:", ["product", "category", "order"])
-            new_with_coupon = st.selectbox("هل يتطلب استخدام كوبون؟", ["لا", "نعم"])
+            new_offer_type = st.selectbox("نوع العرض :", ["buy_x_get_y", "percentage", "fixed_amount"], key="creation_type_box")
+            new_applied_to = st.selectbox("تطبيق العرض على:", ["product", "category", "order"])
+            new_with_coupon = st.selectbox("تطبيق العرض مع الكوبون؟", ["لا", "نعم"])
         with c2:
-            new_message = st.text_input("الرسالة التسويقية للسلة:")
-            new_offer_status = st.selectbox("حالة تشغيل العرض الفورية:", ["active", "inactive"], format_func=lambda x: "مفعل فوراً بالمتجر" if x == "active" else "حفظ كمسودة")
+            new_message = st.text_input("نص رسالة العرض:")
+            new_offer_status = st.selectbox("حالة تشغيل العرض:", ["active", "inactive"], format_func=lambda x: "تفعيل" if x == "active" else "إلغاء التفعيل")
             new_start_date = st.text_input("توقيت بدء العرض:", value=datetime.now().strftime('%Y-%m-%d %H:%M:%S'))
             new_expiry_date = st.text_input("توقيت انتهاء العرض:", value="2026-12-31 23:59:59")
             
-        st.markdown("#### 🛒 شروط ومجموعات الحقول المتغيرة")
+        st.markdown("#### 🛒 خيارات العرض المتغيرة")
         
         # التغيير الشرطي الكامل حقول الإنشاء لتتوافق مع نوع العرض المختار
         if new_offer_type == "buy_x_get_y":
@@ -84,7 +85,7 @@ def render_offers_page():
         else:
             col_p1, col_p2 = st.columns(2)
             with col_p1:
-                new_discount_amount = st.number_input("قيمة أو نسبة التخفيض المالي للعرض:", min_value=0.5, value=10.0)
+                new_discount_amount = st.number_input("قيمة أو نسبة التخفيض:", min_value=0.5, value=10.0)
                 new_buy_products = st.text_input("معرفات الـ IDs للمنتجات المشمولة بالتخفيض الفوري:")
             with col_p2:
                 st.caption("عروض النسبة والمبالغ المقطوعة تطبق بشكل فوري ومباشر على أصناف المستودع المحددة دون اشتراط هدايا معها.")
@@ -113,7 +114,7 @@ def render_offers_page():
                     payload["get"]["discount_amount"] = float(new_discount_amount)
                     
                 if safe_api_request("POST", SALLA_API_URL, headers, json=payload):
-                    st.success("✅ تم تدوين وإنشاء العرض الترويجي المتكامل بنجاح!")
+                    st.success("✅ تم إنشاء العرض الترويجي بنجاح!")
                     st.rerun()
             except Exception as e:
                 st.error(f"خطأ أثناء إنشاء العرض: {str(e)}")
@@ -124,7 +125,7 @@ def render_offers_page():
     st.markdown("#### 🔍 أدوات التصفية والبحث المتقدمة عن العروض")
     f1, f2, f3 = st.columns(3)
     with f1: search_offer = st.text_input("🔎 ابحث باسم العرض أو بالمعرف الرقمي:")
-    with f2: status_filter = st.selectbox("📌 حالة نشاط وظهور العرض بالمتجر:", ["الكل", "نشط فقط", "غير نشط فقط"])
+    with f2: status_filter = st.selectbox("📌 حالة ظهور العرض بالمتجر:", ["الكل", "نشط", "غير نشط"])
     with f3: filter_date_str = st.text_input("📅 ابحث عن تاريخ انتهاء مطابق تماماً وحصراً (YYYY-MM-DD):", placeholder="مثال: 2026-06-24")
 
     now = datetime.now()
@@ -136,13 +137,13 @@ def render_offers_page():
         exp_date = safe_parse_date(offer.get('expiry_date'))
         
         if search_offer and (search_offer.lower() not in offer_name.lower() and search_offer not in str(offer_id)): continue
-        if status_filter == "نشط فقط" and status != "active": continue
-        if status_filter == "غير inactive فقط" and status == "active": continue
+        if status_filter == "نشط" and status != "active": continue
+        if status_filter == "غير نشط" and status == "active": continue
         
         # التصفية للمطابقة الدقيقة للتاريخ المدخل حصراً (وليس قبله ولا بعده)
         if filter_date_str.strip():
             try:
-                target_date = datetime.strptime(filter_date_str.strip(), "%Y-%m-%d").date()
+                target_date = datetime.strptime(filter_date_str.strip(), "%d-%m-%Y").date()
                 if not exp_date or exp_date.date() != target_date: continue
             except ValueError:
                 st.warning("⚠️ يرجى كتابة صيغة التاريخ بشكل سليم المطابق تماماً: YYYY-MM-DD")
@@ -176,8 +177,8 @@ def render_offers_page():
                 st.markdown(f"**📅 توقيت بدء النشر المعتمد:** `{offer.get('start_date', 'غير محدد')}`")
                 st.markdown(f"**📅 توقيت انتهاء الصلاحية:** `{offer.get('expiry_date', 'بدون تاريخ (مستمر)')}`")
             with cy:
-                st.markdown(f"**🔖 متوافق ومربوط مع كوبونات؟** `{'نعم بالتأكيد' if offer.get('applied_with_coupon') else 'لا (تلقائي المفعول)'}`")
-                st.markdown(f"**📢 نص الرسالة الترويجية للزبائن:** *{offer.get('message', 'لا توجد رسالة مرفقة')}*")
+                st.markdown(f"**🔖 تطبيق العرض مع كوبون التخفيض؟** `{'نعم يطبق مع كوبونات التخفيض' if offer.get('applied_with_coupon') else 'لا يطبق مع كوبونات التخفيض'}`")
+                st.markdown(f"**📢 نص رسالة العرض:** *{offer.get('message', 'لا توجد رسالة مرفقة')}*")
                 
             st.markdown("<hr style='margin: 15px 0; border-top: 1px dashed #e2e8f0;'>", unsafe_allow_html=True)
             
@@ -189,36 +190,36 @@ def render_offers_page():
             with col_y:
                 st.markdown("<b style='color:#0f1c2e;'>🎁 مجموعة المنح والهدية (Y) [تشمل الأسماء والمعرفات ورقم الصنف SKU]:</b>", unsafe_allow_html=True)
                 st.text(parse_products_cleanly(offer.get('get', {})))
-                st.caption(f"كمية المنح/الخصم: {offer.get('get', {}).get('quantity', 1)} قطعة")
+                st.caption(f"الكمية المجانية/الخصم: {offer.get('get', {}).get('quantity', 1)} قطعة")
 
             st.markdown("<br>", unsafe_allow_html=True)
             b1, b2, b3 = st.columns(3)
             with b1:
                 t_status = "inactive" if status == "active" else "active"
-                lbl = "⏸️ إيقاف مفعول العرض" if status == "active" else "▶️ إعادة تفعيل وبث العرض"
+                lbl = "🛑 إيقاف العرض" if status == "active" else "▶️ إعادة تفعيل العرض"
                 if st.button(lbl, key=f"t_st_{offer_id}_{idx}", use_container_width=True):
                     safe_api_request("PUT", f"{SALLA_API_URL}/{offer_id}/status", headers, json={"status": t_status})
                     st.rerun()
             with b2:
-                if st.button("🔖 عكس التوافق مع الكوبون", key=f"t_cp_{offer_id}_{idx}", use_container_width=True):
+                if st.button("🔖 عكس تطبيق العرض مع الكوبون ⏯", key=f"t_cp_{offer_id}_{idx}", use_container_width=True):
                     safe_api_request("PUT", f"{SALLA_API_URL}/{offer_id}", headers, json={"applied_with_coupon": not offer.get('applied_with_coupon', False)})
                     st.rerun()
             with b3:
-                if st.button("🗑️ حذف هذا العرض بالكامل", key=f"t_dl_{offer_id}_{idx}", use_container_width=True):
+                if st.button("🗑️ حذف العرض بالكامل", key=f"t_dl_{offer_id}_{idx}", use_container_width=True, type="primary"):
                     safe_api_request("DELETE", f"{SALLA_API_URL}/{offer_id}", headers)
                     st.rerun()
 
             # --- حقول التعديل المتقدمة والشرطية المرنة لكل عرض ---
-            with st.expander("✏️ تعديل ومراجعة كافة حقول هذا العرض الترويجي", expanded=False):
+            with st.expander("✏️ تعديل ومراجعة العرض الترويجي", expanded=False):
                 st.markdown("##### ✏️ تعديل البيانات والخيارات الأساسية")
-                ed_name = st.text_input("تحديث مسمى العرض الحصري:", value=offer_name, key=f"ed_n_{offer_id}_{idx}")
-                ed_msg = st.text_input("تحديث الرسالة المعروضة في السلة للزبائن:", value=offer.get('message', ''), key=f"ed_m_{offer_id}_{idx}")
+                ed_name = st.text_input("تحديث إسم العرض:", value=offer_name, key=f"ed_n_{offer_id}_{idx}")
+                ed_msg = st.text_input("تحديث نص رسالة العرض:", value=offer.get('message', ''), key=f"ed_m_{offer_id}_{idx}")
                 
                 ec1, ec2 = st.columns(2)
                 with ec1:
-                    ed_type = st.selectbox("تعديل هيكل ونوع العرض المعتمد:", ["buy_x_get_y", "percentage", "fixed_amount"], index=["buy_x_get_y", "percentage", "fixed_amount"].index(offer.get('offer_type', 'buy_x_get_y')) if offer.get('offer_type', 'buy_x_get_y') in ["buy_x_get_y", "percentage", "fixed_amount"] else 0, key=f"ed_t_{offer_id}_{idx}")
+                    ed_type = st.selectbox("تعديل نوع العرض:", ["buy_x_get_y", "percentage", "fixed_amount"], index=["buy_x_get_y", "percentage", "fixed_amount"].index(offer.get('offer_type', 'buy_x_get_y')) if offer.get('offer_type', 'buy_x_get_y') in ["buy_x_get_y", "percentage", "fixed_amount"] else 0, key=f"ed_t_{offer_id}_{idx}")
                 with ec2:
-                    ed_coupon = st.selectbox("تعديل اشتراط الكوبون للتفعيل؟", ["لا", "نعم"], index=1 if offer.get('applied_with_coupon') else 0, key=f"ed_c_{offer_id}_{idx}")
+                    ed_coupon = st.selectbox("تعديل تطبيق العرض مع كوبون الخصم؟", ["لا", "نعم"], index=1 if offer.get('applied_with_coupon') else 0, key=f"ed_c_{offer_id}_{idx}")
 
                 st.markdown("##### 🛒 تعديل مجموعات الصنف والكميات بشكل ديناميكي")
                 buy_obj = offer.get('buy', {})
@@ -236,8 +237,8 @@ def render_offers_page():
                         ed_buy_products = st.text_input("تعديل الـ IDs لمنتجات الشراء المشمولة:", value=buy_p_ids, key=f"ed_bp_ids_{offer_id}_{idx}")
                     with eq2:
                         ed_get_type = st.selectbox("تعديل نوع هدية Y:", ["product", "category"], index=0 if get_obj.get('type') == 'product' else 1, key=f"ed_gt_{offer_id}_{idx}")
-                        ed_get_qty = st.number_input("تعديل كمية الهدية (Y):", min_value=1, value=int(get_obj.get('quantity', 1)), key=f"ed_gq_{offer_id}_{idx}")
-                        ed_get_products = st.text_input("تعديل الـ IDs لمنتجات الهدية المشمولة:", value=get_p_ids, key=f"ed_gp_ids_{offer_id}_{idx}")
+                        ed_get_qty = st.number_input("تعديل الكمية المجانية (Y):", min_value=1, value=int(get_obj.get('quantity', 1)), key=f"ed_gq_{offer_id}_{idx}")
+                        ed_get_products = st.text_input("تعديل الـ IDs للمنتجات المجانية المشمولة:", value=get_p_ids, key=f"ed_gp_ids_{offer_id}_{idx}")
                     ed_disc_type = "free-product"
                     ed_disc_amt = 0.0
                 else:
@@ -246,7 +247,7 @@ def render_offers_page():
                         ed_disc_amt = st.number_input("تعديل قيمة أو نسبة الخصم المالي المباشر:", min_value=0.5, value=float(get_obj.get('discount_amount', 10.0)), key=f"ed_da_{offer_id}_{idx}")
                         ed_buy_products = st.text_input("تعديل الـ IDs للمنتجات المشمولة بالتخفيض الفوري:", value=buy_p_ids, key=f"ed_bp_direct_{offer_id}_{idx}")
                     with eq2:
-                        st.caption("ملاحظة: هذا العرض مالي مباشر ولا يتطلب منتجات هدايا تابعة.")
+                        st.caption("ملاحظة: هذا العرض مالي مباشر ولا يتطلب منتجات مجانية تابعة.")
                     ed_buy_type = "product"
                     ed_buy_qty = 1
                     ed_get_type = "product"
@@ -258,7 +259,7 @@ def render_offers_page():
                 with et1: ed_start = st.text_input("تحديث تاريخ بدء العرض الترويجي:", value=offer.get('start_date', ''), key=f"ed_s_dt_{offer_id}_{idx}")
                 with et2: ed_end = st.text_input("تحديث تاريخ انتهاء العرض الترويجي:", value=offer.get('expiry_date', ''), key=f"ed_e_dt_{offer_id}_{idx}")
                 
-                if st.button("💾 اعتماد وحفظ تفاصيل هذا العرض المحدث حالياً", key=f"sv_of_{offer_id}_{idx}", type="primary", use_container_width=True):
+                if st.button("💾 اعتماد وحفظ العرض المحدث", key=f"sv_of_{offer_id}_{idx}", type="primary", use_container_width=True):
                     try:
                         b_p_list = [int(i.strip()) for i in ed_buy_products.split(",") if i.strip().isdigit()]
                         update_payload = {
@@ -274,7 +275,7 @@ def render_offers_page():
                             update_payload["get"]["discount_amount"] = float(ed_disc_amt)
                             
                         if safe_api_request("PUT", f"{SALLA_API_URL}/{offer_id}", headers, json=update_payload):
-                            st.success("✅ تم تحديث ونشر بيانات العرض الترويجي ديناميكياً!")
+                            st.success("✅ تم تحديث ونشر العرض الترويجي!")
                             st.rerun()
                     except Exception as e:
                         st.error(f"خطأ أثناء حفظ التحديثات: {str(e)}")
