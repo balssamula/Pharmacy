@@ -86,7 +86,7 @@ if not st.session_state["logged_in"]:
                 st.error("❌ عذراً، تأكد من صحة البيانات والتوكن المرفق!")
     st.stop()
 
-st.markdown("<h1 style='color:#0f1c2e;'>🏥 لوحة التحكم الإدارية لصيدليات بلسم العُلا</h1>", unsafe_allow_html=True)
+st.markdown("<h1 style='color:#0f1c2e;'>🏥 لوحة التحكم الإدارية لإدارة العروض الخاصة والمنتجات </h1>", unsafe_allow_html=True)
 st.markdown("---")
 
 c_tok, c_pwd, _ = st.columns([2, 2, 4])
