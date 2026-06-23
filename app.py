@@ -22,12 +22,14 @@ st.set_page_config(
 )
 
 # ==========================================
-# CSS المحسّن بالكامل
+# CSS المحسّن - إزالة التعارضات
 # ==========================================
 st.markdown("""
     <style>
+    /* استيراد الخط */
     @import url('https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700&display=swap');
     
+    /* إعادة تعيين كل العناصر */
     * {
         font-family: 'Cairo', sans-serif !important;
         direction: rtl !important;
@@ -35,6 +37,7 @@ st.markdown("""
         box-sizing: border-box !important;
     }
     
+    /* ---------- شاشة الدخول ---------- */
     .login-container {
         max-width: 450px;
         margin: 80px auto;
@@ -52,6 +55,7 @@ st.markdown("""
         to { opacity: 1; transform: translateY(0); }
     }
     
+    /* ---------- الشريط العلوي ---------- */
     .top-sticky-bar {
         background: linear-gradient(135deg, #0a1628 0%, #1a2d4a 100%);
         padding: 14px 24px;
@@ -62,9 +66,9 @@ st.markdown("""
         align-items: center;
         border-bottom: 4px solid #00b4d8;
         box-shadow: 0 4px 15px rgba(0,0,0,0.08);
-        direction: rtl !important;
         flex-wrap: wrap;
         gap: 10px;
+        direction: rtl !important;
     }
     
     .top-sticky-bar .title {
@@ -86,6 +90,12 @@ st.markdown("""
         border: 1px solid rgba(0, 180, 216, 0.3);
     }
     
+    /* ---------- حاوية المحتوى الرئيسية ---------- */
+    .main-container {
+        padding: 10px 0;
+        direction: rtl !important;
+    }
+    
     /* ---------- بطاقات المنتجات المحسّنة ---------- */
     .product-card {
         background: #ffffff;
@@ -97,7 +107,6 @@ st.markdown("""
         direction: rtl !important;
         overflow: hidden;
         transition: all 0.3s ease;
-        position: relative;
     }
     
     .product-card:hover {
@@ -112,9 +121,9 @@ st.markdown("""
         justify-content: space-between;
         align-items: center;
         border-bottom: 3px solid #00b4d8;
-        direction: rtl !important;
         flex-wrap: wrap;
         gap: 8px;
+        direction: rtl !important;
     }
     
     .product-card-header .product-name {
@@ -166,6 +175,7 @@ st.markdown("""
         border-radius: 10px;
         border: 1px dashed #00b4d8;
         margin-top: 12px;
+        direction: rtl !important;
     }
     
     /* ---------- تنسيق السعر ---------- */
@@ -210,6 +220,7 @@ st.markdown("""
         overflow-x: auto;
         border-radius: 12px;
         border: 1px solid #e8edf2;
+        margin: 10px 0;
     }
     
     .dataframe-container table {
@@ -248,10 +259,6 @@ st.markdown("""
         background-color: #f8fafc;
     }
     
-    .dataframe-container tbody tr:nth-child(even):hover {
-        background-color: #f0f7ff;
-    }
-    
     /* ---------- القائمة الجانبية ---------- */
     [data-testid="stSidebar"] {
         background-color: #0f1c2e !important;
@@ -282,12 +289,13 @@ st.markdown("""
         border-bottom: 2px solid rgba(0, 180, 216, 0.25);
     }
     
+    /* ---------- أزرار التحكم ---------- */
     .refresh-btn-container {
         margin-top: 10px;
     }
     
     .refresh-btn-container button {
-        background: linear-gradient(135deg, #00FF7F, #20c997) !important;
+        background: linear-gradient(135deg, #28a745, #20c997) !important;
         color: #ffffff !important;
         font-weight: 700 !important;
         font-size: 16px !important;
@@ -295,7 +303,6 @@ st.markdown("""
         height: 46px !important;
         border: none !important;
         box-shadow: 0 4px 15px rgba(40, 167, 69, 0.35) !important;
-        transition: all 0.3s ease !important;
     }
     
     .refresh-btn-container button:hover {
@@ -316,7 +323,6 @@ st.markdown("""
         height: 46px !important;
         border: none !important;
         box-shadow: 0 4px 15px rgba(220, 53, 69, 0.35) !important;
-        transition: all 0.3s ease !important;
     }
     
     .logout-btn button:hover {
@@ -358,6 +364,7 @@ st.markdown("""
         border-top: 1px solid #e9ecef;
         margin-top: 30px;
         font-size: 13px;
+        direction: rtl !important;
     }
     
     .offers-count {
@@ -366,6 +373,7 @@ st.markdown("""
         border-radius: 10px;
         margin-bottom: 16px;
         border-right: 4px solid #00b4d8;
+        direction: rtl !important;
     }
     
     .offer-date {
@@ -417,6 +425,7 @@ st.markdown("""
         font-size: 12px !important;
     }
     
+    /* ---------- شارات الحالة ---------- */
     .coupon-badge {
         display: inline-block;
         padding: 2px 10px;
@@ -453,6 +462,7 @@ st.markdown("""
         color: #721c24;
     }
     
+    /* ---------- أزرار التصدير ---------- */
     .export-btn-container {
         display: flex;
         gap: 10px;
@@ -477,6 +487,21 @@ st.markdown("""
     .export-btn-container .stButton button:hover {
         transform: scale(1.02) !important;
         box-shadow: 0 4px 15px rgba(0, 180, 216, 0.4) !important;
+    }
+    
+    /* ---------- حاوية المحتوى ---------- */
+    .content-wrapper {
+        padding: 0 5px;
+        direction: rtl !important;
+    }
+    
+    /* ---------- تحسين عرض الأعمدة ---------- */
+    .row-widget {
+        direction: rtl !important;
+    }
+    
+    .stColumn {
+        direction: rtl !important;
     }
     </style>
 """, unsafe_allow_html=True)
@@ -536,7 +561,6 @@ def safe_api_request(method: str, url: str, headers: Dict, **kwargs) -> Optional
             except:
                 error_detail = response.text[:500]
             
-            # ✅ لا نعرض خطأ 404 كـ st.error لمنع التكرار
             if response.status_code != 404:
                 st.error(f"⚠️ خطأ {response.status_code}: {error_detail}")
             logger.error(f"API Error {response.status_code}: {error_detail}")
@@ -553,8 +577,12 @@ def safe_api_request(method: str, url: str, headers: Dict, **kwargs) -> Optional
         return None
 
 def get_headers():
+    token = st.session_state.get('access_token', '')
+    if not token:
+        st.warning("⚠️ الرجاء إدخال مفتاح الربط (Access Token)")
+        return {}
     return {
-        "Authorization": f"Bearer {st.session_state.get('access_token', '')}",
+        "Authorization": f"Bearer {token}",
         "Content-Type": "application/json"
     }
 
@@ -563,7 +591,6 @@ def get_headers():
 # ==========================================
 
 def export_offers_to_excel(offers: List[Dict]) -> bytes:
-    """تصدير العروض إلى ملف Excel"""
     try:
         data = []
         for offer in offers:
@@ -607,7 +634,6 @@ def export_offers_to_excel(offers: List[Dict]) -> bytes:
         return b""
 
 def export_products_to_excel(products: List[Dict]) -> bytes:
-    """تصدير المنتجات إلى ملف Excel"""
     try:
         data = []
         for p in products:
@@ -647,9 +673,12 @@ def export_products_to_excel(products: List[Dict]) -> bytes:
 # ==========================================
 
 def process_excel_import(df: pd.DataFrame) -> Dict:
-    """معالجة ملف الإكسيل واستيراد العروض"""
     results = {"success": [], "errors": []}
     headers = get_headers()
+    
+    if not headers:
+        results["errors"].append("❌ الرجاء إدخال مفتاح الربط أولاً")
+        return results
     
     for idx, row in df.iterrows():
         try:
@@ -855,7 +884,6 @@ def generate_salla_excel_template() -> bytes:
         ws = wb.active
         ws.title = "قائمة العروض"
         
-        # تنسيق الحدود
         thin_border = Border(
             left=Side(style='thin', color='CCCCCC'),
             right=Side(style='thin', color='CCCCCC'),
@@ -870,7 +898,6 @@ def generate_salla_excel_template() -> bytes:
             for col_idx, value in enumerate(row_data, 1):
                 ws.cell(row=row_idx, column=col_idx, value=value)
         
-        # تنسيق الرأس
         header_fill = PatternFill(start_color="1F497D", end_color="1F497D", fill_type="solid")
         header_font = Font(name="Segoe UI", size=11, bold=True, color="FFFFFF")
         header_alignment = Alignment(horizontal="center", vertical="center")
@@ -882,7 +909,6 @@ def generate_salla_excel_template() -> bytes:
             cell.alignment = header_alignment
             cell.border = thin_border
         
-        # تنسيق البيانات
         data_font = Font(name="Segoe UI", size=10)
         data_alignment = Alignment(horizontal="right", vertical="center")
         
@@ -893,7 +919,6 @@ def generate_salla_excel_template() -> bytes:
                 cell.alignment = data_alignment
                 cell.border = thin_border
         
-        # ضبط عرض الأعمدة
         for col in ws.columns:
             max_length = 0
             column = col[0].column_letter
@@ -1035,8 +1060,9 @@ def generate_salla_excel_template() -> bytes:
 # ==========================================
 
 def create_new_offer(offer_data: Dict) -> bool:
-    """إنشاء عرض جديد"""
     headers = get_headers()
+    if not headers:
+        return False
     response = safe_api_request(
         "POST",
         "https://api.salla.dev/admin/v2/specialoffers",
@@ -1067,12 +1093,13 @@ init_session_state()
 # ==========================================
 
 if not st.session_state["logged_in"]:
-    st.markdown("<div class='login-container'>", unsafe_allow_html=True)
     st.markdown("""
-        <div style="text-align: center; margin-bottom: 25px;">
-            <h1 style="color: #0f1c2e; font-weight: 700; font-size: 26px;">🛡️ منظومة بلسم</h1>
-            <p style="color: #6c757d; font-size: 15px;">تسجيل الدخول الآمن إلى لوحة التحكم</p>
-        </div>
+    <div style="display: flex; justify-content: center; align-items: center; min-height: 70vh;">
+        <div class='login-container'>
+            <div style="text-align: center; margin-bottom: 25px;">
+                <h1 style="color: #0f1c2e; font-weight: 700; font-size: 26px;">🛡️ منظومة بلسم</h1>
+                <p style="color: #6c757d; font-size: 15px;">تسجيل الدخول الآمن إلى لوحة التحكم</p>
+            </div>
     """, unsafe_allow_html=True)
     
     st.text_input("🔑 مفتاح الربط (Access Token):", type="password", key="login_token", help="أدخل التوكن الخاص بتطبيقك")
@@ -1081,7 +1108,7 @@ if not st.session_state["logged_in"]:
     
     col1, col2, col3 = st.columns([1, 2, 1])
     with col2:
-        if st.button("🚀 دخول آمن للمنظومة", key="submit_login", use_container_width=True, type="primary"):
+        if st.button("🚀 دخول آمن للمنظومة", key="submit_login", use_container_width=True):
             if st.session_state.get("login_token", "").strip():
                 st.session_state["access_token"] = st.session_state["login_token"].strip()
             if username == "admin" and password == st.session_state["admin_password"]:
@@ -1090,7 +1117,10 @@ if not st.session_state["logged_in"]:
             else:
                 st.error("❌ بيانات الدخول خاطئة.")
     
-    st.markdown("</div>", unsafe_allow_html=True)
+    st.markdown("""
+        </div>
+    </div>
+    """, unsafe_allow_html=True)
     st.stop()
 
 # ==========================================
@@ -1152,8 +1182,8 @@ st.sidebar.divider()
 page = st.sidebar.radio(
     "📋 تصفح الأقسام التنفيذية:",
     [
-        "📊 لوحة إدارة العروض الحالية",
-        "📦 قائمة المنتجات ومعرفات الـ IDs"
+        "📊 لوحة تصفية وإدارة العروض الحالية",
+        "📦 مركز جرد المنتجات ومعرفات الـ IDs"
     ],
     index=0
 )
@@ -1166,7 +1196,7 @@ if st.sidebar.button("🔄 تحديث البيانات والصفحة", key="ref
 st.sidebar.markdown("</div>", unsafe_allow_html=True)
 
 st.sidebar.markdown("<div class='logout-btn'>", unsafe_allow_html=True)
-if st.sidebar.button("🚪 تسجيل الخروج", key="logout_sidebar", use_container_width=True, type="primary"):
+if st.sidebar.button("🚪 تسجيل الخروج", key="logout_sidebar", use_container_width=True):
     st.session_state["logged_in"] = False
     st.session_state["access_token"] = ""
     st.rerun()
@@ -1181,14 +1211,16 @@ with st.sidebar.expander("ℹ️ معلومات النظام", expanded=False):
 # الشاشة الأولى: لوحة العروض
 # ==========================================
 
-if page == "📊 لوحة إدارة العروض الحالية":
+if page == "📊 لوحة تصفية وإدارة العروض الحالية":
     st.markdown("""
-        <h1 style='color: #0f1c2e; font-weight: 700; margin-bottom: 8px; font-size: 26px;'>
-            📊 لوحة إدارة العروض الاحترافية
-        </h1>
-        <p style='color: #6c757d; margin-bottom: 20px; font-size: 14px;'>
-            إدارة شاملة للعروض مع إمكانية التصفية والبحث والتعديل الفوري
-        </p>
+        <div class='content-wrapper'>
+            <h1 style='color: #0f1c2e; font-weight: 700; margin-bottom: 8px; font-size: 26px;'>
+                📊 لوحة إدارة العروض الاحترافية
+            </h1>
+            <p style='color: #6c757d; margin-bottom: 20px; font-size: 14px;'>
+                إدارة شاملة للعروض مع إمكانية التصفية والبحث والتعديل الفوري
+            </p>
+        </div>
     """, unsafe_allow_html=True)
     
     # --- نموذج الاستيراد ---
@@ -1201,8 +1233,7 @@ if page == "📊 لوحة إدارة العروض الحالية":
             data=generate_salla_excel_template(),
             file_name="Salla_Offers_Template.xlsx",
             mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-            use_container_width=True,
-            type="primary"
+            use_container_width=True
         )
     
     uploaded_file = st.file_uploader(
@@ -1229,7 +1260,6 @@ if page == "📊 لوحة إدارة العروض الحالية":
             
             st.success(f"✅ تم تحميل الملف! يحتوي على {len(df_user)} عرض")
             
-            # عرض الجدول بتنسيق احترافي
             st.markdown("<div class='dataframe-container'>", unsafe_allow_html=True)
             st.dataframe(df_user, use_container_width=True, height=300)
             st.markdown("</div>", unsafe_allow_html=True)
@@ -1297,7 +1327,6 @@ if page == "📊 لوحة إدارة العروض الحالية":
             )
             new_message = st.text_input("الرسالة الترويجية:", placeholder="رسالة العرض")
         
-        # عرض حقول حسب نوع العرض
         st.markdown("---")
         st.markdown("#### 🛒 تفاصيل العرض")
         
@@ -1323,7 +1352,7 @@ if page == "📊 لوحة إدارة العروض الحالية":
                 key="new_get_type"
             )
             new_get_qty = st.number_input(
-                "الكمية المجانية:",
+                "كمية الهدية:",
                 min_value=1,
                 value=1,
                 key="new_get_qty"
@@ -1350,14 +1379,13 @@ if page == "📊 لوحة إدارة العروض الحالية":
             help="أدخل معرفات المنتجات مفصولة بفاصلة"
         )
         new_get_products = st.text_input(
-            "معرفات المنتجات المجانية (بفاصلة):",
+            "معرفات منتجات الهدية (بفاصلة):",
             placeholder="مثال: 1298176905, 1444615766",
             help="أدخل معرفات المنتجات مفصولة بفاصلة"
         )
         
         if st.button("✅ إنشاء العرض", use_container_width=True, type="primary"):
             try:
-                # معالجة المنتجات
                 buy_products = []
                 if new_buy_products.strip():
                     for p in re.split(r'[,\s;]+', new_buy_products.strip()):
@@ -1372,7 +1400,6 @@ if page == "📊 لوحة إدارة العروض الحالية":
                         if p and p.isdigit():
                             get_products.append(int(p))
                 
-                # بناء البيانات
                 offer_data = {
                     "name": new_offer_name,
                     "offer_type": new_offer_type,
@@ -1415,14 +1442,18 @@ if page == "📊 لوحة إدارة العروض الحالية":
     
     # --- جلب العروض ---
     with st.spinner("🔄 جاري تحميل العروض..."):
-        res = safe_api_request("GET", SALLA_API_URL, get_headers())
+        headers = get_headers()
+        if headers:
+            res = safe_api_request("GET", SALLA_API_URL, headers)
+        else:
+            res = None
     
     if res and res.get("data"):
         raw_offers = res["data"]
         
         # --- أزرار التصدير ---
         st.markdown("<div class='export-btn-container'>", unsafe_allow_html=True)
-        col1, col2, col3 = st.columns([1, 1, 4])
+        col1, col2 = st.columns([1, 5])
         with col1:
             if st.button("📥 تصدير العروض", use_container_width=True):
                 excel_data = export_offers_to_excel(raw_offers)
@@ -1432,12 +1463,8 @@ if page == "📊 لوحة إدارة العروض الحالية":
                         data=excel_data,
                         file_name=f"offers_export_{datetime.now().strftime('%Y%m%d_%H%M%S')}.xlsx",
                         mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-                        key="download_offers",
-                        type="primary"
+                        key="download_offers"
                     )
-        with col2:
-            # زر تصدير المنتجات (سيظهر في الشاشة الثانية)
-            pass
         st.markdown("</div>", unsafe_allow_html=True)
         
         # --- الفلترة ---
@@ -1445,7 +1472,7 @@ if page == "📊 لوحة إدارة العروض الحالية":
             col1, col2, col3 = st.columns(3)
             with col1:
                 search_offer = st.text_input(
-                    "🔍 ابحث عن منتج (اسم أو SKU أو ID):",
+                    "🔎 بحث باسم العرض أو المعرف:",
                     placeholder="أدخل نص البحث..."
                 )
             with col2:
@@ -1571,7 +1598,7 @@ if page == "📊 لوحة إدارة العروض الحالية":
                 
                 with col4:
                     target_status = "inactive" if offer_status == "active" else "active"
-                    btn_label = "🛑 إيقاف" if offer_status == "active" else "▶️ تفعيل"
+                    btn_label = "⏸️ إيقاف" if offer_status == "active" else "▶️ تفعيل"
                     if st.button(btn_label, key=f"toggle_status_{offer_id}_{idx}", use_container_width=True):
                         with st.spinner("🔄 جاري تحديث الحالة..."):
                             update_res = safe_api_request(
@@ -1756,34 +1783,43 @@ if page == "📊 لوحة إدارة العروض الحالية":
 
 elif page == "📦 مركز جرد المنتجات ومعرفات الـ IDs":
     st.markdown("""
-        <h1 style='color: #0f1c2e; font-weight: 700; margin-bottom: 8px; font-size: 26px;'>
-            📦 مركز جرد المنتجات
-        </h1>
-        <p style='color: #6c757d; margin-bottom: 20px; font-size: 14px;'>
-            إدارة المنتجات وحالة الظهور وعرض العروض المرتبطة
-        </p>
+        <div class='content-wrapper'>
+            <h1 style='color: #0f1c2e; font-weight: 700; margin-bottom: 8px; font-size: 26px;'>
+                📦 مركز جرد المنتجات
+            </h1>
+            <p style='color: #6c757d; margin-bottom: 20px; font-size: 14px;'>
+                إدارة المنتجات وحالة الظهور وعرض العروض المرتبطة
+            </p>
+        </div>
     """, unsafe_allow_html=True)
     
     # --- زر تصدير المنتجات ---
     st.markdown("<div class='export-btn-container'>", unsafe_allow_html=True)
     if st.button("📥 تصدير المنتجات", use_container_width=False):
         with st.spinner("🔄 جاري تحميل المنتجات للتصدير..."):
-            products_res = safe_api_request("GET", "https://api.salla.dev/admin/v2/products", get_headers())
-            if products_res and products_res.get("data"):
-                excel_data = export_products_to_excel(products_res["data"])
-                if excel_data:
-                    st.download_button(
-                        label="📥 تحميل",
-                        data=excel_data,
-                        file_name=f"products_export_{datetime.now().strftime('%Y%m%d_%H%M%S')}.xlsx",
-                        mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-                        key="download_products"
-                    )
+            headers = get_headers()
+            if headers:
+                products_res = safe_api_request("GET", "https://api.salla.dev/admin/v2/products", headers)
+                if products_res and products_res.get("data"):
+                    excel_data = export_products_to_excel(products_res["data"])
+                    if excel_data:
+                        st.download_button(
+                            label="📥 تحميل",
+                            data=excel_data,
+                            file_name=f"products_export_{datetime.now().strftime('%Y%m%d_%H%M%S')}.xlsx",
+                            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                            key="download_products"
+                        )
     st.markdown("</div>", unsafe_allow_html=True)
     
     with st.spinner("🔄 جاري تحميل المنتجات والعروض..."):
-        products_res = safe_api_request("GET", "https://api.salla.dev/admin/v2/products", get_headers())
-        offers_res = safe_api_request("GET", SALLA_API_URL, get_headers())
+        headers = get_headers()
+        if headers:
+            products_res = safe_api_request("GET", "https://api.salla.dev/admin/v2/products", headers)
+            offers_res = safe_api_request("GET", SALLA_API_URL, headers)
+        else:
+            products_res = None
+            offers_res = None
     
     if products_res and products_res.get("data") and offers_res:
         products = products_res["data"]
@@ -1823,159 +1859,157 @@ elif page == "📦 مركز جرد المنتجات ومعرفات الـ IDs":
         
         if not filtered_products:
             st.warning("⚠️ لم يتم العثور على منتجات تطابق البحث")
-        
-        for idx, p in enumerate(filtered_products):
-            p_id = p.get('id', 'N/A')
-            p_name = p.get('name', 'منتج بدون اسم')
-            p_sku = p.get('sku', 'لا يوجد')
-            
-            p_promotion = p.get('promotion_title', '')
-            if not p_promotion:
-                promotion = p.get('promotion', {})
-                if isinstance(promotion, dict):
-                    p_promotion = promotion.get('title', '')
-            
-            # تنسيق السعر
-            price = get_product_price(p)
-            sale_price_obj = p.get('sale_price', {})
-            if isinstance(sale_price_obj, dict):
-                sale_price = sale_price_obj.get('amount', 0)
-            else:
-                sale_price = float(sale_price_obj) if sale_price_obj else 0
-            
-            has_discount = sale_price > 0 and sale_price < price
-            discount_percent = int(((price - sale_price) / price) * 100) if price > 0 and has_discount else 0
-            
-            offer = offer_map.get(p_id)
-            has_offer = offer is not None
-            
-            st.markdown(f"""
-                <div class='product-card'>
-                    <div class='product-card-header'>
-                        <span class='product-name'>📦 {p_name}</span>
-                        <span class='product-promotion'>🏷️ {p_promotion if p_promotion else 'لا يوجد عنوان ترويجي'}</span>
-                    </div>
-                    <div class='product-card-body'>
-            """, unsafe_allow_html=True)
-            
-            col1, col2, col3, col4 = st.columns([2.5, 2.2, 1.8, 2])
-            
-            with col1:
-                product_url = p.get('url', '#')
-                st.markdown(f"<a href='{product_url}' target='_blank' class='product-link'>{p_name}</a>", unsafe_allow_html=True)
-                st.caption(f"🏷️ SKU: `{p_sku}`")
-                st.caption(f"🆔 ID: `{p_id}`")
+        else:
+            for idx, p in enumerate(filtered_products):
+                p_id = p.get('id', 'N/A')
+                p_name = p.get('name', 'منتج بدون اسم')
+                p_sku = p.get('sku', 'لا يوجد')
                 
-                if p.get('thumbnail') or p.get('main_image'):
-                    st.markdown("<span style='color: #2a9d8f;'>✅ يحتوي على صورة</span>", unsafe_allow_html=True)
+                p_promotion = p.get('promotion_title', '')
+                if not p_promotion:
+                    promotion = p.get('promotion', {})
+                    if isinstance(promotion, dict):
+                        p_promotion = promotion.get('title', '')
+                
+                price = get_product_price(p)
+                sale_price_obj = p.get('sale_price', {})
+                if isinstance(sale_price_obj, dict):
+                    sale_price = sale_price_obj.get('amount', 0)
                 else:
-                    st.markdown("<span style='color: #e76f51;'>⚠️ يحتاج لصورة</span>", unsafe_allow_html=True)
-            
-            with col2:
-                # عرض السعر بشكل احترافي
-                st.markdown("**💰 السعر:**")
-                if has_discount:
-                    st.markdown(f"""
-                        <div class='price-display'>
-                            <span class='price-sale'>{sale_price:,.2f} SAR</span>
-                            <span class='price-original'>{price:,.2f} SAR</span>
-                            <span class='price-discount'>-{discount_percent}%</span>
-                        </div>
-                    """, unsafe_allow_html=True)
-                else:
-                    st.markdown(f"""
-                        <div class='price-display'>
-                            <span class='price-current'>{price:,.2f} SAR</span>
-                        </div>
-                    """, unsafe_allow_html=True)
+                    sale_price = float(sale_price_obj) if sale_price_obj else 0
                 
-                st.markdown(f"**📦 المخزون:** {p.get('quantity', 0)} حبة")
-                st.markdown(f"**📈 المبيعات:** {p.get('sold_quantity', 0)}")
+                has_discount = sale_price > 0 and sale_price < price
+                discount_percent = int(((price - sale_price) / price) * 100) if price > 0 and has_discount else 0
                 
-                status = p.get('status', 'sale')
-                status_text = "🟢 معروض" if status == "sale" else "🔴 مخفي"
-                st.markdown(f"**👁️ الحالة:** {status_text}")
-            
-            with col3:
-                if has_offer:
-                    offer_status = offer.get('status', '')
-                    offer_id = offer.get('id', '')
-                    status_color = "🟢" if offer_status == "active" else "🔴"
-                    status_text = "مفعل" if offer_status == "active" else "غير مفعل"
-                    coupon_status = "مع كوبون" if offer.get('applied_with_coupon', False) else "بدون كوبون"
-                    
-                    st.markdown(f"""
-                        <div style="border: 1px solid #e8edf2; border-radius: 8px; padding: 10px; background: #f8f9fa;">
-                            <strong>🎯 عرض:</strong> {offer.get('name', 'عرض')}
-                            <br>
-                            <span style="font-size: 12px;">🆔 {offer_id}</span>
-                            <br>
-                            <span style="font-size: 12px;">{status_color} {status_text}</span>
-                            <br>
-                            <span style="font-size: 11px; color: #6c757d;">🔖 {coupon_status}</span>
+                offer = offer_map.get(p_id)
+                has_offer = offer is not None
+                
+                st.markdown(f"""
+                    <div class='product-card'>
+                        <div class='product-card-header'>
+                            <span class='product-name'>📦 {p_name}</span>
+                            <span class='product-promotion'>🏷️ {p_promotion if p_promotion else 'لا يوجد عنوان ترويجي'}</span>
                         </div>
-                    """, unsafe_allow_html=True)
+                        <div class='product-card-body'>
+                """, unsafe_allow_html=True)
+                
+                col1, col2, col3, col4 = st.columns([2.5, 2.2, 1.8, 2])
+                
+                with col1:
+                    product_url = p.get('url', '#')
+                    st.markdown(f"<a href='{product_url}' target='_blank' class='product-link'>{p_name}</a>", unsafe_allow_html=True)
+                    st.caption(f"🏷️ SKU: `{p_sku}`")
+                    st.caption(f"🆔 ID: `{p_id}`")
                     
-                    st.markdown("<div class='action-buttons'>", unsafe_allow_html=True)
-                    
-                    if offer_status == "active":
-                        if st.button("⏸️ إيقاف العرض", key=f"pause_offer_{p_id}_{idx}", use_container_width=True):
-                            with st.spinner("🔄 جاري إيقاف العرض..."):
-                                update_res = safe_api_request(
-                                    "PUT",
-                                    f"{SALLA_API_URL}/{offer_id}/status",
-                                    get_headers(),
-                                    json={"status": "inactive"}
-                                )
-                                if update_res:
-                                    st.success("✅ تم إيقاف العرض!")
-                                    st.rerun()
+                    if p.get('thumbnail') or p.get('main_image'):
+                        st.markdown("<span style='color: #2a9d8f;'>✅ يحتوي على صورة</span>", unsafe_allow_html=True)
                     else:
-                        if st.button("▶️ تفعيل العرض", key=f"activate_offer_{p_id}_{idx}", use_container_width=True):
-                            with st.spinner("🔄 جاري تفعيل العرض..."):
-                                update_res = safe_api_request(
-                                    "PUT",
-                                    f"{SALLA_API_URL}/{offer_id}/status",
-                                    get_headers(),
-                                    json={"status": "active"}
-                                )
-                                if update_res:
-                                    st.success("✅ تم تفعيل العرض!")
-                                    st.rerun()
-                    
-                    st.markdown("</div>", unsafe_allow_html=True)
-                    
-                else:
-                    st.markdown("**⚪ لا يوجد عرض**")
-                    st.button("إضافة عرض", key=f"add_offer_{p_id}_{idx}", disabled=True, use_container_width=True)
-            
-            with col4:
-                if st.button("📋 نسخ ID", key=f"copy_id_{p_id}_{idx}", use_container_width=True):
-                    st.toast(f"✅ تم نسخ المعرف: {p_id}")
+                        st.markdown("<span style='color: #e76f51;'>⚠️ يحتاج لصورة</span>", unsafe_allow_html=True)
                 
-                current_status = p.get('status', 'sale')
-                btn_label = "👁️ إخفاء" if current_status == "sale" else "👁️ إظهار"
-                btn_type = "primary" if current_status == "sale" else "secondary"
-                
-                if st.button(btn_label, key=f"toggle_status_{p_id}_{idx}", use_container_width=True, type=btn_type):
-                    target_status = "hidden" if current_status == "sale" else "sale"
+                with col2:
+                    st.markdown("**💰 السعر:**")
+                    if has_discount:
+                        st.markdown(f"""
+                            <div class='price-display'>
+                                <span class='price-sale'>{sale_price:,.2f} SAR</span>
+                                <span class='price-original'>{price:,.2f} SAR</span>
+                                <span class='price-discount'>-{discount_percent}%</span>
+                            </div>
+                        """, unsafe_allow_html=True)
+                    else:
+                        st.markdown(f"""
+                            <div class='price-display'>
+                                <span class='price-current'>{price:,.2f} SAR</span>
+                            </div>
+                        """, unsafe_allow_html=True)
                     
-                    with st.spinner("🔄 جاري تحديث الحالة..."):
-                        update_payload = {"status": target_status}
-                        update_res = safe_api_request(
-                            "PUT",
-                            f"https://api.salla.dev/admin/v2/products/{p_id}",
-                            get_headers(),
-                            json=update_payload
-                        )
-                        if update_res is not None:
-                            st.success("✅ تم تحديث حالة المنتج!")
-                            st.rerun()
-            
-            st.markdown("</div></div>", unsafe_allow_html=True)
+                    st.markdown(f"**📦 المخزون:** {p.get('quantity', 0)} حبة")
+                    st.markdown(f"**📈 المبيعات:** {p.get('sold_quantity', 0)}")
+                    
+                    status = p.get('status', 'sale')
+                    status_text = "🟢 معروض" if status == "sale" else "🔴 مخفي"
+                    st.markdown(f"**👁️ الحالة:** {status_text}")
+                
+                with col3:
+                    if has_offer:
+                        offer_status = offer.get('status', '')
+                        offer_id = offer.get('id', '')
+                        status_color = "🟢" if offer_status == "active" else "🔴"
+                        status_text = "مفعل" if offer_status == "active" else "غير مفعل"
+                        coupon_status = "مع كوبون" if offer.get('applied_with_coupon', False) else "بدون كوبون"
+                        
+                        st.markdown(f"""
+                            <div style="border: 1px solid #e8edf2; border-radius: 8px; padding: 10px; background: #f8f9fa;">
+                                <strong>🎯 عرض:</strong> {offer.get('name', 'عرض')}
+                                <br>
+                                <span style="font-size: 12px;">🆔 {offer_id}</span>
+                                <br>
+                                <span style="font-size: 12px;">{status_color} {status_text}</span>
+                                <br>
+                                <span style="font-size: 11px; color: #6c757d;">🔖 {coupon_status}</span>
+                            </div>
+                        """, unsafe_allow_html=True)
+                        
+                        st.markdown("<div class='action-buttons'>", unsafe_allow_html=True)
+                        
+                        if offer_status == "active":
+                            if st.button("⏸️ إيقاف العرض", key=f"pause_offer_{p_id}_{idx}", use_container_width=True):
+                                with st.spinner("🔄 جاري إيقاف العرض..."):
+                                    update_res = safe_api_request(
+                                        "PUT",
+                                        f"{SALLA_API_URL}/{offer_id}/status",
+                                        get_headers(),
+                                        json={"status": "inactive"}
+                                    )
+                                    if update_res:
+                                        st.success("✅ تم إيقاف العرض!")
+                                        st.rerun()
+                        else:
+                            if st.button("▶️ تفعيل العرض", key=f"activate_offer_{p_id}_{idx}", use_container_width=True):
+                                with st.spinner("🔄 جاري تفعيل العرض..."):
+                                    update_res = safe_api_request(
+                                        "PUT",
+                                        f"{SALLA_API_URL}/{offer_id}/status",
+                                        get_headers(),
+                                        json={"status": "active"}
+                                    )
+                                    if update_res:
+                                        st.success("✅ تم تفعيل العرض!")
+                                        st.rerun()
+                        
+                        st.markdown("</div>", unsafe_allow_html=True)
+                        
+                    else:
+                        st.markdown("**⚪ لا يوجد عرض**")
+                        st.button("إضافة عرض", key=f"add_offer_{p_id}_{idx}", disabled=True, use_container_width=True)
+                
+                with col4:
+                    if st.button("📋 نسخ ID", key=f"copy_id_{p_id}_{idx}", use_container_width=True):
+                        st.toast(f"✅ تم نسخ المعرف: {p_id}")
+                    
+                    current_status = p.get('status', 'sale')
+                    btn_label = "👁️ إخفاء" if current_status == "sale" else "👁️ إظهار"
+                    btn_type = "primary" if current_status == "sale" else "secondary"
+                    
+                    if st.button(btn_label, key=f"toggle_status_{p_id}_{idx}", use_container_width=True, type=btn_type):
+                        target_status = "hidden" if current_status == "sale" else "sale"
+                        
+                        with st.spinner("🔄 جاري تحديث الحالة..."):
+                            update_payload = {"status": target_status}
+                            update_res = safe_api_request(
+                                "PUT",
+                                f"https://api.salla.dev/admin/v2/products/{p_id}",
+                                get_headers(),
+                                json=update_payload
+                            )
+                            if update_res is not None:
+                                st.success("✅ تم تحديث حالة المنتج!")
+                                st.rerun()
+                
+                st.markdown("</div></div>", unsafe_allow_html=True)
     
     else:
-        st.error("⚠️ فشل في تحميل البيانات. يرجى التحقق من الاتصال والتوكن.")
+        st.warning("⚠️ لا توجد منتجات أو فشل في تحميل البيانات. تأكد من صحة مفتاح الربط.")
 
 # ==========================================
 # التذييل
