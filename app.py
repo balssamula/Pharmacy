@@ -1,7 +1,7 @@
 import streamlit as st
 
 st.set_page_config(
-    page_title="منظومة بلسم العلا لإدارة العروض",
+    page_title="منظومة إدارة العروض الخاصة والمنتجات",
     layout="wide",
     page_icon="🎁",
     initial_sidebar_state="expanded"
@@ -11,31 +11,33 @@ from offers_page import render_offers_page
 from products_page import render_products_page
 
 # ==============================================================================================
-# CSS الذكي المطور لحل مشكلة تداخل نصوص الرموز والـ Ligatures (expand_more و arrow_down) بشكل نهائي
+# CSS الاحترافي الحاسم لمنع تداخل الكلمات البرمجية (expand_more / arrow_down) وتلوين الأزرار المطلوبة
 # ==============================================================================================
 st.markdown("""
     <style>
     @import url('https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700&display=swap');
     
-    /* حصر وسم خط كايرو على العناصر والكتل النصية المكتوبة الصافية وتجنب الـ span العام */
-    html, body, .stApp, h1, h2, h3, h4, h5, h6, p, label, button, input, select, textarea {
+    /* حصر وسم خط كايرو على العناصر والنصوص الصافية لمنع تشويه ودمج أيقونات النظام الداعمة */
+    html, body, .stApp, h1, h2, h3, h4, h5, h6, p, label, input, select, textarea, 
+    div[data-testid="stMarkdownContainer"] p {
         font-family: 'Cairo', sans-serif !important;
     }
     
-    /* منع وإلغاء تطبيق خط كايرو على أيقونات نظام Streamlit الداخلية والـ SVG لمنع تداخل نصوصها */
-    .stIcon, [data-testid="stIcon"], [class^="st-"] svg, .material-icons, i,
+    /* حماية شاملة تمنع تحويل أيقونات الخيارات والـ expander والـ popover الافتراضية إلى كلمات نصية */
+    .stIcon, [data-testid="stIcon"], [class^="st-"] svg, svg, i,
     span[data-testid="stIconVisibility"], summary svg, button svg,
-    [data-base-ui="icon"], [class*="Icon"] {
+    [data-base-ui="icon"], [class*="Icon"], summary::after {
         font-family: inherit !important;
     }
     
-    /* تخصيص وصباغة أزرار التعديل والإنشاء وإعدادات التوكن باللون الأخضر الغامق الكريستالي والنص الأبيض */
+    /* تخصيص وصباغة أزرار التعديل والإنشاء وإعدادات التوكن باللون الأخضر الغامق الفاخر والنص الأبيض */
     div.stButton > button[data-testid="baseButton-primary"] {
         background-color: #0f5132 !important;
         color: #ffffff !important;
         border: 1px solid #0f5132 !important;
         box-shadow: 0 4px 6px rgba(0,0,0,0.08) !important;
         font-size: 14px !important;
+        font-family: 'Cairo', sans-serif !important;
     }
     div.stButton > button[data-testid="baseButton-primary"]:hover {
         background-color: #146c43 !important;
@@ -43,7 +45,14 @@ st.markdown("""
         transform: scale(1.02) !important;
     }
     
-    /* الحفاظ على أزرار الحذف باللون الأحمر لعزلها إدارياً ومنع الأخطاء البصرية */
+    /* تلوين أزرار الـ popover الفرعية للتوكن والباسورد لتتوافق مع اللون الأخضر الغامق */
+    div[data-testid="stPopover"] button {
+        background-color: #0f5132 !important;
+        color: #ffffff !important;
+        border-radius: 8px !important;
+    }
+    
+    /* الحفاظ على أزرار الحذف باللون الأحمر لعزلها بصرياً ومنع الأخطاء التنفيذية */
     div.stButton > button[key*="t_dl_"] {
         background-color: #dc3545 !important;
         color: #ffffff !important;
@@ -63,7 +72,7 @@ if "admin_password" not in st.session_state: st.session_state["admin_password"] 
 if not st.session_state["logged_in"]:
     _, col2, _ = st.columns([1, 2, 1])
     with col2:
-        st.markdown("<h3 style='text-align:center;'>🏥 تسجيل الدخول - منظومة العروض المتطورة</h3>", unsafe_allow_html=True)
+        st.markdown("<h3 style='text-align:center;'>🏥 تسجيل الدخول - منظومة بلسم الرقمية</h3>", unsafe_allow_html=True)
         st.divider()
         token = st.text_input("🔑 مفتاح الربط (Access Token):", type="password")
         un = st.text_input("👤 اسم المستخدم:")
@@ -77,7 +86,7 @@ if not st.session_state["logged_in"]:
                 st.error("❌ عذراً، تأكد من صحة البيانات والتوكن المرفق!")
     st.stop()
 
-st.markdown("<h1 style='color:#0f1c2e;'>🏥 لوحة التحكم الإدارية للعروض والمنتجات</h1>", unsafe_allow_html=True)
+st.markdown("<h1 style='color:#0f1c2e;'>🏥 لوحة التحكم الإدارية لصيدليات بلسم العُلا</h1>", unsafe_allow_html=True)
 st.markdown("---")
 
 c_tok, c_pwd, _ = st.columns([2, 2, 4])
@@ -100,7 +109,7 @@ st.divider()
 st.sidebar.markdown("### 🏪 أقسام المنظومة")
 page = st.sidebar.radio(
     "انتقل بين الواجهات الفنية:",
-    ["لوحة إدارة العروض الخاصة الحالية", "مركز جرد وفحص المنتجات"]
+    ["لوحة إدارة وتصفية العروض الحالية", "مركز جرد وفحص مستودع المنتجات"]
 )
 
 st.sidebar.divider()
