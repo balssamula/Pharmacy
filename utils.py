@@ -7,6 +7,9 @@ import logging
 import re
 from datetime import datetime
 from typing import Optional, List, Dict, Any
+from openpyxl.styles import PatternFill, Font, Alignment, Border, Side
+from openpyxl.worksheet.datavalidation import DataValidation
+from openpyxl.utils import get_column_letter
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -23,6 +26,7 @@ def safe_parse_date(date_str: Optional[str]) -> Optional[datetime]:
     return None
 
 def parse_products_cleanly(offer_section: Dict) -> str:
+    """تحليل شامل وعرض اسم المنتج مع الـ ID ورقم الصنف SKU معاً"""
     if not offer_section or not isinstance(offer_section, dict):
         return "كل منتجات المتجر"
     clean_elements = []
@@ -31,7 +35,10 @@ def parse_products_cleanly(offer_section: Dict) -> str:
     if products and isinstance(products, list):
         for p in products:
             if isinstance(p, dict):
-                clean_elements.append(f"• منتج: {p.get('name', 'غير معرف')} [ID: {p.get('id', 'N/A')}]")
+                name = p.get('name', 'غير معرف')
+                p_id = p.get('id', 'N/A')
+                sku = p.get('sku', 'لا يوجد SKU')
+                clean_elements.append(f"• منتج: {name} [ID: {p_id}] [SKU: {sku}]")
             else:
                 clean_elements.append(f"• معرف منتج رقم: {p}")
                 
@@ -73,6 +80,36 @@ def get_headers():
         return None
     return {"Authorization": f"Bearer {token}", "Content-Type": "application/json"}
 
+def style_excel_file(ws, is_template=False):
+    """تطبيق تنسيقات احترافية جذابة متناسقة مع الفلترة التلقائية للأعمدة"""
+    header_fill = PatternFill(start_color="0F1C2E", end_color="0F1C2E", fill_type="solid")
+    header_font = Font(name="Segoe UI", size=11, bold=True, color="FFFFFF")
+    center_alignment = Alignment(horizontal="center", vertical="center", wrap_text=True)
+    thin_border = Border(
+        left=Side(style='thin', color='DDDDDD'), right=Side(style='thin', color='DDDDDD'),
+        top=Side(style='thin', color='DDDDDD'), bottom=Side(style='thin', color='DDDDDD')
+    )
+    
+    start_row = 2 if is_template else 1
+    
+    # تنسيق العناوين
+    for col in range(1, ws.max_column + 1):
+        cell = ws.cell(row=start_row, column=col)
+        cell.fill = header_fill
+        cell.font = header_font
+        cell.alignment = center_alignment
+        cell.border = thin_border
+        
+    # إضافة الفلترة التلقائية لجميع الأعمدة بشكل احترافي
+    last_letter = get_column_letter(ws.max_column)
+    ws.auto_filter.ref = f"A{start_row}:{last_letter}{ws.max_row}"
+    
+    # ضبط العرض التلقائي للأعمدة
+    for col in ws.columns:
+        max_len = max(len(str(cell.value or '')) for cell in col)
+        col_letter = get_column_letter(col[0].column)
+        ws.column_dimensions[col_letter].width = min(max(max_len + 3, 12), 30)
+
 def export_offers_to_excel(offers: List[Dict]) -> bytes:
     try:
         data = []
@@ -91,7 +128,8 @@ def export_offers_to_excel(offers: List[Dict]) -> bytes:
         df = pd.DataFrame(data)
         buffer = io.BytesIO()
         with pd.ExcelWriter(buffer, engine='openpyxl') as writer:
-            df.to_excel(writer, index=False, sheet_name='قائمة العروض')
+            df.to_excel(writer, index=False)
+            style_excel_file(writer.sheets['Sheet1'], is_template=False)
         return buffer.getvalue()
     except Exception as e:
         st.error(f"⚠️ خطأ في التصدير: {str(e)}")
@@ -112,24 +150,54 @@ def export_products_to_excel(products: List[Dict]) -> bytes:
         df = pd.DataFrame(data)
         buffer = io.BytesIO()
         with pd.ExcelWriter(buffer, engine='openpyxl') as writer:
-            df.to_excel(writer, index=False, sheet_name='قائمة المنتجات')
+            df.to_excel(writer, index=False)
+            style_excel_file(writer.sheets['Sheet1'], is_template=False)
         return buffer.getvalue()
     except Exception as e:
         st.error(f"⚠️ خطأ في التصدير: {str(e)}")
         return b""
 
 def generate_salla_excel_template() -> bytes:
+    """توليد كشف استيراد احترافي مع حقن قوائم منسدلة وخانات اختيار منسقة"""
+    from openpyxl import Workbook
+    output = io.BytesIO()
+    wb = Workbook()
+    ws = wb.active
+    ws.title = "قائمة العروض"
+    
+    # إدراج سطر التعليمات العلوي
+    ws.append(["📋 تعليمات: Action (create, update, delete) | With_Coupon (نعم, لا) | Offer_Status (active, inactive)"])
+    ws.merge_cells('A1:S1')
+    ws.row_dimensions[1].height = 30
+    
     columns = [
         "Action", "Offer_ID", "Offer_Name", "Offer_Type", "Applied_Channel",
         "Applied_To", "With_Coupon", "Offer_Status", "Start_Date_Time", "Expiry_Date_Time", 
         "Buy_Type", "Buy_Quantity", "Buy_Products_IDs", "Get_Type", "Get_Quantity", 
         "Discount_Type", "Discount_Amount", "Get_Products_IDs", "Offer_Message"
     ]
-    df = pd.DataFrame(columns=columns)
-    buffer = io.BytesIO()
-    with pd.ExcelWriter(buffer, engine='openpyxl') as writer:
-        df.to_excel(writer, index=False)
-    return buffer.getvalue()
+    ws.append(columns)
+    
+    # إضافة صف عينة بيانات افتراضي
+    ws.append(["create", "", "عرض ترويجي تجريبي", "buy_x_get_y", "browser_and_application", "product", "لا", "active", "2026-06-23 12:00:00", "2026-07-23 12:00:00", "product", 1, "112233", "product", 1, "free-product", 0, "445566", "خصم مميز"])
+    
+    style_excel_file(ws, is_template=True)
+    
+    # إضافة القوائم المنسدلة للنموذج
+    dv_action = DataValidation(type="list", formula1='"create,update,delete"', allow_blank=True)
+    ws.add_data_validation(dv_action)
+    dv_action.add("A3:A100")
+    
+    dv_coupon = DataValidation(type="list", formula1='"نعم,لا"', allow_blank=True)
+    ws.add_data_validation(dv_coupon)
+    dv_coupon.add("G3:G100")
+    
+    dv_status = DataValidation(type="list", formula1='"active,inactive"', allow_blank=True)
+    ws.add_data_validation(dv_status)
+    dv_status.add("H3:H100")
+    
+    wb.save(output)
+    return output.getvalue()
 
 def process_excel_import(df: pd.DataFrame) -> Dict:
     results = {"success": [], "errors": []}
@@ -139,6 +207,7 @@ def process_excel_import(df: pd.DataFrame) -> Dict:
         return results
     
     for idx, row in df.iterrows():
+        if row.isna().all() or str(row.iloc[0]).strip().startswith("📋"): continue
         try:
             action = str(row.get('Action', 'create')).strip().lower()
             offer_name = str(row.get('Offer_Name', 'عرض جديد')).strip()
@@ -180,21 +249,19 @@ def process_excel_import(df: pd.DataFrame) -> Dict:
     return results
 
 def update_product_status(product_id: int, status: str) -> bool:
+    """تحديث مفعول ظهور المنتج بحذف حقل القنوات تماماً لتفادي الأخطاء البرمجية للمنصة"""
     headers = get_headers()
     if not headers: return False
     current = safe_api_request("GET", f"https://api.salla.dev/admin/v2/products/{product_id}", headers)
     if not current or not current.get('data'): return False
     p_data = current['data']
     
-    # بناء حمولة البيانات وإرجاع القنوات الصحيحة والمقبولة لدى سلة لتفادي خطأ 422
+    # نكتفي بإرسال القيمة المسطحة للسعر والحالة الجديدة دون إرسال القنوات لتجنب خطأ 422
     update_payload = {
         "status": status,
         "name": p_data.get('name'),
         "price": get_flat_price(p_data.get('price', 0))
     }
-    
-    # تصحيح قنوات العرض واستبدال المتغيرات غير الصالحة بـ "store" و "app"
-    update_payload["channels"] = ["store", "app"]
         
     sale_amt = get_flat_price(p_data.get('sale_price', 0))
     if sale_amt > 0:
