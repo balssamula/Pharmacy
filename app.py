@@ -22,25 +22,12 @@ st.set_page_config(
 )
 
 # ==========================================
-# CSS الاحترافي المحسّن بالكامل
+# CSS المحسّن بالكامل
 # ==========================================
 st.markdown("""
     <style>
-    @import url('https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700;800&display=swap');
+    @import url('https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700&display=swap');
     
-    :root {
-        --primary-color: #00b4d8;
-        --secondary-color: #0f1c2e;
-        --accent-color: #2a9d8f;
-        --danger-color: #e63946;
-        --warning-color: #ffb703;
-        --text-dark: #2d3436;
-        --text-light: #636e72;
-        --bg-light: #f8f9fa;
-        --white: #ffffff;
-        --shadow: 0 4px 20px rgba(0,0,0,0.08);
-    }
-
     * {
         font-family: 'Cairo', sans-serif !important;
         direction: rtl !important;
@@ -48,21 +35,16 @@ st.markdown("""
         box-sizing: border-box !important;
     }
     
-    /* تحسين شكل الحاويات الرئيسية */
-    .stApp {
-        background-color: var(--bg-light);
-    }
-
     .login-container {
         max-width: 450px;
         margin: 80px auto;
-        background: var(--white);
+        background: #ffffff;
         padding: 45px 35px;
-        border-radius: 24px;
-        box-shadow: var(--shadow);
-        border-top: 8px solid var(--primary-color);
+        border-radius: 20px;
+        box-shadow: 0 8px 30px rgba(0,0,0,0.12);
+        border-top: 6px solid #00b4d8;
         text-align: center;
-        animation: fadeIn 0.6s ease-out;
+        animation: fadeIn 0.5s ease-in;
     }
     
     @keyframes fadeIn {
@@ -70,60 +52,76 @@ st.markdown("""
         to { opacity: 1; transform: translateY(0); }
     }
     
-    /* شريط العنوان العلوي */
     .top-sticky-bar {
-        background: linear-gradient(135deg, #0f1c2e 0%, #1a2d4a 100%);
-        padding: 16px 28px;
-        border-radius: 16px;
-        margin-bottom: 25px;
+        background: linear-gradient(135deg, #0a1628 0%, #1a2d4a 100%);
+        padding: 14px 24px;
+        border-radius: 12px;
+        margin-bottom: 20px;
         display: flex;
         justify-content: space-between;
         align-items: center;
-        border-bottom: 4px solid var(--primary-color);
-        box-shadow: 0 6px 20px rgba(0,0,0,0.1);
+        border-bottom: 4px solid #00b4d8;
+        box-shadow: 0 4px 15px rgba(0,0,0,0.08);
+        direction: rtl !important;
         flex-wrap: wrap;
-        gap: 15px;
+        gap: 10px;
     }
     
     .top-sticky-bar .title {
-        color: var(--white);
-        font-weight: 800;
-        font-size: 18px;
+        color: #ffffff;
+        font-weight: 700;
+        font-size: 16px;
         display: flex;
         align-items: center;
-        gap: 12px;
+        gap: 10px;
     }
     
-    /* بطاقات المنتجات والعروض المحسنة */
-    .product-card, .offer-card {
-        background: var(--white);
-        border-radius: 18px;
-        box-shadow: var(--shadow);
-        margin-bottom: 24px;
-        border: 1px solid #edf2f7;
+    .top-sticky-bar .status {
+        color: #00b4d8;
+        font-weight: 600;
+        font-size: 13px;
+        background: rgba(0, 180, 216, 0.12);
+        padding: 4px 14px;
+        border-radius: 20px;
+        border: 1px solid rgba(0, 180, 216, 0.3);
+    }
+    
+    /* ---------- بطاقات المنتجات المحسّنة ---------- */
+    .product-card {
+        background: #ffffff;
+        padding: 0 !important;
+        border-radius: 14px;
+        box-shadow: 0 2px 12px rgba(0,0,0,0.07);
+        margin-bottom: 20px;
+        border: 1px solid #e8edf2;
+        direction: rtl !important;
         overflow: hidden;
-        transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+        transition: all 0.3s ease;
         position: relative;
     }
     
-    .product-card:hover, .offer-card:hover {
-        transform: translateY(-5px);
-        box-shadow: 0 12px 30px rgba(0,0,0,0.12);
+    .product-card:hover {
+        box-shadow: 0 6px 25px rgba(0,0,0,0.1);
+        transform: translateY(-2px);
     }
     
     .product-card-header {
-        background: linear-gradient(135deg, #0f1c2e 0%, #1e3a5f 100%);
-        padding: 15px 25px;
+        background: linear-gradient(135deg, #0f1c2e 0%, #1a2d4a 100%);
+        padding: 12px 20px;
         display: flex;
         justify-content: space-between;
         align-items: center;
-        border-bottom: 3px solid var(--primary-color);
+        border-bottom: 3px solid #00b4d8;
+        direction: rtl !important;
+        flex-wrap: wrap;
+        gap: 8px;
     }
     
     .product-card-header .product-name {
-        color: var(--white);
-        font-size: 18px;
+        color: #ffffff;
+        font-size: 17px;
         font-weight: 700;
+        margin: 0;
     }
     
     .product-card-header .product-promotion {
@@ -131,109 +129,354 @@ st.markdown("""
         font-size: 13px;
         font-weight: 600;
         background: rgba(255, 215, 0, 0.15);
-        padding: 4px 14px;
-        border-radius: 30px;
+        padding: 3px 12px;
+        border-radius: 20px;
         border: 1px solid rgba(255, 215, 0, 0.3);
+        display: inline-block;
     }
     
-    .product-card-body, .offer-card-body {
-        padding: 20px 25px;
+    .product-card-body {
+        padding: 16px 20px;
+        direction: rtl !important;
     }
-
-    /* حل مشكلة تداخل الأزرار والنصوص */
-    .stButton > button {
-        width: 100% !important;
-        font-weight: 700 !important;
-        border-radius: 12px !important;
-        height: 44px !important;
-        border: none !important;
-        transition: all 0.3s ease !important;
-        margin-bottom: 8px !important;
-        display: flex !important;
-        align-items: center !important;
-        justify-content: center !important;
-        gap: 8px !important;
+    
+    /* ---------- بطاقات العروض ---------- */
+    .offer-card {
+        background: #ffffff;
+        padding: 16px 20px;
+        border-radius: 14px;
+        box-shadow: 0 2px 12px rgba(0,0,0,0.07);
+        margin-bottom: 16px;
+        border-right: 6px solid #2a9d8f;
+        border-left: 1px solid #e8edf2;
+        border-top: 1px solid #e8edf2;
+        border-bottom: 1px solid #e8edf2;
+        direction: rtl !important;
+        transition: all 0.3s ease;
     }
-
-    /* تحسين توزيع الأعمدة لمنع التداخل */
-    .column-container {
+    
+    .offer-card:hover {
+        box-shadow: 0 4px 20px rgba(0,0,0,0.1);
+        transform: translateY(-1px);
+    }
+    
+    .sub-card {
+        background: #f7f9fc;
+        padding: 16px 18px;
+        border-radius: 10px;
+        border: 1px dashed #00b4d8;
+        margin-top: 12px;
+    }
+    
+    /* ---------- تنسيق السعر ---------- */
+    .price-display {
         display: flex;
-        flex-direction: column;
-        gap: 12px;
-        padding: 10px;
-    }
-
-    /* شارات الحالة */
-    .badge {
-        display: inline-flex;
         align-items: center;
-        padding: 4px 12px;
-        border-radius: 30px;
-        font-size: 12px;
-        font-weight: 700;
-        margin: 4px;
+        gap: 10px;
+        flex-wrap: wrap;
+        direction: rtl !important;
     }
     
-    .badge-active { background: #dcfce7; color: #166534; }
-    .badge-inactive { background: #fee2e2; color: #991b1b; }
-    .badge-info { background: #e0f2fe; color: #075985; }
+    .price-current {
+        font-size: 20px;
+        font-weight: 700;
+        color: #0f1c2e;
+    }
     
-    /* تحسين السايدبار */
+    .price-original {
+        font-size: 16px;
+        color: #6c757d;
+        text-decoration: line-through;
+    }
+    
+    .price-sale {
+        font-size: 18px;
+        font-weight: 700;
+        color: #dc3545;
+    }
+    
+    .price-discount {
+        background: #dc3545;
+        color: #ffffff;
+        padding: 2px 10px;
+        border-radius: 12px;
+        font-size: 12px;
+        font-weight: 600;
+    }
+    
+    /* ---------- تنسيق الجدول ---------- */
+    .dataframe-container {
+        direction: rtl !important;
+        overflow-x: auto;
+        border-radius: 12px;
+        border: 1px solid #e8edf2;
+    }
+    
+    .dataframe-container table {
+        width: 100%;
+        border-collapse: collapse;
+        font-family: 'Cairo', sans-serif !important;
+        direction: rtl !important;
+    }
+    
+    .dataframe-container thead {
+        background: linear-gradient(135deg, #0f1c2e 0%, #1a2d4a 100%);
+        color: #ffffff !important;
+    }
+    
+    .dataframe-container thead th {
+        padding: 12px 16px;
+        text-align: right !important;
+        font-weight: 700;
+        font-size: 14px;
+        border-bottom: 3px solid #00b4d8;
+        white-space: nowrap;
+        color: #ffffff !important;
+    }
+    
+    .dataframe-container tbody td {
+        padding: 10px 16px;
+        border-bottom: 1px solid #e8edf2;
+        font-size: 13px;
+    }
+    
+    .dataframe-container tbody tr:hover {
+        background-color: #f0f7ff;
+    }
+    
+    .dataframe-container tbody tr:nth-child(even) {
+        background-color: #f8fafc;
+    }
+    
+    .dataframe-container tbody tr:nth-child(even):hover {
+        background-color: #f0f7ff;
+    }
+    
+    /* ---------- القائمة الجانبية ---------- */
     [data-testid="stSidebar"] {
-        background-color: var(--secondary-color) !important;
-        padding: 30px 15px !important;
+        background-color: #0f1c2e !important;
+        padding: 20px 12px !important;
+        min-width: 280px !important;
     }
     
     [data-testid="stSidebar"] * {
-        color: var(--white) !important;
+        color: #ffffff !important;
+    }
+    
+    [data-testid="stSidebar"] .stRadio label {
+        color: #ffffff !important;
+        font-size: 15px !important;
+        font-weight: 500 !important;
+    }
+    
+    [data-testid="stSidebar"] .stRadio label:hover {
+        color: #00b4d8 !important;
     }
     
     [data-testid="stSidebar"] h2 {
-        color: var(--primary-color) !important;
-        font-size: 24px !important;
-        border-bottom: 2px solid rgba(0, 180, 216, 0.2);
-        padding-bottom: 15px;
-        margin-bottom: 20px;
+        color: #00b4d8 !important;
+        font-size: 22px !important;
+        font-weight: 700 !important;
+        text-align: center !important;
+        padding-bottom: 10px;
+        border-bottom: 2px solid rgba(0, 180, 216, 0.25);
     }
-
-    /* تنسيق المدخلات */
-    .stTextInput input, .stSelectbox select, .stNumberInput input {
-        border-radius: 12px !important;
-        border: 2px solid #e2e8f0 !important;
-        padding: 10px 15px !important;
+    
+    .refresh-btn-container {
+        margin-top: 10px;
     }
-
-    .stTextInput input:focus {
-        border-color: var(--primary-color) !important;
-        box-shadow: 0 0 0 3px rgba(0, 180, 216, 0.1) !important;
+    
+    .refresh-btn-container button {
+        background: linear-gradient(135deg, #00FF7F, #20c997) !important;
+        color: #ffffff !important;
+        font-weight: 700 !important;
+        font-size: 16px !important;
+        border-radius: 10px !important;
+        height: 46px !important;
+        border: none !important;
+        box-shadow: 0 4px 15px rgba(40, 167, 69, 0.35) !important;
+        transition: all 0.3s ease !important;
     }
-
-    /* التذييل */
+    
+    .refresh-btn-container button:hover {
+        transform: scale(1.03) !important;
+        box-shadow: 0 6px 25px rgba(40, 167, 69, 0.5) !important;
+    }
+    
+    .logout-btn {
+        margin-top: 10px;
+    }
+    
+    .logout-btn button {
+        background: linear-gradient(135deg, #dc3545, #c82333) !important;
+        color: #ffffff !important;
+        font-weight: 700 !important;
+        font-size: 16px !important;
+        border-radius: 10px !important;
+        height: 46px !important;
+        border: none !important;
+        box-shadow: 0 4px 15px rgba(220, 53, 69, 0.35) !important;
+        transition: all 0.3s ease !important;
+    }
+    
+    .logout-btn button:hover {
+        transform: scale(1.03) !important;
+        box-shadow: 0 6px 25px rgba(220, 53, 69, 0.5) !important;
+    }
+    
+    .stButton>button {
+        width: 100% !important;
+        font-weight: 700 !important;
+        border-radius: 8px !important;
+        height: 42px !important;
+        border: none !important;
+        transition: all 0.3s ease !important;
+    }
+    
+    .stButton>button:hover {
+        transform: scale(1.02) !important;
+        box-shadow: 0 4px 15px rgba(0,0,0,0.12) !important;
+    }
+    
+    .product-link {
+        color: #00b4d8 !important;
+        font-weight: 700;
+        text-decoration: none;
+        font-size: 17px;
+        transition: all 0.3s ease;
+    }
+    
+    .product-link:hover {
+        color: #0077b6 !important;
+        text-decoration: underline !important;
+    }
+    
     .footer {
         text-align: center;
-        padding: 30px;
-        color: var(--text-light);
-        border-top: 1px solid #edf2f7;
-        margin-top: 50px;
-        background: var(--white);
+        padding: 18px;
+        color: #6c757d;
+        border-top: 1px solid #e9ecef;
+        margin-top: 30px;
+        font-size: 13px;
     }
     
-    /* منع ظهور الأكواد فوق الأزرار */
-    code {
-        background: #f1f5f9 !important;
-        color: #475569 !important;
-        padding: 2px 6px !important;
-        border-radius: 6px !important;
-        font-family: monospace !important;
-        font-size: 0.9em !important;
+    .offers-count {
+        background: #f0f4f8;
+        padding: 8px 16px;
+        border-radius: 10px;
+        margin-bottom: 16px;
+        border-right: 4px solid #00b4d8;
     }
     
-    .offer-details-box {
-        background: #f8fafc;
+    .offer-date {
+        color: #6c757d;
+        font-size: 13px;
+    }
+    
+    .stAlert {
+        border-radius: 10px !important;
+        direction: rtl !important;
+    }
+    
+    .stTextInput>div>div>input,
+    .stNumberInput>div>div>input {
+        border-radius: 8px !important;
+        border: 2px solid #e2e8f0 !important;
+        transition: all 0.3s ease !important;
+        background: #ffffff !important;
+    }
+    
+    .stTextInput>div>div>input:focus,
+    .stNumberInput>div>div>input:focus {
+        border-color: #00b4d8 !important;
+        box-shadow: 0 0 0 3px rgba(0, 180, 216, 0.15) !important;
+    }
+    
+    .stSelectbox>div>div {
+        border-radius: 8px !important;
+        border: 2px solid #e2e8f0 !important;
+        background: #ffffff !important;
+    }
+    
+    .action-buttons {
+        display: flex;
+        gap: 6px;
+        flex-wrap: wrap;
+        align-items: center;
+    }
+    
+    .action-buttons .stButton {
+        flex: 0 0 auto;
+        width: auto !important;
+    }
+    
+    .action-buttons .stButton button {
+        width: auto !important;
+        padding: 0 14px !important;
+        height: 32px !important;
+        font-size: 12px !important;
+    }
+    
+    .coupon-badge {
+        display: inline-block;
+        padding: 2px 10px;
         border-radius: 12px;
-        padding: 15px;
-        border-right: 5px solid var(--primary-color);
-        margin: 10px 0;
+        font-size: 11px;
+        font-weight: 600;
+    }
+    
+    .coupon-enabled {
+        background: #d4edda;
+        color: #155724;
+    }
+    
+    .coupon-disabled {
+        background: #f8d7da;
+        color: #721c24;
+    }
+    
+    .status-badge {
+        display: inline-block;
+        padding: 2px 10px;
+        border-radius: 12px;
+        font-size: 11px;
+        font-weight: 600;
+    }
+    
+    .status-active {
+        background: #d4edda;
+        color: #155724;
+    }
+    
+    .status-inactive {
+        background: #f8d7da;
+        color: #721c24;
+    }
+    
+    .export-btn-container {
+        display: flex;
+        gap: 10px;
+        flex-wrap: wrap;
+        margin-bottom: 15px;
+    }
+    
+    .export-btn-container .stButton {
+        flex: 0 0 auto;
+        width: auto !important;
+    }
+    
+    .export-btn-container .stButton button {
+        width: auto !important;
+        padding: 0 20px !important;
+        height: 38px !important;
+        font-size: 14px !important;
+        background: linear-gradient(135deg, #0077b6, #00b4d8) !important;
+        color: #ffffff !important;
+    }
+    
+    .export-btn-container .stButton button:hover {
+        transform: scale(1.02) !important;
+        box-shadow: 0 4px 15px rgba(0, 180, 216, 0.4) !important;
     }
     </style>
 """, unsafe_allow_html=True)
@@ -245,12 +488,13 @@ st.markdown("""
 def safe_parse_date(date_str: Optional[str]) -> Optional[datetime]:
     if not date_str:
         return None
-    for fmt in ('%Y-%m-%d %H:%M:%S', '%Y-%m-%d'):
+    try:
+        return datetime.strptime(date_str, '%Y-%m-%d %H:%M:%S')
+    except (ValueError, TypeError):
         try:
-            return datetime.strptime(date_str, fmt)
+            return datetime.strptime(date_str, '%Y-%m-%d')
         except (ValueError, TypeError):
-            continue
-    return None
+            return None
 
 def parse_products_cleanly(product_list: Optional[List]) -> str:
     if not product_list or not isinstance(product_list, list):
@@ -283,16 +527,29 @@ def get_product_price(product: Dict) -> float:
 def safe_api_request(method: str, url: str, headers: Dict, **kwargs) -> Optional[Dict]:
     try:
         response = requests.request(method, url, headers=headers, timeout=30, **kwargs)
+        
         if response.status_code >= 400:
+            error_detail = ""
             try:
-                error_detail = json.dumps(response.json(), ensure_ascii=False)
+                error_data = response.json()
+                error_detail = json.dumps(error_data, ensure_ascii=False)
             except:
                 error_detail = response.text[:500]
-            st.error(f"⚠️ خطأ {response.status_code}: {error_detail}")
+            
+            # ✅ لا نعرض خطأ 404 كـ st.error لمنع التكرار
+            if response.status_code != 404:
+                st.error(f"⚠️ خطأ {response.status_code}: {error_detail}")
+            logger.error(f"API Error {response.status_code}: {error_detail}")
             return None
+        
         return response.json()
-    except Exception as e:
+        
+    except requests.exceptions.RequestException as e:
         st.error(f"⚠️ خطأ في الاتصال: {str(e)}")
+        logger.error(f"Request Error: {e}")
+        return None
+    except json.JSONDecodeError as e:
+        st.error(f"⚠️ خطأ في تحليل البيانات: {str(e)}")
         return None
 
 def get_headers():
@@ -302,10 +559,95 @@ def get_headers():
     }
 
 # ==========================================
-# معالجة ملف الإكسيل
+# دوال التصدير
+# ==========================================
+
+def export_offers_to_excel(offers: List[Dict]) -> bytes:
+    """تصدير العروض إلى ملف Excel"""
+    try:
+        data = []
+        for offer in offers:
+            buy_products = []
+            for p in offer.get('buy', {}).get('products', []):
+                if isinstance(p, dict):
+                    buy_products.append(str(p.get('id', '')))
+                else:
+                    buy_products.append(str(p))
+            
+            get_products = []
+            for p in offer.get('get', {}).get('products', []):
+                if isinstance(p, dict):
+                    get_products.append(str(p.get('id', '')))
+                else:
+                    get_products.append(str(p))
+            
+            data.append({
+                'المعرف': offer.get('id', ''),
+                'اسم العرض': offer.get('name', ''),
+                'النوع': offer.get('offer_type', ''),
+                'الحالة': 'مفعل' if offer.get('status') == 'active' else 'غير مفعل',
+                'مع كوبون': 'نعم' if offer.get('applied_with_coupon', False) else 'لا',
+                'تاريخ البدء': offer.get('start_date', ''),
+                'تاريخ الانتهاء': offer.get('expiry_date', ''),
+                'منتجات الشراء': ', '.join(buy_products),
+                'كمية الشراء': offer.get('buy', {}).get('quantity', 1),
+                'منتجات الهدية': ', '.join(get_products),
+                'كمية الهدية': offer.get('get', {}).get('quantity', 1),
+                'الرسالة': offer.get('message', '')
+            })
+        
+        df = pd.DataFrame(data)
+        buffer = io.BytesIO()
+        with pd.ExcelWriter(buffer, engine='openpyxl') as writer:
+            df.to_excel(writer, index=False, sheet_name='قائمة العروض')
+        buffer.seek(0)
+        return buffer.getvalue()
+    except Exception as e:
+        st.error(f"⚠️ خطأ في تصدير العروض: {str(e)}")
+        return b""
+
+def export_products_to_excel(products: List[Dict]) -> bytes:
+    """تصدير المنتجات إلى ملف Excel"""
+    try:
+        data = []
+        for p in products:
+            price = get_product_price(p)
+            sale_price = p.get('sale_price', {})
+            if isinstance(sale_price, dict):
+                sale_price = sale_price.get('amount', 0)
+            elif isinstance(sale_price, (int, float)):
+                sale_price = sale_price
+            else:
+                sale_price = 0
+            
+            data.append({
+                'المعرف': p.get('id', ''),
+                'الاسم': p.get('name', ''),
+                'SKU': p.get('sku', ''),
+                'السعر': price,
+                'السعر المخفض': sale_price if sale_price > 0 else '',
+                'المخزون': p.get('quantity', 0),
+                'المبيعات': p.get('sold_quantity', 0),
+                'الحالة': 'معروض' if p.get('status') == 'sale' else 'مخفي',
+                'الرابط': p.get('url', '')
+            })
+        
+        df = pd.DataFrame(data)
+        buffer = io.BytesIO()
+        with pd.ExcelWriter(buffer, engine='openpyxl') as writer:
+            df.to_excel(writer, index=False, sheet_name='قائمة المنتجات')
+        buffer.seek(0)
+        return buffer.getvalue()
+    except Exception as e:
+        st.error(f"⚠️ خطأ في تصدير المنتجات: {str(e)}")
+        return b""
+
+# ==========================================
+# دالة معالجة استيراد الإكسيل
 # ==========================================
 
 def process_excel_import(df: pd.DataFrame) -> Dict:
+    """معالجة ملف الإكسيل واستيراد العروض"""
     results = {"success": [], "errors": []}
     headers = get_headers()
     
@@ -313,217 +655,1335 @@ def process_excel_import(df: pd.DataFrame) -> Dict:
         try:
             action = str(row.get('Action', 'create')).strip().lower()
             offer_id = row.get('Offer_ID')
-            if offer_id and isinstance(offer_id, float) and offer_id.is_integer():
-                offer_id = int(offer_id)
+            
+            if offer_id and isinstance(offer_id, float):
+                offer_id = int(offer_id) if offer_id.is_integer() else None
             
             offer_name = str(row.get('Offer_Name', 'عرض جديد')).strip()
-            offer_status = str(row.get('Offer_Status', 'active')).strip().lower()
+            offer_type = str(row.get('Offer_Type', 'buy_x_get_y')).strip()
+            applied_channel = str(row.get('Applied_Channel', 'browser_and_application')).strip()
+            applied_to = str(row.get('Applied_To', 'product')).strip()
             
-            # بناء البيانات (مبسط للمثال)
+            offer_status = str(row.get('Offer_Status', 'active')).strip().lower()
+            if offer_status not in ['active', 'inactive']:
+                offer_status = 'active'
+            
+            start_date = row.get('Start_Date_Time')
+            if pd.isna(start_date):
+                start_date = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+            elif isinstance(start_date, datetime):
+                start_date = start_date.strftime('%Y-%m-%d %H:%M:%S')
+            else:
+                start_date = str(start_date)
+            
+            expiry_date = row.get('Expiry_Date_Time')
+            if pd.isna(expiry_date):
+                expiry_date = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+            elif isinstance(expiry_date, datetime):
+                expiry_date = expiry_date.strftime('%Y-%m-%d %H:%M:%S')
+            else:
+                expiry_date = str(expiry_date)
+            
+            buy_products_str = str(row.get('Buy_Products_IDs', '')).strip()
+            buy_products = []
+            if buy_products_str and buy_products_str != 'nan':
+                for p in re.split(r'[,\s;]+', buy_products_str):
+                    p = p.strip()
+                    if p and p.isdigit():
+                        buy_products.append(int(p))
+            
+            get_products_str = str(row.get('Get_Products_IDs', '')).strip()
+            get_products = []
+            if get_products_str and get_products_str != 'nan':
+                for p in re.split(r'[,\s;]+', get_products_str):
+                    p = p.strip()
+                    if p and p.isdigit():
+                        get_products.append(int(p))
+            
             offer_data = {
                 "name": offer_name,
-                "status": offer_status,
-                "offer_type": str(row.get('Offer_Type', 'buy_x_get_y')).strip(),
-                "applied_to": str(row.get('Applied_To', 'product')).strip(),
-                "applied_with_coupon": str(row.get('With_Coupon', 'لا')).strip() == 'نعم'
+                "offer_type": offer_type,
+                "applied_channel": applied_channel,
+                "applied_to": applied_to,
+                "start_date": start_date,
+                "expiry_date": expiry_date,
+                "message": str(row.get('Offer_Message', '')).strip(),
+                "status": offer_status
             }
             
-            # تنفيذ الطلبات بناءً على الأكشن
+            with_coupon = str(row.get('With_Coupon', 'لا')).strip()
+            offer_data["applied_with_coupon"] = with_coupon == 'نعم'
+            
+            buy_qty = 1
+            try:
+                buy_qty_val = row.get('Buy_Quantity')
+                if pd.notna(buy_qty_val):
+                    buy_qty = int(float(buy_qty_val))
+            except:
+                pass
+            
+            buy_type = str(row.get('Buy_Type', 'product')).strip()
+            offer_data["buy"] = {
+                "type": buy_type,
+                "quantity": buy_qty
+            }
+            if buy_products:
+                offer_data["buy"]["products"] = buy_products
+            
+            get_qty = 1
+            try:
+                get_qty_val = row.get('Get_Quantity')
+                if pd.notna(get_qty_val):
+                    get_qty = int(float(get_qty_val))
+            except:
+                pass
+            
+            get_type = str(row.get('Get_Type', 'product')).strip()
+            discount_type = str(row.get('Discount_Type', 'percentage')).strip()
+            
+            offer_data["get"] = {
+                "type": get_type,
+                "quantity": get_qty,
+                "discount_type": discount_type
+            }
+            
+            try:
+                discount_amount = row.get('Discount_Amount')
+                if pd.notna(discount_amount) and float(discount_amount) > 0:
+                    offer_data["get"]["discount_amount"] = float(discount_amount)
+            except:
+                pass
+            
+            if get_products:
+                offer_data["get"]["products"] = get_products
+            
             if action == 'create':
-                res = safe_api_request("POST", "https://api.salla.dev/admin/v2/specialoffers", headers, json=offer_data)
-                if res: results["success"].append(f"✅ تم إنشاء: {offer_name}")
+                response = safe_api_request(
+                    "POST", 
+                    "https://api.salla.dev/admin/v2/specialoffers", 
+                    headers, 
+                    json=offer_data
+                )
+                if response:
+                    status_text = "مفعل" if offer_status == "active" else "غير مفعل"
+                    results["success"].append(f"✅ تم إنشاء العرض: {offer_name} (الحالة: {status_text})")
+                else:
+                    results["errors"].append(f"❌ فشل إنشاء العرض: {offer_name}")
+                    
             elif action == 'update' and offer_id:
-                res = safe_api_request("PUT", f"https://api.salla.dev/admin/v2/specialoffers/{offer_id}", headers, json=offer_data)
-                if res: results["success"].append(f"✅ تم تحديث ID: {offer_id}")
+                response = safe_api_request(
+                    "PUT", 
+                    f"https://api.salla.dev/admin/v2/specialoffers/{offer_id}", 
+                    headers, 
+                    json=offer_data
+                )
+                if response:
+                    results["success"].append(f"✅ تم تحديث العرض ID: {offer_id}")
+                else:
+                    results["errors"].append(f"❌ فشل تحديث العرض ID: {offer_id}")
+                    
             elif action == 'delete' and offer_id:
-                res = safe_api_request("DELETE", f"https://api.salla.dev/admin/v2/specialoffers/{offer_id}", headers)
-                if res: results["success"].append(f"✅ تم حذف ID: {offer_id}")
+                response = safe_api_request(
+                    "DELETE", 
+                    f"https://api.salla.dev/admin/v2/specialoffers/{offer_id}", 
+                    headers
+                )
+                if response:
+                    results["success"].append(f"✅ تم حذف العرض ID: {offer_id}")
+                else:
+                    results["errors"].append(f"❌ فشل حذف العرض ID: {offer_id}")
+                    
+            elif action in ['active', 'inactive'] and offer_id:
+                status = "active" if action == 'active' else "inactive"
+                response = safe_api_request(
+                    "PUT", 
+                    f"https://api.salla.dev/admin/v2/specialoffers/{offer_id}/status", 
+                    headers, 
+                    json={"status": status}
+                )
+                if response:
+                    results["success"].append(f"✅ تم تغيير حالة العرض ID: {offer_id} إلى {status}")
+                else:
+                    results["errors"].append(f"❌ فشل تغيير حالة العرض ID: {offer_id}")
+                    
+            else:
+                results["errors"].append(f"⚠️ إجراء غير معروف: {action}")
                 
         except Exception as e:
             results["errors"].append(f"❌ خطأ في الصف {idx+1}: {str(e)}")
+            logger.error(f"Import error: {traceback.format_exc()}")
+    
     return results
 
 # ==========================================
-# الواجهة الرئيسية
+# دالة إنشاء نموذج الإكسيل
 # ==========================================
 
-# التحقق من الدخول (محاكاة)
-if 'access_token' not in st.session_state:
-    st.session_state['access_token'] = ""
+def generate_salla_excel_template() -> bytes:
+    try:
+        try:
+            from openpyxl.styles import PatternFill, Font, Alignment, Border, Side
+            from openpyxl.worksheet.datavalidation import DataValidation
+            from openpyxl import Workbook
+            from openpyxl.styles import numbers
+        except ImportError:
+            import subprocess
+            subprocess.check_call(["pip", "install", "openpyxl"])
+            from openpyxl.styles import PatternFill, Font, Alignment, Border, Side
+            from openpyxl.worksheet.datavalidation import DataValidation
+            from openpyxl import Workbook
+            from openpyxl.styles import numbers
+        
+        output = io.BytesIO()
+        
+        columns = [
+            "Action", "Offer_ID", "Offer_Name", "Offer_Type", "Applied_Channel",
+            "Applied_To", "With_Coupon", "Offer_Status", "Start_Date_Time", "Expiry_Date_Time", 
+            "Buy_Type", "Buy_Quantity", "Buy_Products_IDs", 
+            "Get_Type", "Get_Quantity", "Discount_Type", 
+            "Discount_Amount", "Get_Products_IDs", "Offer_Message"
+        ]
+        
+        sample_data = [
+            ["create", "", "عرض ترويجي جديد", "buy_x_get_y", "browser_and_application",
+             "product", "نعم", "active", "2026-06-22 12:00:00", "2026-07-22 23:59:59",
+             "product", 1, "1298176905", 
+             "product", 1, "percentage", 50, "1298176905", "خصم 50% على الحبة الثانية"],
+        ]
+        
+        wb = Workbook()
+        ws = wb.active
+        ws.title = "قائمة العروض"
+        
+        # تنسيق الحدود
+        thin_border = Border(
+            left=Side(style='thin', color='CCCCCC'),
+            right=Side(style='thin', color='CCCCCC'),
+            top=Side(style='thin', color='CCCCCC'),
+            bottom=Side(style='thin', color='CCCCCC')
+        )
+        
+        for col_idx, col_name in enumerate(columns, 1):
+            cell = ws.cell(row=2, column=col_idx, value=col_name)
+        
+        for row_idx, row_data in enumerate(sample_data, 3):
+            for col_idx, value in enumerate(row_data, 1):
+                ws.cell(row=row_idx, column=col_idx, value=value)
+        
+        # تنسيق الرأس
+        header_fill = PatternFill(start_color="1F497D", end_color="1F497D", fill_type="solid")
+        header_font = Font(name="Segoe UI", size=11, bold=True, color="FFFFFF")
+        header_alignment = Alignment(horizontal="center", vertical="center")
+        
+        for col_idx in range(1, len(columns) + 1):
+            cell = ws.cell(row=2, column=col_idx)
+            cell.fill = header_fill
+            cell.font = header_font
+            cell.alignment = header_alignment
+            cell.border = thin_border
+        
+        # تنسيق البيانات
+        data_font = Font(name="Segoe UI", size=10)
+        data_alignment = Alignment(horizontal="right", vertical="center")
+        
+        for row in range(3, len(sample_data) + 3):
+            for col in range(1, len(columns) + 1):
+                cell = ws.cell(row=row, column=col)
+                cell.font = data_font
+                cell.alignment = data_alignment
+                cell.border = thin_border
+        
+        # ضبط عرض الأعمدة
+        for col in ws.columns:
+            max_length = 0
+            column = col[0].column_letter
+            for cell in col:
+                try:
+                    val = str(cell.value or '')
+                    if len(val) > max_length:
+                        max_length = len(val)
+                except:
+                    pass
+            adjusted_width = min(max_length + 2, 30)
+            ws.column_dimensions[column].width = adjusted_width
+        
+        # القوائم المنسدلة
+        dv_action = DataValidation(
+            type="list",
+            formula1='"create,update,active,inactive,delete"',
+            allow_blank=True,
+            showErrorMessage=True,
+            errorTitle="قيمة غير صحيحة",
+            error="الرجاء اختيار: create, update, active, inactive, delete"
+        )
+        ws.add_data_validation(dv_action)
+        dv_action.add("A3:A100")
+        
+        dv_offer_type = DataValidation(
+            type="list",
+            formula1='"buy_x_get_y,percentage,fixed_amount,discounts_table,tiered_offer,cart_offer,special_price"',
+            allow_blank=True,
+            showErrorMessage=True,
+            errorTitle="نوع عرض غير صحيح",
+            error="الرجاء اختيار نوع العرض المناسب"
+        )
+        ws.add_data_validation(dv_offer_type)
+        dv_offer_type.add("D3:D100")
+        
+        dv_channel = DataValidation(
+            type="list",
+            formula1='"browser,browser_and_application"',
+            allow_blank=True,
+            showErrorMessage=True,
+            errorTitle="قناة غير صحيحة",
+            error="الرجاء اختيار: browser أو browser_and_application"
+        )
+        ws.add_data_validation(dv_channel)
+        dv_channel.add("E3:E100")
+        
+        dv_applied_to = DataValidation(
+            type="list",
+            formula1='"order,product,category,paymentMethod"',
+            allow_blank=True,
+            showErrorMessage=True,
+            errorTitle="نوع التطبيق غير صحيح",
+            error="الرجاء اختيار: order, product, category, paymentMethod"
+        )
+        ws.add_data_validation(dv_applied_to)
+        dv_applied_to.add("F3:F100")
+        
+        dv_coupon = DataValidation(
+            type="list",
+            formula1='"نعم,لا"',
+            allow_blank=True,
+            showErrorMessage=True,
+            errorTitle="قيمة غير صحيحة",
+            error="الرجاء اختيار نعم أو لا"
+        )
+        ws.add_data_validation(dv_coupon)
+        dv_coupon.add("G3:G100")
+        
+        dv_offer_status = DataValidation(
+            type="list",
+            formula1='"active,inactive"',
+            allow_blank=True,
+            showErrorMessage=True,
+            errorTitle="حالة العرض غير صحيحة",
+            error="الرجاء اختيار: active (مفعل) أو inactive (غير مفعل)"
+        )
+        ws.add_data_validation(dv_offer_status)
+        dv_offer_status.add("H3:H100")
+        
+        dv_disc_type = DataValidation(
+            type="list",
+            formula1='"percentage,free-product"',
+            allow_blank=True,
+            showErrorMessage=True,
+            errorTitle="نوع خصم غير صحيح",
+            error="الرجاء اختيار: percentage أو free-product"
+        )
+        ws.add_data_validation(dv_disc_type)
+        dv_disc_type.add("P3:P100")
+        
+        # تنسيق التواريخ
+        for row in range(3, 100):
+            for col in ['I', 'J']:
+                cell = ws[f"{col}{row}"]
+                cell.number_format = numbers.FORMAT_DATE_DATETIME
+        
+        # تعليمات
+        ws.insert_rows(1)
+        ws.merge_cells('A1:S1')
+        instructions_cell = ws.cell(row=1, column=1)
+        instructions_cell.value = """
+📋 تعليمات التعبئة:
+- Action: create (إنشاء), update (تحديث), delete (حذف), active (تفعيل), inactive (إيقاف)
+- Applied_To: order (طلب), product (منتج), category (تصنيف), paymentMethod (طريقة دفع) - مطلوب!
+- With_Coupon: نعم (تطبيق مع كوبون) أو لا (بدون كوبون)
+- Offer_Status: active (مفعل) أو inactive (غير مفعل) - حالة العرض
+- Offer_ID: مطلوب للتحديث والحذف (استخدم أرقام صحيحة بدون نقاط عشرية)
+- التواريخ: استخدم الصيغة YYYY-MM-DD HH:mm:ss
+- المنتجات: يمكن إدخال أكثر من معرف بفاصلة مثل: 123,456,789
+"""
+        instructions_cell.font = Font(name="Segoe UI", size=11, bold=True, color="1F497D")
+        instructions_cell.alignment = Alignment(horizontal="center", vertical="center", wrap_text=True)
+        ws.row_dimensions[1].height = 140
+        
+        wb.save(output)
+        output.seek(0)
+        return output.getvalue()
+        
+    except Exception as e:
+        logger.error(f"Error generating template: {e}")
+        st.error(f"⚠️ خطأ في إنشاء النموذج: {str(e)}")
+        columns = [
+            "Action", "Offer_ID", "Offer_Name", "Offer_Type", "Applied_Channel",
+            "Applied_To", "With_Coupon", "Offer_Status", "Start_Date_Time", "Expiry_Date_Time",
+            "Buy_Type", "Buy_Quantity", "Buy_Products_IDs",
+            "Get_Type", "Get_Quantity", "Discount_Type",
+            "Discount_Amount", "Get_Products_IDs", "Offer_Message"
+        ]
+        df = pd.DataFrame(columns=columns)
+        buffer = io.BytesIO()
+        with pd.ExcelWriter(buffer, engine='openpyxl') as writer:
+            df.to_excel(writer, index=False, sheet_name='قائمة العروض')
+        buffer.seek(0)
+        return buffer.getvalue()
 
-if not st.session_state['access_token']:
-    with st.container():
-        st.markdown('<div class="login-container">', unsafe_allow_html=True)
-        st.image("https://salla.sa/assets/images/logo-light.png", width=120)
-        st.markdown("### تسجيل الدخول للمنظومة")
-        token = st.text_input("أدخل توكن الوصول (Access Token):", type="password")
-        if st.button("🚀 دخول للمنظومة"):
-            if token:
-                st.session_state['access_token'] = token
-                st.success("تم تسجيل الدخول بنجاح!")
+# ==========================================
+# دالة إنشاء عرض جديد
+# ==========================================
+
+def create_new_offer(offer_data: Dict) -> bool:
+    """إنشاء عرض جديد"""
+    headers = get_headers()
+    response = safe_api_request(
+        "POST",
+        "https://api.salla.dev/admin/v2/specialoffers",
+        headers,
+        json=offer_data
+    )
+    return response is not None
+
+# ==========================================
+# إدارة جلسة الدخول
+# ==========================================
+
+def init_session_state():
+    defaults = {
+        "admin_password": "admin123",
+        "logged_in": False,
+        "access_token": "",
+        "setup_completed": True
+    }
+    for key, value in defaults.items():
+        if key not in st.session_state:
+            st.session_state[key] = value
+
+init_session_state()
+
+# ==========================================
+# شاشة الدخول
+# ==========================================
+
+if not st.session_state["logged_in"]:
+    st.markdown("<div class='login-container'>", unsafe_allow_html=True)
+    st.markdown("""
+        <div style="text-align: center; margin-bottom: 25px;">
+            <h1 style="color: #0f1c2e; font-weight: 700; font-size: 26px;">🛡️ منظومة بلسم</h1>
+            <p style="color: #6c757d; font-size: 15px;">تسجيل الدخول الآمن إلى لوحة التحكم</p>
+        </div>
+    """, unsafe_allow_html=True)
+    
+    st.text_input("🔑 مفتاح الربط (Access Token):", type="password", key="login_token", help="أدخل التوكن الخاص بتطبيقك")
+    username = st.text_input("👤 اسم المستخدم:", value="admin", key="lg_un")
+    password = st.text_input("🔒 كلمة المرور:", type="password", key="lg_pw")
+    
+    col1, col2, col3 = st.columns([1, 2, 1])
+    with col2:
+        if st.button("🚀 دخول آمن للمنظومة", key="submit_login", use_container_width=True, type="primary"):
+            if st.session_state.get("login_token", "").strip():
+                st.session_state["access_token"] = st.session_state["login_token"].strip()
+            if username == "admin" and password == st.session_state["admin_password"]:
+                st.session_state["logged_in"] = True
                 st.rerun()
             else:
-                st.warning("يرجى إدخال التوكن")
-        st.markdown('</div>', unsafe_allow_html=True)
+                st.error("❌ بيانات الدخول خاطئة.")
+    
+    st.markdown("</div>", unsafe_allow_html=True)
     st.stop()
 
-# شريط جانبي
-with st.sidebar:
-    st.markdown("## ⚙️ التحكم")
-    page = st.radio("انتقل إلى:", ["🎯 إدارة العروض الترويجية", "📦 مركز جرد المنتجات ومعرفات الـ IDs"])
-    st.divider()
-    if st.button("🔄 تحديث البيانات", use_container_width=True):
-        st.rerun()
-    if st.button("🚪 تسجيل الخروج", use_container_width=True, type="primary"):
-        st.session_state['access_token'] = ""
-        st.rerun()
+# ==========================================
+# إعدادات API
+# ==========================================
 
 SALLA_API_URL = "https://api.salla.dev/admin/v2/specialoffers"
 
-# الصفحة الأولى: إدارة العروض
-if page == "🎯 إدارة العروض الترويجية":
+# ==========================================
+# الشريط العلوي
+# ==========================================
+
+st.markdown(f"""
+    <div class='top-sticky-bar'>
+        <div class='title'>🛡️ لوحة التحكم الإدارية لصيدليات بلسم العُلا</div>
+        <div class='status'>✅ الاتصال موثق ومستقر</div>
+    </div>
+""", unsafe_allow_html=True)
+
+col1, col2, col3 = st.columns([1.5, 1.5, 5])
+
+with col1:
+    with st.popover("🔑 تعديل مفتاح الربط"):
+        current_token = st.session_state.get("access_token", "")
+        new_tok = st.text_input("أدخل التوكن الجديد:", value=current_token, type="password")
+        if st.button("تحديث التوكن", use_container_width=True):
+            if new_tok.strip():
+                st.session_state["access_token"] = new_tok.strip()
+                st.success("✅ تم تحديث التوكن بنجاح!")
+                st.rerun()
+            else:
+                st.warning("⚠️ الرجاء إدخال توكن صحيح")
+
+with col2:
+    with st.popover("🔒 تعديل كلمة المرور"):
+        new_pwd = st.text_input("أدخل كلمة المرور الجديدة:", type="password")
+        if st.button("تحديث الباسورد", use_container_width=True):
+            if new_pwd.strip():
+                st.session_state["admin_password"] = new_pwd.strip()
+                st.success("✅ تم تحديث كلمة المرور بنجاح!")
+            else:
+                st.warning("⚠️ الرجاء إدخال كلمة مرور صحيحة")
+
+st.divider()
+
+# ==========================================
+# القائمة الجانبية
+# ==========================================
+
+st.sidebar.markdown("""
+    <div style="text-align: center; padding: 10px 0;">
+        <h2>🏥 بوابة بلسم الرقمية</h2>
+        <p style="color: #8c9aa8; font-size: 13px; margin-top: 5px;">منظومة إدارة العروض والمنتجات</p>
+    </div>
+""", unsafe_allow_html=True)
+
+st.sidebar.divider()
+
+page = st.sidebar.radio(
+    "📋 تصفح الأقسام التنفيذية:",
+    [
+        "📊 لوحة إدارة العروض الحالية",
+        "📦 قائمة المنتجات ومعرفات الـ IDs"
+    ],
+    index=0
+)
+
+st.sidebar.divider()
+
+st.sidebar.markdown("<div class='refresh-btn-container'>", unsafe_allow_html=True)
+if st.sidebar.button("🔄 تحديث البيانات والصفحة", key="refresh_page_btn", use_container_width=True):
+    st.rerun()
+st.sidebar.markdown("</div>", unsafe_allow_html=True)
+
+st.sidebar.markdown("<div class='logout-btn'>", unsafe_allow_html=True)
+if st.sidebar.button("🚪 تسجيل الخروج", key="logout_sidebar", use_container_width=True, type="primary"):
+    st.session_state["logged_in"] = False
+    st.session_state["access_token"] = ""
+    st.rerun()
+st.sidebar.markdown("</div>", unsafe_allow_html=True)
+
+with st.sidebar.expander("ℹ️ معلومات النظام", expanded=False):
+    st.caption(f"📅 {datetime.now().strftime('%Y-%m-%d %H:%M')}")
+    st.caption("🔗 https://api.salla.dev/admin/v2")
+    st.caption("📊 الحالة: متصل")
+
+# ==========================================
+# الشاشة الأولى: لوحة العروض
+# ==========================================
+
+if page == "📊 لوحة إدارة العروض الحالية":
     st.markdown("""
-        <div class="top-sticky-bar">
-            <div class="title">🎯 إدارة العروض الترويجية الذكية</div>
-            <div style="color: #00b4d8; font-weight: 600;">نظام بلسم المتكامل</div>
-        </div>
+        <h1 style='color: #0f1c2e; font-weight: 700; margin-bottom: 8px; font-size: 26px;'>
+            📊 لوحة إدارة العروض الاحترافية
+        </h1>
+        <p style='color: #6c757d; margin-bottom: 20px; font-size: 14px;'>
+            إدارة شاملة للعروض مع إمكانية التصفية والبحث والتعديل الفوري
+        </p>
     """, unsafe_allow_html=True)
-
-    # قسم الاستيراد
-    with st.expander("📤 استيراد العروض عبر Excel", expanded=False):
-        uploaded_file = st.file_uploader("اختر ملف Excel", type=["xlsx"])
-        if uploaded_file:
-            df = pd.read_excel(uploaded_file)
-            st.dataframe(df, use_container_width=True)
-            if st.button("🚀 تنفيذ العمليات الجماعية"):
-                with st.spinner("جاري العمل..."):
-                    res = process_excel_import(df)
-                    for s in res["success"]: st.success(s)
-                    for e in res["errors"]: st.error(e)
-
+    
+    # --- نموذج الاستيراد ---
+    col_info, col_btn = st.columns([3, 1])
+    with col_info:
+        st.info("📥 قم بتنزيل النموذج الاحترافي وتعبئة البيانات بالصيغ المحددة")
+    with col_btn:
+        st.download_button(
+            label="📥 تحميل النموذج",
+            data=generate_salla_excel_template(),
+            file_name="Salla_Offers_Template.xlsx",
+            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            use_container_width=True,
+            type="primary"
+        )
+    
+    uploaded_file = st.file_uploader(
+        "📂 اختر ملف العروض بصيغة XLSX للاستيراد الجماعي:",
+        type=["xlsx"],
+        help="قم بتحميل ملف الإكسيل المعبأ وفق النموذج"
+    )
+    
+    if uploaded_file:
+        try:
+            df_user = pd.read_excel(uploaded_file)
+            
+            date_columns = ['Start_Date_Time', 'Expiry_Date_Time']
+            for col in date_columns:
+                if col in df_user.columns:
+                    df_user[col] = df_user[col].apply(
+                        lambda x: x.strftime('%Y-%m-%d %H:%M:%S') if isinstance(x, (datetime, pd.Timestamp)) else str(x) if pd.notna(x) else ''
+                    )
+            
+            numeric_columns = ['Offer_ID', 'Buy_Quantity', 'Get_Quantity', 'Discount_Amount']
+            for col in numeric_columns:
+                if col in df_user.columns:
+                    df_user[col] = pd.to_numeric(df_user[col], errors='coerce')
+            
+            st.success(f"✅ تم تحميل الملف! يحتوي على {len(df_user)} عرض")
+            
+            # عرض الجدول بتنسيق احترافي
+            st.markdown("<div class='dataframe-container'>", unsafe_allow_html=True)
+            st.dataframe(df_user, use_container_width=True, height=300)
+            st.markdown("</div>", unsafe_allow_html=True)
+            
+            if st.button("🚀 تأكيد النشر الجماعي", use_container_width=True, type="primary"):
+                with st.spinner("🔄 جاري معالجة العروض..."):
+                    results = process_excel_import(df_user)
+                
+                if results["success"]:
+                    for msg in results["success"]:
+                        st.success(msg)
+                if results["errors"]:
+                    for msg in results["errors"]:
+                        st.error(msg)
+                
+                if results["success"]:
+                    st.balloons()
+                    st.rerun()
+                    
+        except Exception as e:
+            st.error(f"⚠️ خطأ في قراءة الملف: {str(e)}")
+            st.code(traceback.format_exc())
+    
     st.divider()
-
-    # عرض العروض
-    with st.spinner("جاري جلب العروض..."):
+    
+    # --- زر إنشاء عرض جديد ---
+    with st.expander("➕ إنشاء عرض جديد", expanded=False):
+        st.markdown("### إنشاء عرض جديد")
+        
+        col1, col2 = st.columns(2)
+        with col1:
+            new_offer_name = st.text_input("اسم العرض:", placeholder="أدخل اسم العرض")
+            new_offer_type = st.selectbox(
+                "نوع العرض:",
+                ["buy_x_get_y", "percentage", "fixed_amount", "discounts_table", "tiered_offer", "cart_offer", "special_price"],
+                key="new_offer_type"
+            )
+            new_applied_to = st.selectbox(
+                "تطبيق العرض على:",
+                ["product", "order", "category", "paymentMethod"],
+                key="new_applied_to"
+            )
+            new_with_coupon = st.selectbox(
+                "تطبيق مع كوبون:",
+                ["نعم", "لا"],
+                key="new_with_coupon"
+            )
+        
+        with col2:
+            new_offer_status = st.selectbox(
+                "حالة العرض:",
+                ["active", "inactive"],
+                key="new_offer_status",
+                format_func=lambda x: "مفعل" if x == "active" else "غير مفعل"
+            )
+            new_start_date = st.text_input(
+                "تاريخ البدء:",
+                value=datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
+                help="صيغة: YYYY-MM-DD HH:mm:ss"
+            )
+            new_expiry_date = st.text_input(
+                "تاريخ الانتهاء:",
+                value=datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
+                help="صيغة: YYYY-MM-DD HH:mm:ss"
+            )
+            new_message = st.text_input("الرسالة الترويجية:", placeholder="رسالة العرض")
+        
+        # عرض حقول حسب نوع العرض
+        st.markdown("---")
+        st.markdown("#### 🛒 تفاصيل العرض")
+        
+        col1, col2, col3 = st.columns(3)
+        
+        with col1:
+            new_buy_type = st.selectbox(
+                "نوع الشراء:",
+                ["product", "category"],
+                key="new_buy_type"
+            )
+            new_buy_qty = st.number_input(
+                "كمية الشراء المطلوبة:",
+                min_value=1,
+                value=1,
+                key="new_buy_qty"
+            )
+        
+        with col2:
+            new_get_type = st.selectbox(
+                "نوع الهدية:",
+                ["product", "category"],
+                key="new_get_type"
+            )
+            new_get_qty = st.number_input(
+                "الكمية المجانية:",
+                min_value=1,
+                value=1,
+                key="new_get_qty"
+            )
+        
+        with col3:
+            new_discount_type = st.selectbox(
+                "نوع الخصم:",
+                ["percentage", "free-product"],
+                key="new_discount_type"
+            )
+            new_discount_amount = st.number_input(
+                "قيمة الخصم:",
+                min_value=0.0,
+                value=0.0,
+                step=0.5,
+                key="new_discount_amount",
+                help="نسبة مئوية (مثال: 50) أو 0 للهدية المجانية"
+            )
+        
+        new_buy_products = st.text_input(
+            "معرفات منتجات الشراء (بفاصلة):",
+            placeholder="مثال: 1298176905, 1444615766",
+            help="أدخل معرفات المنتجات مفصولة بفاصلة"
+        )
+        new_get_products = st.text_input(
+            "معرفات المنتجات المجانية (بفاصلة):",
+            placeholder="مثال: 1298176905, 1444615766",
+            help="أدخل معرفات المنتجات مفصولة بفاصلة"
+        )
+        
+        if st.button("✅ إنشاء العرض", use_container_width=True, type="primary"):
+            try:
+                # معالجة المنتجات
+                buy_products = []
+                if new_buy_products.strip():
+                    for p in re.split(r'[,\s;]+', new_buy_products.strip()):
+                        p = p.strip()
+                        if p and p.isdigit():
+                            buy_products.append(int(p))
+                
+                get_products = []
+                if new_get_products.strip():
+                    for p in re.split(r'[,\s;]+', new_get_products.strip()):
+                        p = p.strip()
+                        if p and p.isdigit():
+                            get_products.append(int(p))
+                
+                # بناء البيانات
+                offer_data = {
+                    "name": new_offer_name,
+                    "offer_type": new_offer_type,
+                    "applied_channel": "browser_and_application",
+                    "applied_to": new_applied_to,
+                    "start_date": new_start_date,
+                    "expiry_date": new_expiry_date,
+                    "message": new_message,
+                    "status": new_offer_status,
+                    "applied_with_coupon": new_with_coupon == "نعم",
+                    "buy": {
+                        "type": new_buy_type,
+                        "quantity": int(new_buy_qty)
+                    },
+                    "get": {
+                        "type": new_get_type,
+                        "quantity": int(new_get_qty),
+                        "discount_type": new_discount_type
+                    }
+                }
+                
+                if buy_products:
+                    offer_data["buy"]["products"] = buy_products
+                if get_products:
+                    offer_data["get"]["products"] = get_products
+                if new_discount_amount > 0 and new_discount_type == "percentage":
+                    offer_data["get"]["discount_amount"] = float(new_discount_amount)
+                
+                with st.spinner("🔄 جاري إنشاء العرض..."):
+                    if create_new_offer(offer_data):
+                        st.success("✅ تم إنشاء العرض بنجاح!")
+                        st.rerun()
+                    else:
+                        st.error("❌ فشل إنشاء العرض. يرجى التحقق من البيانات.")
+                        
+            except Exception as e:
+                st.error(f"❌ خطأ: {str(e)}")
+    
+    st.divider()
+    
+    # --- جلب العروض ---
+    with st.spinner("🔄 جاري تحميل العروض..."):
         res = safe_api_request("GET", SALLA_API_URL, get_headers())
     
     if res and res.get("data"):
-        offers = res["data"]
+        raw_offers = res["data"]
         
-        # فلترة بسيطة
-        col_s1, col_s2 = st.columns(2)
-        with col_s1:
-            search = st.text_input("🔎 ابحث باسم العرض:", placeholder="اكتب هنا...")
-        with col_s2:
-            st.markdown(f"<div style='margin-top: 30px;'><b>إجمالي العروض: {len(offers)}</b></div>", unsafe_allow_html=True)
-
-        for idx, offer in enumerate(offers):
-            if search and search.lower() not in offer.get('name', '').lower():
-                continue
+        # --- أزرار التصدير ---
+        st.markdown("<div class='export-btn-container'>", unsafe_allow_html=True)
+        col1, col2, col3 = st.columns([1, 1, 4])
+        with col1:
+            if st.button("📥 تصدير العروض", use_container_width=True):
+                excel_data = export_offers_to_excel(raw_offers)
+                if excel_data:
+                    st.download_button(
+                        label="📥 تحميل",
+                        data=excel_data,
+                        file_name=f"offers_export_{datetime.now().strftime('%Y%m%d_%H%M%S')}.xlsx",
+                        mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                        key="download_offers",
+                        type="primary"
+                    )
+        with col2:
+            # زر تصدير المنتجات (سيظهر في الشاشة الثانية)
+            pass
+        st.markdown("</div>", unsafe_allow_html=True)
+        
+        # --- الفلترة ---
+        with st.expander("🔍 خيارات البحث والفلترة المتقدمة", expanded=True):
+            col1, col2, col3 = st.columns(3)
+            with col1:
+                search_offer = st.text_input(
+                    "🔍 ابحث عن منتج (اسم أو SKU أو ID):",
+                    placeholder="أدخل نص البحث..."
+                )
+            with col2:
+                offer_status_filter = st.selectbox(
+                    "📌 حالة العرض:",
+                    ["الكل", "نشط", "غير نشط", "منتهي الصلاحية", "لم يبدأ بعد"]
+                )
+            with col3:
+                offer_type_filter = st.selectbox(
+                    "🏷️ نوع العرض:",
+                    ["الكل", "buy_x_get_y", "percentage", "fixed_amount", "discounts_table", "tiered_offer", "cart_offer", "special_price"]
+                )
+        
+        now = datetime.now()
+        filtered_offers = []
+        
+        for offer in raw_offers:
+            match = True
+            start_date = safe_parse_date(offer.get('start_date'))
+            expiry_date = safe_parse_date(offer.get('expiry_date'))
+            
+            if search_offer:
+                search_lower = search_offer.lower()
+                offer_name = offer.get('name', '').lower()
+                offer_id = str(offer.get('id', ''))
                 
-            offer_id = offer.get('id')
-            status = offer.get('status', 'inactive')
-            status_badge = f'<span class="badge badge-active">مفعل</span>' if status == 'active' else f'<span class="badge badge-inactive">غير مفعل</span>'
+                buy_products = offer.get('buy', {}).get('products', [])
+                get_products = offer.get('get', {}).get('products', [])
+                all_ids = []
+                for p in buy_products + get_products:
+                    if isinstance(p, dict):
+                        all_ids.append(str(p.get('id', '')))
+                        all_ids.append(str(p.get('sku', '')).lower())
+                    else:
+                        all_ids.append(str(p))
+                
+                if search_lower not in offer_name and search_lower not in offer_id:
+                    if not any(search_lower in pid for pid in all_ids):
+                        match = False
             
-            st.markdown(f"""
-                <div class="offer-card">
-                    <div class="offer-card-body">
-                        <div style="display: flex; justify-content: space-between; align-items: flex-start;">
-                            <div>
-                                <h4 style="margin: 0; color: #0f1c2e;">🎯 {offer.get('name')}</h4>
-                                <p style="color: #636e72; font-size: 14px; margin: 5px 0;">ID: <code>{offer_id}</code> | {status_badge}</p>
-                            </div>
-                            <div style="text-align: left;">
-                                <span class="badge badge-info">🏷️ {offer.get('offer_type')}</span>
-                            </div>
+            if offer_type_filter != "الكل" and offer.get('offer_type') != offer_type_filter:
+                match = False
+            
+            if offer_status_filter != "الكل":
+                current_status = offer.get('status', '')
+                if offer_status_filter == "نشط" and current_status != "active":
+                    match = False
+                elif offer_status_filter == "غير نشط" and current_status != "inactive":
+                    match = False
+                elif offer_status_filter == "منتهي الصلاحية" and (not expiry_date or expiry_date >= now):
+                    match = False
+                elif offer_status_filter == "لم يبدأ بعد" and (not start_date or start_date <= now):
+                    match = False
+            
+            if match:
+                filtered_offers.append(offer)
+        
+        st.markdown(f"""
+            <div class='offers-count'>
+                <strong>📊 عدد العروض: {len(filtered_offers)} عرض</strong>
+            </div>
+        """, unsafe_allow_html=True)
+        
+        # عرض العروض
+        for idx, offer in enumerate(filtered_offers):
+            with st.container():
+                st.markdown(f"<div class='offer-card'>", unsafe_allow_html=True)
+                
+                applied_with_coupon = offer.get('applied_with_coupon', False)
+                coupon_status = "🟢 مع كوبون" if applied_with_coupon else "🔴 بدون كوبون"
+                coupon_class = "coupon-enabled" if applied_with_coupon else "coupon-disabled"
+                
+                offer_status = offer.get('status', 'inactive')
+                status_icon = "🟢" if offer_status == "active" else "🔴"
+                status_text = "مفعل" if offer_status == "active" else "غير مفعل"
+                status_class = "status-active" if offer_status == "active" else "status-inactive"
+                
+                col1, col2, col3, col4, col5 = st.columns([2.5, 1.2, 1.2, 1.2, 1.2])
+                
+                with col1:
+                    offer_name = offer.get('name', 'عرض بدون اسم')
+                    offer_id = offer.get('id', 'N/A')
+                    start = offer.get('start_date', 'غير محدد')
+                    expiry = offer.get('expiry_date', 'غير محدد')
+                    
+                    st.markdown(f"""
+                        <div>
+                            <h4 style="margin: 0 0 5px 0; color: #0f1c2e; font-size: 17px;">🎯 {offer_name}</h4>
+                            <span style="color: #6c757d; font-size: 13px;">🆔 ID: {offer_id}</span>
+                            <br>
+                            <span class="offer-date">📅 {start} → {expiry}</span>
+                            <br>
+                            <span class="coupon-badge {coupon_class}">🔖 {coupon_status}</span>
+                            <span class="status-badge {status_class}" style="margin-right: 5px;">{status_icon} {status_text}</span>
                         </div>
-            """, unsafe_allow_html=True)
-            
-            # أزرار التحكم في العرض - توزيع احترافي لمنع التداخل
-            c1, c2, c3, c4 = st.columns([2, 1, 1, 1])
-            with c1:
-                st.markdown(f"📅 **الفترة:** {offer.get('start_date')} → {offer.get('expiry_date')}")
-            with c2:
-                label = "⏸️ إيقاف" if status == 'active' else "▶️ تفعيل"
-                if st.button(label, key=f"tgl_{offer_id}_{idx}"):
-                    new_status = 'inactive' if status == 'active' else 'active'
-                    safe_api_request("PUT", f"{SALLA_API_URL}/{offer_id}/status", get_headers(), json={"status": new_status})
-                    st.rerun()
-            with c3:
-                if st.button("🗑️ حذف", key=f"del_{offer_id}_{idx}", type="primary"):
-                    safe_api_request("DELETE", f"{SALLA_API_URL}/{offer_id}", get_headers())
-                    st.rerun()
-            with c4:
-                show_details = st.toggle("تفاصيل", key=f"tgl_det_{offer_id}")
+                    """, unsafe_allow_html=True)
+                
+                with col2:
+                    st.markdown(f"**🏷️ النوع:** {offer.get('offer_type', 'غير محدد')}")
+                    st.caption(f"📌 {offer.get('applied_to', 'غير محدد')}")
+                
+                with col3:
+                    coupon_label = "🔖 مع كوبون" if not applied_with_coupon else "🔖 بدون كوبون"
+                    coupon_type = "secondary" if not applied_with_coupon else "primary"
+                    if st.button(coupon_label, key=f"toggle_coupon_{offer_id}_{idx}", use_container_width=True, type=coupon_type):
+                        with st.spinner("🔄 جاري تحديث حالة الكوبون..."):
+                            current_offer = safe_api_request("GET", f"{SALLA_API_URL}/{offer_id}", get_headers())
+                            if current_offer and current_offer.get('data'):
+                                offer_data = current_offer['data']
+                                offer_data['applied_with_coupon'] = not applied_with_coupon
+                                for key in ['id', 'status', 'created_at', 'updated_at']:
+                                    offer_data.pop(key, None)
+                                
+                                update_res = safe_api_request(
+                                    "PUT",
+                                    f"{SALLA_API_URL}/{offer_id}",
+                                    get_headers(),
+                                    json=offer_data
+                                )
+                                if update_res:
+                                    st.success(f"✅ تم {'تفعيل' if not applied_with_coupon else 'إيقاف'} تطبيق العرض مع الكوبون!")
+                                    st.rerun()
+                
+                with col4:
+                    target_status = "inactive" if offer_status == "active" else "active"
+                    btn_label = "🛑 إيقاف" if offer_status == "active" else "▶️ تفعيل"
+                    if st.button(btn_label, key=f"toggle_status_{offer_id}_{idx}", use_container_width=True):
+                        with st.spinner("🔄 جاري تحديث الحالة..."):
+                            update_res = safe_api_request(
+                                "PUT",
+                                f"{SALLA_API_URL}/{offer_id}/status",
+                                get_headers(),
+                                json={"status": target_status}
+                            )
+                            if update_res:
+                                st.success("✅ تم تحديث الحالة!")
+                                st.rerun()
+                
+                with col5:
+                    if st.button("🗑️ حذف", key=f"delete_offer_{offer_id}_{idx}", use_container_width=True, type="primary"):
+                        with st.spinner("🔄 جاري الحذف..."):
+                            del_res = safe_api_request("DELETE", f"{SALLA_API_URL}/{offer_id}", get_headers())
+                            if del_res is not None:
+                                st.success("✅ تم حذف العرض!")
+                                st.rerun()
+                
+                with st.expander("🔽 تفاصيل العرض المتقدمة", expanded=False):
+                    st.markdown("<div class='sub-card'>", unsafe_allow_html=True)
+                    
+                    col_left, col_right = st.columns(2)
+                    
+                    with col_left:
+                        st.markdown("**🛒 منتجات الشراء (X):**")
+                        buy_products = offer.get('buy', {}).get('products', [])
+                        st.text(parse_products_cleanly(buy_products))
+                        buy_qty = offer.get('buy', {}).get('quantity', 1)
+                        st.markdown(f"**📦 كمية الشراء:** `{buy_qty}`")
+                    
+                    with col_right:
+                        st.markdown("**🎁 منتجات الهدية (Y):**")
+                        get_products = offer.get('get', {}).get('products', [])
+                        st.text(parse_products_cleanly(get_products))
+                        get_qty = offer.get('get', {}).get('quantity', 1)
+                        st.markdown(f"**🎯 كمية الهدية:** `{get_qty}`")
+                    
+                    st.divider()
+                    
+                    st.markdown("#### ✏️ تعديل تفاصيل العرض")
+                    
+                    col1, col2 = st.columns(2)
+                    with col1:
+                        ed_name = st.text_input("اسم العرض:", value=offer.get('name', ''), key=f"edit_name_{offer_id}")
+                        ed_msg = st.text_input("الرسالة الترويجية:", value=offer.get('message', ''), key=f"edit_msg_{offer_id}")
+                    
+                    with col2:
+                        offer_types = ["buy_x_get_y", "percentage", "fixed_amount", "discounts_table", "tiered_offer", "cart_offer", "special_price"]
+                        current_type = offer.get('offer_type', 'buy_x_get_y')
+                        type_index = offer_types.index(current_type) if current_type in offer_types else 0
+                        ed_type = st.selectbox(
+                            "نوع العرض:",
+                            offer_types,
+                            index=type_index,
+                            key=f"edit_type_{offer_id}"
+                        )
+                        
+                        applied_to_options = ["order", "product", "category", "paymentMethod"]
+                        current_applied_to = offer.get('applied_to', 'product')
+                        applied_to_index = applied_to_options.index(current_applied_to) if current_applied_to in applied_to_options else 1
+                        ed_applied_to = st.selectbox(
+                            "تطبيق العرض على:",
+                            applied_to_options,
+                            index=applied_to_index,
+                            key=f"edit_applied_to_{offer_id}"
+                        )
+                        
+                        ed_coupon = st.selectbox(
+                            "تطبيق مع كوبون:",
+                            ["نعم", "لا"],
+                            index=0 if offer.get('applied_with_coupon', False) else 1,
+                            key=f"edit_coupon_{offer_id}"
+                        )
+                        
+                        ed_offer_status = st.selectbox(
+                            "حالة العرض:",
+                            ["active", "inactive"],
+                            index=0 if offer.get('status') == 'active' else 1,
+                            key=f"edit_offer_status_{offer_id}",
+                            help="active: مفعل, inactive: غير مفعل"
+                        )
+                    
+                    col1, col2 = st.columns(2)
+                    with col1:
+                        ed_start = st.text_input(
+                            "تاريخ البدء:",
+                            value=offer.get('start_date', ''),
+                            key=f"edit_start_{offer_id}",
+                            help="صيغة: YYYY-MM-DD HH:mm:ss"
+                        )
+                    with col2:
+                        ed_end = st.text_input(
+                            "تاريخ الانتهاء:",
+                            value=offer.get('expiry_date', ''),
+                            key=f"edit_end_{offer_id}",
+                            help="صيغة: YYYY-MM-DD HH:mm:ss"
+                        )
+                    
+                    col1, col2 = st.columns(2)
+                    with col1:
+                        buy_qty_val = int(offer.get('buy', {}).get('quantity', 1))
+                        ed_buy_q = st.number_input(
+                            "كمية الشراء المطلوبة:",
+                            value=buy_qty_val,
+                            min_value=1,
+                            key=f"edit_buy_q_{offer_id}"
+                        )
+                    with col2:
+                        get_qty_val = int(offer.get('get', {}).get('quantity', 1))
+                        ed_get_q = st.number_input(
+                            "كمية الهدية:",
+                            value=get_qty_val,
+                            min_value=1,
+                            key=f"edit_get_q_{offer_id}"
+                        )
+                    
+                    if st.button("💾 حفظ التحديثات", key=f"save_offer_{offer_id}", use_container_width=True, type="primary"):
+                        try:
+                            update_payload = {
+                                "name": ed_name,
+                                "message": ed_msg,
+                                "start_date": ed_start,
+                                "expiry_date": ed_end,
+                                "offer_type": ed_type,
+                                "applied_to": ed_applied_to,
+                                "applied_with_coupon": ed_coupon == "نعم",
+                                "status": ed_offer_status,
+                                "buy": {
+                                    "type": offer.get('buy', {}).get('type', 'product'),
+                                    "quantity": int(ed_buy_q)
+                                },
+                                "get": {
+                                    "type": offer.get('get', {}).get('type', 'product'),
+                                    "quantity": int(ed_get_q),
+                                    "discount_type": offer.get('get', {}).get('discount_type', 'free-product')
+                                }
+                            }
+                            
+                            buy_products_ids = []
+                            for p in offer.get('buy', {}).get('products', []):
+                                if isinstance(p, dict):
+                                    buy_products_ids.append(p.get('id'))
+                                else:
+                                    buy_products_ids.append(p)
+                            if buy_products_ids:
+                                update_payload["buy"]["products"] = buy_products_ids
+                            
+                            get_products_ids = []
+                            for p in offer.get('get', {}).get('products', []):
+                                if isinstance(p, dict):
+                                    get_products_ids.append(p.get('id'))
+                                else:
+                                    get_products_ids.append(p)
+                            if get_products_ids:
+                                update_payload["get"]["products"] = get_products_ids
+                            
+                            with st.spinner("🔄 جاري حفظ التغييرات..."):
+                                update_res = safe_api_request(
+                                    "PUT",
+                                    f"{SALLA_API_URL}/{offer_id}",
+                                    get_headers(),
+                                    json=update_payload
+                                )
+                                if update_res:
+                                    st.success("✅ تم تحديث العرض!")
+                                    st.rerun()
+                        except Exception as e:
+                            st.error(f"❌ خطأ: {str(e)}")
+                    
+                    st.markdown("</div>", unsafe_allow_html=True)
+                
+                st.markdown("</div>", unsafe_allow_html=True)
+    
+    else:
+        st.warning("⚠️ لا توجد عروض حالياً في المتجر")
 
-            if show_details:
-                st.markdown('<div class="offer-details-box">', unsafe_allow_html=True)
-                det_col1, det_col2 = st.columns(2)
-                with det_col1:
-                    st.write("**🛒 المشتريات:**")
-                    st.code(parse_products_cleanly(offer.get('buy', {}).get('products', [])))
-                with det_col2:
-                    st.write("**🎁 الهدايا:**")
-                    st.code(parse_products_cleanly(offer.get('get', {}).get('products', [])))
-                st.markdown('</div>', unsafe_allow_html=True)
-            
-            st.markdown("</div></div>", unsafe_allow_html=True)
+# ==========================================
+# الشاشة الثانية: مركز جرد المنتجات
+# ==========================================
 
-# الصفحة الثانية: جرد المنتجات
 elif page == "📦 مركز جرد المنتجات ومعرفات الـ IDs":
     st.markdown("""
-        <div class="top-sticky-bar">
-            <div class="title">📦 مركز جرد المنتجات</div>
-            <div style="color: #00b4d8; font-weight: 600;">إدارة المخزون والهوية</div>
-        </div>
+        <h1 style='color: #0f1c2e; font-weight: 700; margin-bottom: 8px; font-size: 26px;'>
+            📦 مركز جرد المنتجات
+        </h1>
+        <p style='color: #6c757d; margin-bottom: 20px; font-size: 14px;'>
+            إدارة المنتجات وحالة الظهور وعرض العروض المرتبطة
+        </p>
     """, unsafe_allow_html=True)
-
-    with st.spinner("جاري تحميل المنتجات..."):
-        p_res = safe_api_request("GET", "https://api.salla.dev/admin/v2/products", get_headers())
     
-    if p_res and p_res.get("data"):
-        products = p_res["data"]
-        search_p = st.text_input("🔍 ابحث عن منتج (اسم أو SKU أو ID):")
+    # --- زر تصدير المنتجات ---
+    st.markdown("<div class='export-btn-container'>", unsafe_allow_html=True)
+    if st.button("📥 تصدير المنتجات", use_container_width=False):
+        with st.spinner("🔄 جاري تحميل المنتجات للتصدير..."):
+            products_res = safe_api_request("GET", "https://api.salla.dev/admin/v2/products", get_headers())
+            if products_res and products_res.get("data"):
+                excel_data = export_products_to_excel(products_res["data"])
+                if excel_data:
+                    st.download_button(
+                        label="📥 تحميل",
+                        data=excel_data,
+                        file_name=f"products_export_{datetime.now().strftime('%Y%m%d_%H%M%S')}.xlsx",
+                        mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                        key="download_products"
+                    )
+    st.markdown("</div>", unsafe_allow_html=True)
+    
+    with st.spinner("🔄 جاري تحميل المنتجات والعروض..."):
+        products_res = safe_api_request("GET", "https://api.salla.dev/admin/v2/products", get_headers())
+        offers_res = safe_api_request("GET", SALLA_API_URL, get_headers())
+    
+    if products_res and products_res.get("data") and offers_res:
+        products = products_res["data"]
+        offers = offers_res.get("data", [])
         
-        for p in products:
-            if search_p and not any(search_p.lower() in str(p.get(k, '')).lower() for k in ['name', 'sku', 'id']):
-                continue
-                
-            p_id = p.get('id')
-            p_status = p.get('status', 'sale')
-            status_text = "🟢 معروض" if p_status == "sale" else "🔴 مخفي"
+        st.info(f"📊 عدد المنتجات: {len(products)} منتج")
+        
+        offer_map = {}
+        for offer in offers:
+            buy_products = offer.get('buy', {}).get('products', [])
+            get_products = offer.get('get', {}).get('products', [])
+            for p in buy_products + get_products:
+                if isinstance(p, dict):
+                    product_id = p.get('id')
+                    if product_id:
+                        offer_map[product_id] = offer
+                else:
+                    offer_map[p] = offer
+        
+        search_query = st.text_input(
+            "🔍 ابحث هنا بواسطة اسم المنتج أو الـ SKU:",
+            placeholder="أدخل اسم المنتج أو SKU..."
+        )
+        
+        filtered_products = []
+        if search_query:
+            search_lower = search_query.lower()
+            for p in products:
+                if (search_lower in p.get('name', '').lower() or 
+                    search_lower in str(p.get('sku', '')).lower() or
+                    search_lower in str(p.get('id', ''))):
+                    filtered_products.append(p)
+        else:
+            filtered_products = products[:20]
+            if len(products) > 20:
+                st.info("📌 عرض أول 20 منتج. استخدم البحث لعرض المزيد.")
+        
+        if not filtered_products:
+            st.warning("⚠️ لم يتم العثور على منتجات تطابق البحث")
+        
+        for idx, p in enumerate(filtered_products):
+            p_id = p.get('id', 'N/A')
+            p_name = p.get('name', 'منتج بدون اسم')
+            p_sku = p.get('sku', 'لا يوجد')
+            
+            p_promotion = p.get('promotion_title', '')
+            if not p_promotion:
+                promotion = p.get('promotion', {})
+                if isinstance(promotion, dict):
+                    p_promotion = promotion.get('title', '')
+            
+            # تنسيق السعر
+            price = get_product_price(p)
+            sale_price_obj = p.get('sale_price', {})
+            if isinstance(sale_price_obj, dict):
+                sale_price = sale_price_obj.get('amount', 0)
+            else:
+                sale_price = float(sale_price_obj) if sale_price_obj else 0
+            
+            has_discount = sale_price > 0 and sale_price < price
+            discount_percent = int(((price - sale_price) / price) * 100) if price > 0 and has_discount else 0
+            
+            offer = offer_map.get(p_id)
+            has_offer = offer is not None
             
             st.markdown(f"""
-                <div class="product-card">
-                    <div class="product-card-header">
-                        <span class="product-name">📦 {p.get('name')}</span>
-                        <span class="product-promotion">SKU: {p.get('sku')}</span>
+                <div class='product-card'>
+                    <div class='product-card-header'>
+                        <span class='product-name'>📦 {p_name}</span>
+                        <span class='product-promotion'>🏷️ {p_promotion if p_promotion else 'لا يوجد عنوان ترويجي'}</span>
                     </div>
-                    <div class="product-card-body">
+                    <div class='product-card-body'>
             """, unsafe_allow_html=True)
             
-            pc1, pc2, pc3 = st.columns([2, 1.5, 1.5])
-            with pc1:
-                st.markdown(f"**💰 السعر:** {get_product_price(p)} SAR")
-                st.markdown(f"**📦 المخزون:** {p.get('quantity', 0)} | **📈 المبيعات:** {p.get('sold_quantity', 0)}")
-                st.markdown(f"**👁️ الحالة:** {status_text}")
-            with pc2:
-                if st.button("📋 نسخ ID المنتج", key=f"cp_{p_id}"):
-                    st.toast(f"تم النسخ: {p_id}")
-                if st.button("👁️ تغيير الظهور", key=f"vis_{p_id}"):
-                    new_s = "hidden" if p_status == "sale" else "sale"
-                    safe_api_request("PUT", f"https://api.salla.dev/admin/v2/products/{p_id}", get_headers(), json={"status": new_s})
-                    st.rerun()
-            with pc3:
+            col1, col2, col3, col4 = st.columns([2.5, 2.2, 1.8, 2])
+            
+            with col1:
                 product_url = p.get('url', '#')
-                st.markdown(f'<a href="{product_url}" target="_blank"><button style="width:100%; height:44px; border-radius:12px; background:#0f1c2e; color:white; border:none; cursor:pointer; font-weight:bold;">🔗 رابط المتجر</button></a>', unsafe_allow_html=True)
-
+                st.markdown(f"<a href='{product_url}' target='_blank' class='product-link'>{p_name}</a>", unsafe_allow_html=True)
+                st.caption(f"🏷️ SKU: `{p_sku}`")
+                st.caption(f"🆔 ID: `{p_id}`")
+                
+                if p.get('thumbnail') or p.get('main_image'):
+                    st.markdown("<span style='color: #2a9d8f;'>✅ يحتوي على صورة</span>", unsafe_allow_html=True)
+                else:
+                    st.markdown("<span style='color: #e76f51;'>⚠️ يحتاج لصورة</span>", unsafe_allow_html=True)
+            
+            with col2:
+                # عرض السعر بشكل احترافي
+                st.markdown("**💰 السعر:**")
+                if has_discount:
+                    st.markdown(f"""
+                        <div class='price-display'>
+                            <span class='price-sale'>{sale_price:,.2f} SAR</span>
+                            <span class='price-original'>{price:,.2f} SAR</span>
+                            <span class='price-discount'>-{discount_percent}%</span>
+                        </div>
+                    """, unsafe_allow_html=True)
+                else:
+                    st.markdown(f"""
+                        <div class='price-display'>
+                            <span class='price-current'>{price:,.2f} SAR</span>
+                        </div>
+                    """, unsafe_allow_html=True)
+                
+                st.markdown(f"**📦 المخزون:** {p.get('quantity', 0)} حبة")
+                st.markdown(f"**📈 المبيعات:** {p.get('sold_quantity', 0)}")
+                
+                status = p.get('status', 'sale')
+                status_text = "🟢 معروض" if status == "sale" else "🔴 مخفي"
+                st.markdown(f"**👁️ الحالة:** {status_text}")
+            
+            with col3:
+                if has_offer:
+                    offer_status = offer.get('status', '')
+                    offer_id = offer.get('id', '')
+                    status_color = "🟢" if offer_status == "active" else "🔴"
+                    status_text = "مفعل" if offer_status == "active" else "غير مفعل"
+                    coupon_status = "مع كوبون" if offer.get('applied_with_coupon', False) else "بدون كوبون"
+                    
+                    st.markdown(f"""
+                        <div style="border: 1px solid #e8edf2; border-radius: 8px; padding: 10px; background: #f8f9fa;">
+                            <strong>🎯 عرض:</strong> {offer.get('name', 'عرض')}
+                            <br>
+                            <span style="font-size: 12px;">🆔 {offer_id}</span>
+                            <br>
+                            <span style="font-size: 12px;">{status_color} {status_text}</span>
+                            <br>
+                            <span style="font-size: 11px; color: #6c757d;">🔖 {coupon_status}</span>
+                        </div>
+                    """, unsafe_allow_html=True)
+                    
+                    st.markdown("<div class='action-buttons'>", unsafe_allow_html=True)
+                    
+                    if offer_status == "active":
+                        if st.button("⏸️ إيقاف العرض", key=f"pause_offer_{p_id}_{idx}", use_container_width=True):
+                            with st.spinner("🔄 جاري إيقاف العرض..."):
+                                update_res = safe_api_request(
+                                    "PUT",
+                                    f"{SALLA_API_URL}/{offer_id}/status",
+                                    get_headers(),
+                                    json={"status": "inactive"}
+                                )
+                                if update_res:
+                                    st.success("✅ تم إيقاف العرض!")
+                                    st.rerun()
+                    else:
+                        if st.button("▶️ تفعيل العرض", key=f"activate_offer_{p_id}_{idx}", use_container_width=True):
+                            with st.spinner("🔄 جاري تفعيل العرض..."):
+                                update_res = safe_api_request(
+                                    "PUT",
+                                    f"{SALLA_API_URL}/{offer_id}/status",
+                                    get_headers(),
+                                    json={"status": "active"}
+                                )
+                                if update_res:
+                                    st.success("✅ تم تفعيل العرض!")
+                                    st.rerun()
+                    
+                    st.markdown("</div>", unsafe_allow_html=True)
+                    
+                else:
+                    st.markdown("**⚪ لا يوجد عرض**")
+                    st.button("إضافة عرض", key=f"add_offer_{p_id}_{idx}", disabled=True, use_container_width=True)
+            
+            with col4:
+                if st.button("📋 نسخ ID", key=f"copy_id_{p_id}_{idx}", use_container_width=True):
+                    st.toast(f"✅ تم نسخ المعرف: {p_id}")
+                
+                current_status = p.get('status', 'sale')
+                btn_label = "👁️ إخفاء" if current_status == "sale" else "👁️ إظهار"
+                btn_type = "primary" if current_status == "sale" else "secondary"
+                
+                if st.button(btn_label, key=f"toggle_status_{p_id}_{idx}", use_container_width=True, type=btn_type):
+                    target_status = "hidden" if current_status == "sale" else "sale"
+                    
+                    with st.spinner("🔄 جاري تحديث الحالة..."):
+                        update_payload = {"status": target_status}
+                        update_res = safe_api_request(
+                            "PUT",
+                            f"https://api.salla.dev/admin/v2/products/{p_id}",
+                            get_headers(),
+                            json=update_payload
+                        )
+                        if update_res is not None:
+                            st.success("✅ تم تحديث حالة المنتج!")
+                            st.rerun()
+            
             st.markdown("</div></div>", unsafe_allow_html=True)
+    
+    else:
+        st.error("⚠️ فشل في تحميل البيانات. يرجى التحقق من الاتصال والتوكن.")
 
+# ==========================================
 # التذييل
+# ==========================================
+
 st.markdown("""
-    <div class="footer">
-        <p>© 2026 منظومة بلسم الرقمية | تم التطوير باحترافية لتواكب تطلعاتكم</p>
-        <p style="font-size: 12px; color: #a0aec0;">الإصدار الاحترافي 2.0</p>
+    <div class='footer'>
+        <p>© 2026 منظومة بلسم الرقمية | جميع الحقوق محفوظة</p>
+        <p style='font-size: 11px; color: #adb5bd;'>تم التطوير باستخدام Streamlit</p>
     </div>
 """, unsafe_allow_html=True)
