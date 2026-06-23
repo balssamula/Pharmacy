@@ -10,14 +10,14 @@ st.set_page_config(
 from offers_page import render_offers_page
 from products_page import render_products_page
 
-# =========================================================================
-# CSS السحري والمطور لحل مشكلة تداخل نصوص الرموز (expand_more / arrow_down)
-# =========================================================================
+# ==============================================================================================
+# CSS الجذري والحاسم لمنع تداخل نصوص الرموز البرمجية (expand_more و arrow_down) عند تغيير الخط
+# ==============================================================================================
 st.markdown("""
     <style>
     @import url('https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700&display=swap');
     
-    /* تطبيق خط Cairo فقط على النصوص المكتوبة لمنع جبر الأيقونات على التحول لكلمات */
+    /* استهداف عناصر النصوص الصافية والمكتوبة فقط بالخط الجديد دون المساس بملفات الأيقونات الافتراضية */
     html, body, [data-testid="stAppViewContainer"] p, 
     [data-testid="stAppViewContainer"] span, 
     [data-testid="stAppViewContainer"] h1, 
@@ -33,8 +33,9 @@ st.markdown("""
         font-family: 'Cairo', sans-serif !important;
     }
     
-    /* استثناء كامل وحاسم للأيقونات الداخلية لـ Streamlit للحفاظ على الخط الافتراضي لها */
-    .stIcon, [data-testid="stIcon"], [class^="st-"] svg, .material-icons, i {
+    /* حماية قاطعة ومطلقة لعناصر الخطوط والأيقونات والـ SVG الخاصة بنظام الأزرار في Streamlit */
+    .stIcon, [data-testid="stIcon"], [class^="st-"] svg, .material-icons, i, 
+    [data-testid="stPopover"]::after, [data-testid="stExpander"]::after {
         font-family: inherit !important;
     }
     
@@ -48,7 +49,7 @@ if "logged_in" not in st.session_state: st.session_state["logged_in"] = False
 if "access_token" not in st.session_state: st.session_state["access_token"] = ""
 if "admin_password" not in st.session_state: st.session_state["admin_password"] = "admin123"
 
-# بوابة الدخول الآمنة
+# بوابة الدخول
 if not st.session_state["logged_in"]:
     _, col2, _ = st.columns([1, 2, 1])
     with col2:
@@ -66,7 +67,7 @@ if not st.session_state["logged_in"]:
                 st.error("❌ عذراً، تأكد من صحة البيانات والتوكن المرفق!")
     st.stop()
 
-# ترويسة علوية
+# الترويسة الرئيسية
 st.markdown("<h1 style='color:#0f1c2e;'>🏥 لوحة التحكم الإدارية لصيدليات بلسم العُلا</h1>", unsafe_allow_html=True)
 st.markdown("---")
 
@@ -87,7 +88,7 @@ with c_pwd:
 
 st.divider()
 
-# القائمة الجانبية مع زر تحديث البيانات والصفحة المطلوب
+# القائمة الجانبية واستعادة زر تحديث الصفحة المحذوف للعمل فوراً
 st.sidebar.markdown("### 🏪 أقسام المنظومة")
 page = st.sidebar.radio(
     "انتقل بين الواجهات الفنية:",
@@ -95,15 +96,15 @@ page = st.sidebar.radio(
 )
 
 st.sidebar.divider()
-# زر تحديث الصفحة البرمجي الفعلي المسترجع للعمل الفوري
-if st.sidebar.button("🔄 تحديث البيانات والصفحة", use_container_width=True):
+# استعادة زر التحديث الفعلي
+if st.sidebar.button("🔄 تحديث البيانات والصفحة فوراً", use_container_width=True):
     st.rerun()
 
 if st.sidebar.button("🚪 تسجيل الخروج من النظام", use_container_width=True):
     st.session_state["logged_in"] = False
     st.rerun()
 
-# توجيه الصفحات الفعلي
+# توجيه وعرض الصفحات
 if page == "لوحة إدارة وتصفية العروض الحالية":
     render_offers_page()
 else:
