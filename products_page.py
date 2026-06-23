@@ -7,15 +7,15 @@ def render_products_page():
     headers = get_headers()
     if not headers: return
 
-    with st.spinner("🔄 جاري تحميل وجلب بيانات مستودع المنتجات..."):
+    with st.spinner("🔄 جاري مزامنة كشف جرد المستودع والمنتجات الحالية..."):
         prod_res = safe_api_request("GET", "https://api.salla.dev/admin/v2/products", headers)
     
     if prod_res and prod_res.get("data"):
         products = prod_res["data"]
         
-        if st.button("📥 تصدير قائمة جرد مستودع صيدليات بلسم الحالية إلى Excel"):
+        if st.button("📥 تصدير كشف جرد أصناف صيدليات بلسم الفوري إلى Excel", type="primary", key="export_all_prod_excel_green"):
             ex_data = export_products_to_excel(products)
-            st.download_button("اضغط هنا لتنزيل كشف المنتجات الفوري", ex_data, "Balsem_Inventory_Report.xlsx", mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
+            st.download_button("اضغط هنا لتحميل كشف جرد المنتجات منسقاً", ex_data, "Balsem_Inventory_Report.xlsx", mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
             
         st.divider()
         search_query = st.text_input("🔍 تصفية وبحث فوري برقم الـ SKU، مسمى الصنف، أو الـ ID المعرف:")
@@ -30,25 +30,30 @@ def render_products_page():
             p_promotion = p.get('promotion_title', '')
             if not p_promotion and isinstance(p.get('promotion'), dict):
                 p_promotion = p.get('promotion', {}).get('title', '')
-            if not p_promotion:
+            if not p_promotion or p_promotion == "لا يوجد عنوان ترويجي":
                 p_promotion = "لا يوجد عنوان ترويجي"
             
             if search_query and (search_query.lower() not in p_name.lower() and search_query not in str(p_sku) and search_query not in str(p_id)):
                 continue
                 
-            # --- سحب وحساب تفاصيل التسعير الشاملة وفق وثيقة الأسعار في سلة ---
-            price = get_flat_price(p.get('price', 0))
-            sale_price = get_flat_price(p.get('sale_price', 0))
-            regular_price = get_flat_price(p.get('regular_price', 0))
-            
-            # احتساب السعر الأساسي ومقارنته بالسعر المخفض بشكل دقيق
-            base_price = regular_price if regular_price > 0 else price
-            if sale_price > 0 and price < base_price:
-                display_sale_price = price
-            else:
-                display_sale_price = sale_price
+            # --- معالجة فحص الأسعار الثلاثية الكاملة من منصة سلة دون تساوي قيمتها ---
+            price_val = get_flat_price(p.get('price', 0))
+            regular_val = get_flat_price(p.get('regular_price', 0))
+            sale_val = get_flat_price(p.get('sale_price', 0))
 
-            has_discount = 0 < display_sale_price < base_price
+            # السعر الأصلي الأساسي هو الحقل الافتراضي للأعلى قيمة
+            base_price = regular_val if regular_val > 0 else price_val
+            
+            if sale_val > 0 and sale_val < base_price:
+                display_sale_price = sale_val
+                has_discount = True
+            elif price_val < regular_val and price_val > 0:
+                display_sale_price = price_val
+                has_discount = True
+            else:
+                display_sale_price = base_price
+                has_discount = False
+
             discount_percent = int(((base_price - display_sale_price) / base_price) * 100) if has_discount and base_price > 0 else 0
             
             disp_status = "🟢 معروض ومتاح حالياً بالمتجر" if status == "sale" else "🔴 مخفي ومؤرشف في المسودات"
@@ -71,24 +76,31 @@ def render_products_page():
                 c_info, c_pricing, c_action = st.columns([3, 3, 2])
                 
                 with c_info:
-                    st.markdown(f"🆔 **معرف المنتج الرقمي:** `{p_id}`")
-                    st.markdown(f"🔢 **الرمز المخزني (SKU):** `{p_sku}`")
-                    # معالجة وعرض وسم الـ HTML للعنوان الترويجي بشكل سليم دون ظهوره كأكواد نصية مقروءة
+                    st.markdown(f"🆔 **معرف المنتج الرقمي الفريد:** `{p_id}`")
+                    st.markdown(f"🔢 **الرمز المخزني للصنف (SKU):** `{p_sku}`")
+                    # عرض مسمى العنوان الترويجي النقي المباشر بدون علامات حصر الأكواد
                     st.markdown(f"📢 **العنوان الترويجي الحالي للصنف:** <span style='color:#e67e22; font-weight:bold;'>{p_promotion}</span>", unsafe_allow_html=True)
                     st.markdown(f"🔗 **معاينة الصنف:** [🌐 تصفح رابط المنتج في المتجر]({p_url})")
-                    st.markdown(f"📦 **مخزون المستودع الحركي:** `{p.get('quantity', 0)} حبة` | 📈 **المبيعات:** `{p.get('sold_quantity', 0)} قطعة`")
+                    st.markdown(f"📦 **مخزون المستودع الحالي:** `{p.get('quantity', 0)} حبة` | 📈 **المبيعات الكلية:** `{p.get('sold_quantity', 0)} قطعة`")
                 
                 with c_pricing:
-                    st.markdown("<b style='color:#2c3e50;'>💰 هيكل وحاوية بيانات التسعير الشاملة:</b>", unsafe_allow_html=True)
+                    st.markdown("<b style='color:#2c3e50;'>💰 هيكلية وحاوية تفاصيل بيانات التسعير الشاملة:</b>", unsafe_allow_html=True)
                     
-                    # إظهار وتفصيل السعر الأصلي والسعر المخفض ونسبة الخصم دائماً للمستخدم
-                    st.markdown(f"""
-                    <div style="background:#ffffff; padding:12px; border-radius:8px; border:1px solid #e2e8f0; border-right:5px solid #0f5132;">
-                        <span style="color: #555; font-size:13px;">💵 السعر الأصلي الأساسي: <b>{base_price:,.2f} SAR</b></span><br>
-                        <span style="color: #555; font-size:13px;">🏷️ السعر المخفض الحالي: <b>{display_sale_price:,.2f} SAR</b></span><br>
-                        {"<span style='background:#d9534f; color:#fff; padding:2px 6px; border-radius:4px; font-size:11px; font-weight:bold; display:inline-block; margin-top:5px;'>🔥 نسبة التخفيض: " + str(discount_percent) + "% خصم</span>" if has_discount else "<span style='color:#888; font-size:11px; display:inline-block; margin-top:5px;'>🔴 لا يوجد خصم فعال حالياً</span>"}
-                    </div>
-                    """, unsafe_allow_html=True)
+                    if has_discount:
+                        st.markdown(f"""
+                        <div style="background:#fff3cd; padding:12px; border-radius:8px; border:1px solid #ffeba2; border-right:5px solid #ffc107;">
+                            <span style="text-decoration: line-through; color: #7f8c8d; font-size:13px; font-weight:600;">السعر الأصلي الأساسي: {base_price:,.2f} SAR</span><br>
+                            <b style="color: #c0392b; font-size:17px;">السعر المخفض النشط حالياً: {display_sale_price:,.2f} SAR</b><br>
+                            <span style="background:#c0392b; color:#fff; padding:2px 7px; border-radius:4px; font-size:11px; font-weight:bold; display:inline-block; margin-top:5px;">وفرت نسبة: {discount_percent}% خصم فعال 🔥</span>
+                        </div>
+                        """, unsafe_allow_html=True)
+                    else:
+                        st.markdown(f"""
+                        <div style="background:#e2e8f0; padding:12px; border-radius:8px; border:1px solid #cbd5e1; border-right:5px solid #4a5568;">
+                            <b style="color:#2d3748; font-size:15px;">السعر الأساسي الحالي: {base_price:,.2f} SAR</b><br>
+                            <span style="color:#718096; font-size:12px; display:inline-block; margin-top:5px;">🔴 لا يوجد خصم نشط حالياً على هذا المنتج</span>
+                        </div>
+                        """, unsafe_allow_html=True)
                         
                 with c_action:
                     st.markdown("<br>", unsafe_allow_html=True)
@@ -96,18 +108,18 @@ def render_products_page():
                         st.toast(f"✅ تم نسخ المعرف بنجاح: {p_id}")
                         
                     target_st = "hidden" if status == "sale" else "sale"
-                    btn_lbl = "👁️ إخفاء الفوري من المتجر" if status == "sale" else "👁️ إظهار الفوري بالمتجر"
+                    btn_lbl = "👁️ إخفاء الفوري من المتجر" if status == "sale" else "👁️ إظهار ونشر بالمتجر الإلكتروني"
                     btn_type = "secondary" if status == "sale" else "primary"
                     
                     if st.button(btn_lbl, key=f"sh_{p_id}_{idx}", type=btn_type, use_container_width=True):
-                        with st.spinner("جاري مزامنة حالة الظهور..."):
+                        with st.spinner("جاري تحديث ونشر الحالة للعملاء..."):
                             if update_product_status(p_id, target_st):
                                 st.success("✅ تم تحديث ونشر ظهور المنتج بنجاح!")
                                 st.rerun()
                                 
-                    with st.popover("✏️ تعديل الترويج"):
-                        new_promo = st.text_input("أدخل مسمى العنوان الترويجي الجديد:", value=(p_promotion if p_promotion != "لا يوجد عنوان ترويجي" else ""), key=f"promo_input_{p_id}_{idx}")
-                        if st.button("حفظ وتحديث الترويج", key=f"p_pr_btn_{p_id}_{idx}", type="primary", use_container_width=True):
+                    with st.popover("✏️ تعديل العنوان الترويجي"):
+                        new_promo = st.text_input("أدخل مسمى الترويج الجديد:", value=(p_promotion if p_promotion != "لا يوجد عنوان ترويجي" else ""), key=f"promo_input_{p_id}_{idx}")
+                        if st.button("حفظ وتحديث الترويج للمتجر", key=f"p_pr_btn_{p_id}_{idx}", type="primary", use_container_width=True):
                             with st.spinner("جاري حفظ العنوان..."):
                                 safe_api_request("PUT", f"https://api.salla.dev/admin/v2/products/{p_id}", headers, json={"promotion_title": new_promo, "price": base_price})
                                 st.success("✅ تم تحديث العنوان بنجاح!")
