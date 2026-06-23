@@ -4,7 +4,6 @@ import io
 import requests
 import json
 import logging
-import traceback
 import re
 from datetime import datetime
 from typing import Optional, List, Dict
@@ -34,7 +33,7 @@ def parse_products_cleanly(product_list: Optional[List]) -> str:
 
 def get_product_price(product: Dict) -> float:
     try:
-        price = product.get('price', {})
+        price = product.get('price', 0)
         return float(price.get('amount', 0)) if isinstance(price, dict) else float(price or 0)
     except (ValueError, TypeError): return 0.0
 
@@ -147,7 +146,6 @@ def process_excel_import(df: pd.DataFrame) -> Dict:
                 "get": {"type": str(row.get('Get_Type', 'product')).strip(), "quantity": int(row.get('Get_Quantity', 1)), "discount_type": str(row.get('Discount_Type', 'percentage')).strip()}
             }
             
-            # معالجة الـ IDs للمنتجات
             for key, col_name in [("buy", "Buy_Products_IDs"), ("get", "Get_Products_IDs")]:
                 p_str = str(row.get(col_name, '')).strip()
                 if p_str and p_str != 'nan':
@@ -166,3 +164,27 @@ def process_excel_import(df: pd.DataFrame) -> Dict:
         except Exception as e:
             results["errors"].append(f"❌ خطأ في الصف {idx+1}: {str(e)}")
     return results
+
+def update_product_status(product_id: int, status: str) -> bool:
+    headers = get_headers()
+    if not headers: return False
+    current = safe_api_request("GET", f"https://api.salla.dev/admin/v2/products/{product_id}", headers)
+    if not current or not current.get('data'): return False
+    p_data = current['data']
+    
+    # بناء كائن مسطح ومتوافق مع متطلبات سلة لمنع خطأ الـ 422
+    update_payload = {
+        "status": status,
+        "name": p_data.get('name'),
+        "channels": p_data.get('channels', ["app", "browser"])
+    }
+    
+    price_val = p_data.get('price')
+    update_payload['price'] = float(price_val.get('amount', 0)) if isinstance(price_val, dict) else float(price_val or 0)
+    
+    sale_val = p_data.get('sale_price')
+    if sale_val:
+        update_payload['sale_price'] = float(sale_val.get('amount', 0)) if isinstance(sale_val, dict) else float(sale_val or 0)
+        
+    res = safe_api_request("PUT", f"https://api.salla.dev/admin/v2/products/{product_id}", headers, json=update_payload)
+    return res is not None
