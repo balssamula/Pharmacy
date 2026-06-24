@@ -248,7 +248,7 @@ def render_offers_page():
             b1, b2, b3 = st.columns(3)
             with b1:
                 t_status = "inactive" if status == "active" else "active"
-                lbl = "	🛑 إيقاف العرض" if status == "active" else "▶️ إعادة تفعيل العرض"
+                lbl = "🛑 إيقاف العرض" if status == "active" else "▶️ إعادة تفعيل العرض"
                 if st.button(lbl, key=f"t_st_{offer_id}_{idx}", use_container_width=True):
                     safe_api_request("PUT", f"{SALLA_API_URL}/{offer_id}/status", headers, json={"status": t_status})
                     st.rerun()
