@@ -1,5 +1,5 @@
 import streamlit as st
-from datetime import datetime
+from datetime import datetime, timedelta
 import pandas as pd
 from utils import (
     get_headers, safe_api_request, SALLA_API_URL, generate_salla_excel_template,
@@ -53,6 +53,100 @@ def render_offers_page():
 
     st.divider()
 
+    # ==========================================
+    # ✅ أزرار الإجراءات الجماعية الجديدة
+    # ==========================================
+    st.markdown("### ⚡ إجراءات جماعية سريعة على العروض")
+    
+    col_bulk1, col_bulk2, col_bulk3 = st.columns(3)
+    
+    with col_bulk1:
+        # زر إيقاف جميع العروض المفعلة دفعة واحدة
+        if st.button("⏹️ إيقاف جميع العروض المفعلة", use_container_width=True, type="primary"):
+            active_offers = [o for o in raw_offers if o.get('status') == 'active']
+            if not active_offers:
+                st.warning("⚠️ لا توجد عروض مفعلة حالياً لإيقافها")
+            else:
+                with st.spinner(f"🔄 جاري إيقاف {len(active_offers)} عرض مفعل..."):
+                    success_count = 0
+                    for offer in active_offers:
+                        offer_id = offer.get('id')
+                        if offer_id:
+                            res = safe_api_request(
+                                "PUT", 
+                                f"{SALLA_API_URL}/{offer_id}/status", 
+                                headers, 
+                                json={"status": "inactive"}
+                            )
+                            if res:
+                                success_count += 1
+                    st.success(f"✅ تم إيقاف {success_count} عرض بنجاح من أصل {len(active_offers)}")
+                    if success_count > 0:
+                        st.rerun()
+    
+    with col_bulk2:
+        # زر تمديد العروض المنتهية بتاريخ محدد
+        with st.popover("📅 تمديد العروض المنتهية"):
+            st.markdown("تمديد العروض التي تنتهي في تاريخ محدد")
+            target_expiry_date = st.date_input(
+                "اختر تاريخ انتهاء العرض الحالي:",
+                value=datetime.now().date(),
+                key="bulk_extend_target_date"
+            )
+            new_expiry_date = st.date_input(
+                "التاريخ الجديد للتمديد:",
+                value=datetime.now().date() + timedelta(days=30),
+                key="bulk_extend_new_date"
+            )
+            new_expiry_datetime = datetime.combine(new_expiry_date, datetime.now().time()).strftime('%Y-%m-%d %H:%M:%S')
+            
+            if st.button("🔄 تطبيق التمديد على جميع العروض", use_container_width=True, type="primary"):
+                target_str = target_expiry_date.strftime('%Y-%m-%d')
+                matching_offers = []
+                for offer in raw_offers:
+                    exp_date = offer.get('expiry_date', '')
+                    if exp_date and exp_date.startswith(target_str):
+                        matching_offers.append(offer)
+                
+                if not matching_offers:
+                    st.warning(f"⚠️ لا توجد عروض تنتهي في تاريخ {target_str}")
+                else:
+                    with st.spinner(f"🔄 جاري تمديد {len(matching_offers)} عرض..."):
+                        success_count = 0
+                        for offer in matching_offers:
+                            offer_id = offer.get('id')
+                            if offer_id:
+                                # جلب العرض الحالي
+                                current = safe_api_request("GET", f"{SALLA_API_URL}/{offer_id}", headers)
+                                if current and current.get('data'):
+                                    offer_data = current['data']
+                                    # تحديث تاريخ الانتهاء فقط
+                                    offer_data['expiry_date'] = new_expiry_datetime
+                                    # إزالة الحقول غير القابلة للتعديل
+                                    for key in ['id', 'created_at', 'updated_at']:
+                                        offer_data.pop(key, None)
+                                    
+                                    res = safe_api_request(
+                                        "PUT",
+                                        f"{SALLA_API_URL}/{offer_id}",
+                                        headers,
+                                        json=offer_data
+                                    )
+                                    if res:
+                                        success_count += 1
+                        st.success(f"✅ تم تمديد {success_count} عرض بنجاح من أصل {len(matching_offers)}")
+                        if success_count > 0:
+                            st.rerun()
+    
+    with col_bulk3:
+        # زر تصدير العروض المفلترة
+        if st.button("📥 تصدير العروض المفلترة", use_container_width=True, type="secondary"):
+            # سنقوم بتصدير العروض المفلترة بناءً على شروط البحث الحالية
+            st.session_state["export_filtered"] = True
+            st.rerun()
+    
+    st.divider()
+
     # --- حاوية إنشاء عرض جديد متكامل ومطور بمجموعات العملاء ونسبة خصم Y ---
     with st.expander("➕ إنشاء عرض ترويجي جديد", expanded=False):
         st.markdown("### 📝 تفاصيل العرض الأساسية")
@@ -98,7 +192,6 @@ def render_offers_page():
             
             new_discount_type_ar = st.selectbox("نوع التخفيض المطبق على Y:", ["منتج مجاني", "خصم بنسبة"], key="cre_dtype_ar")
             
-            # تلبية طلبك بظهور خانة نسبة الخصم عند اختيار "خصم بنسبة" في شاشة الإنشاء
             if new_discount_type_ar == "خصم بنسبة":
                 new_discount_amount = st.number_input("نسبة الخصم المطبقة على Y (%):", min_value=1.0, max_value=100.0, value=50.0)
                 new_discount_type = "percentage"
@@ -158,8 +251,67 @@ def render_offers_page():
     with f3: filter_date_str = st.text_input("📅 ابحث عن تاريخ انتهاء العرض (YYYY-MM-DD):")
 
     now = datetime.now()
+    
+    # ✅ تصفية العروض بناءً على معايير البحث
+    filtered_offers = []
+    for offer in raw_offers:
+        offer_id = offer.get('id', 'N/A')
+        offer_name = offer.get('name', 'عرض بدون اسم')
+        status = offer.get('status', 'inactive')
+        
+        start_date = safe_parse_date(offer.get('start_date'))
+        exp_date = safe_parse_date(offer.get('expiry_date'))
+        
+        if search_offer and (search_offer.lower() not in offer_name.lower() and search_offer not in str(offer_id)):
+            continue
+        if status_filter == "نشط" and status != "active":
+            continue
+        if status_filter == "غير نشط" and status == "active":
+            continue
+        
+        if filter_date_str.strip():
+            try:
+                target_date = datetime.strptime(filter_date_str.strip(), "%Y-%m-%d").date()
+                if not exp_date or exp_date.date() != target_date:
+                    continue
+            except ValueError:
+                st.warning("⚠️ صيغة تاريخ البحث الإلزامية هي: YYYY-MM-DD")
+                st.stop()
+        
+        filtered_offers.append(offer)
+    
+    # ✅ تخزين العروض المفلترة في session_state للتصدير
+    st.session_state["filtered_offers"] = filtered_offers
+    
+    # ✅ زر تصدير العروض المفلترة (يظهر فقط إذا كانت هناك فلترة)
+    if filtered_offers and len(filtered_offers) < len(raw_offers):
+        col_export_filtered1, col_export_filtered2 = st.columns([1, 5])
+        with col_export_filtered1:
+            if st.button("📥 تصدير العروض المفلترة", use_container_width=True, type="secondary"):
+                if filtered_offers:
+                    excel_data = export_offers_to_excel(filtered_offers)
+                    if excel_data:
+                        st.download_button(
+                            label="📥 تحميل العروض المفلترة",
+                            data=excel_data,
+                            file_name=f"filtered_offers_export_{datetime.now().strftime('%Y%m%d_%H%M%S')}.xlsx",
+                            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                            key="download_filtered_offers",
+                            type="primary"
+                        )
+    
+    st.divider()
+    
+    # عرض عدد العروض المفلترة
+    st.markdown(f"""
+        <div style="background: #f0f4f8; padding: 8px 16px; border-radius: 8px; margin-bottom: 14px; border-right: 4px solid #00b4d8;">
+            <strong>📊 عدد العروض: {len(filtered_offers)} عرض</strong>
+            {f' (تم تصفيتها من أصل {len(raw_offers)})' if len(filtered_offers) < len(raw_offers) else ''}
+        </div>
+    """, unsafe_allow_html=True)
 
-    for idx, offer in enumerate(raw_offers):
+    # عرض العروض
+    for idx, offer in enumerate(filtered_offers):
         offer_id = offer.get('id', 'N/A')
         offer_name = offer.get('name', 'عرض بدون اسم')
         status = offer.get('status', 'inactive')
@@ -170,21 +322,8 @@ def render_offers_page():
         start_date = safe_parse_date(offer.get('start_date'))
         exp_date = safe_parse_date(offer.get('expiry_date'))
         
-        if search_offer and (search_offer.lower() not in offer_name.lower() and search_offer not in str(offer_id)): continue
-        if status_filter == "نشط" and status != "active": continue
-        if status_filter == "غير نشط" and status == "active": continue
-        
-        if filter_date_str.strip():
-            try:
-                target_date = datetime.strptime(filter_date_str.strip(), "%d-%m-%Y").date()
-                if not exp_date or exp_date.date() != target_date: continue
-            except ValueError:
-                st.warning("⚠️ صيغة تاريخ البحث الإلزامية هي: YYYY-MM-DD")
-                st.stop()
-        
         badge = "🟢 نشط بالمتجر" if status == "active" else "🔴 متوقف حالياً"
         
-        # ضبط شارات التواريخ الاحترافية الثلاثية المطلوبة بدقة كاملة (إظهار لم يبدأ بعد)
         if start_date and start_date > now:
             exp_badge = "⏳ لم يبدأ بعد"
         elif exp_date and exp_date < now:
@@ -221,7 +360,6 @@ def render_offers_page():
                 st.markdown(f"📅 **توقيت انتهاء العرض:** `{offer.get('expiry_date', 'بدون تاريخ (مستمر)')}`")
                 st.markdown(f"🛡️ **الحد الأقصى للخصم:** `{offer.get('max_discount_amount', 0)} SAR` | 💵 **الحد الأدنى للشراء:** `{offer.get('min_purchase_amount', 0)} SAR`")
                 
-                # عرض مجموعات العملاء بوضوح في البيانات
                 c_groups_raw = offer.get('customer_groups', [])
                 c_groups_rendered = ", ".join([str(g.get('name', g.get('id', g))) if isinstance(g, dict) else str(g) for g in c_groups_raw]) if c_groups_raw else "كل المجموعات"
                 st.markdown(f"👥 **مجموعة العملاء المستهدفة:** `{c_groups_rendered}`")
@@ -234,7 +372,6 @@ def render_offers_page():
             col_x, col_y = st.columns(2)
             with col_x:
                 st.markdown("<b style='color:#0f1c2e;'>🛒 مجموعة الشراء (X) - [إذا اشترى العميل]:</b>", unsafe_allow_html=True)
-                # استخدام دالة عزل مخصصة لكل حلقة لمنع تداخل الأسماء والعروض
                 st.text(parse_products_cleanly(offer.get('buy', {})))
                 st.caption(f"الكمية المطلوبة: {offer.get('buy', {}).get('quantity', 1)} قطعة")
             with col_y:
@@ -253,7 +390,7 @@ def render_offers_page():
                     safe_api_request("PUT", f"{SALLA_API_URL}/{offer_id}/status", headers, json={"status": t_status})
                     st.rerun()
             with b2:
-                if st.button("🔖 عكس تطبيق العرض مع الكوبون	⏯", key=f"t_cp_{offer_id}_{idx}", use_container_width=True):
+                if st.button("🔖 عكس تطبيق العرض مع الكوبون ⏯", key=f"t_cp_{offer_id}_{idx}", use_container_width=True):
                     safe_api_request("PUT", f"{SALLA_API_URL}/{offer_id}", headers, json={"applied_with_coupon": not offer.get('applied_with_coupon', False)})
                     st.rerun()
             with b3:
@@ -283,7 +420,6 @@ def render_offers_page():
                 selected_ed_chan_key = [k for k, v in CHANNELS_MAP.items() if v == ed_chan_ar][0]
                 selected_ed_app_key = [k for k, v in APPLIED_TO_MAP.items() if v == ed_applied_ar][0]
 
-                # قراءة وتعديل مصفوفة مجموعات العملاء
                 existing_cg_str = ", ".join([str(g.get('id', g)) if isinstance(g, dict) else str(g) for g in offer.get('customer_groups', [])])
                 ed_cust_groups = st.text_input("تعديل مجموعة العملاء المشمولة (ضع بينهم فاصلة):", value=existing_cg_str, key=f"ed_cg_{offer_id}_{idx}")
 
@@ -302,7 +438,6 @@ def render_offers_page():
                 buy_p_ids = ",".join([str(p.get('id', p)) if isinstance(p, dict) else str(p) for p in buy_obj.get('products', [])]) if buy_obj else ""
                 get_p_ids = ",".join([str(p.get('id', p)) if isinstance(p, dict) else str(p) for p in get_obj.get('products', [])]) if get_obj else ""
                 
-                # التغيير الشرطي الكامل لحقول التعديل لتطابق التحديث الجديد ونسبة خصم Y
                 if selected_ed_type_key == "buy_x_get_y":
                     eq1, eq2 = st.columns(2)
                     with eq1:
@@ -317,7 +452,6 @@ def render_offers_page():
                     current_disc_type_raw = "خصم بنسبة" if get_obj.get('discount_type', 'free-product') == 'percentage' else "منتج مجاني"
                     ed_discount_type_ar = st.selectbox("تعديل نوع الخصم Y:", ["منتج مجاني", "خصم بنسبة"], index=1 if current_disc_type_raw == "خصم بنسبة" else 0, key=f"ed_dt_ar_{offer_id}_{idx}")
                     
-                    # تلبية طلبك بظهور خانة نسبة الخصم عند اختيار خصم بنسبة في واجهة التعديل أيضاً
                     if ed_discount_type_ar == "خصم بنسبة":
                         ed_disc_amt = st.number_input("تعديل نسبة الخصم المطبقة على Y (%):", min_value=1.0, max_value=100.0, value=safe_float(get_obj.get('discount_amount', 50.0)), key=f"ed_da_{offer_id}_{idx}")
                         ed_disc_type = "percentage"
