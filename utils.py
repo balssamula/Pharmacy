@@ -16,6 +16,25 @@ logger = logging.getLogger(__name__)
 
 SALLA_API_URL = "https://api.salla.dev/admin/v2/specialoffers"
 
+# قواميس الترطيب والربط الموحدة بناءً على منصة سلة
+OFFER_TYPES_MAP = {
+    "buy_x_get_y": "اذا اشترى العميل X يحصل على Y",
+    "fixed_amount": "مبلغ ثابت من قيمة مشتريات العميل",
+    "percentage": "نسبة من قيمة مشتريات العميل",
+    "discounts_table": "جدول الخصومات",
+    "special_price": "سعر ثابت",
+    "tiered_offer": "عرض الفئات"
+}
+REV_OFFER_TYPES_MAP = {v: k for k, v in OFFER_TYPES_MAP.items()}
+
+CHANNELS_MAP = {
+    "browser": "متصفح المتجر",
+    "app": "تطبيق المتجر",
+    "browser_and_application": "متصفح وتطبيق المتجر",
+    "pos": "سلة بوينت"
+}
+REV_CHANNELS_MAP = {v: k for k, v in CHANNELS_MAP.items()}
+
 def safe_parse_date(date_str: Optional[str]) -> Optional[datetime]:
     if not date_str: return None
     for fmt in ('%Y-%m-%d %H:%M:%S', '%Y-%m-%d', '%a %b %d %Y %H:%M:%S', '%Y-%m-%dT%H:%M:%S'):
@@ -34,10 +53,7 @@ def parse_products_cleanly(offer_section: Dict) -> str:
     if products and isinstance(products, list):
         for p in products:
             if isinstance(p, dict):
-                name = p.get('name', 'غير معرف')
-                p_id = p.get('id', 'N/A')
-                sku = p.get('sku', 'لا يوجد SKU')
-                clean_elements.append(f"• صنف: {name} [ID: {p_id}] [SKU: {sku}]")
+                clean_elements.append(f"• صنف: {p.get('name', 'غير معرف')} [ID: {p.get('id', 'N/A')}] [SKU: {p.get('sku', 'لا يوجد SKU')}]")
             else:
                 clean_elements.append(f"• معرف منتج رقم: {p}")
                 
@@ -49,7 +65,7 @@ def parse_products_cleanly(offer_section: Dict) -> str:
             else:
                 clean_elements.append(f"• معرف تصنيف رقم: {c}")
                 
-    return "\n".join(clean_elements) if clean_elements else "كل المنتجات المشمولة بالعرض"
+    return "\n".join(clean_elements) if clean_elements else "كل الأصناف المشمولة"
 
 def get_flat_price(price_field: Any) -> float:
     if not price_field: return 0.0
@@ -79,9 +95,9 @@ def get_headers():
         return None
     return {"Authorization": f"Bearer {token}", "Content-Type": "application/json"}
 
-def style_excel_file(ws, is_template=False):
-    header_fill = PatternFill(start_color="0F1C2E", end_color="0F1C2E", fill_type="solid")
-    header_font = Font(name="Segoe UI", size=11, bold=True, color="FFFFFF")
+def style_excel_file(ws, is_template=False, header_color="0F1C2E"):
+    header_fill = PatternFill(start_color=header_color, end_color=header_color, fill_type="solid")
+    header_font = Font(name="Segoe UI", size=11, bold=True, color="FFFFFF" if header_color != "00ebcf" else "0F1C2E")
     center_alignment = Alignment(horizontal="center", vertical="center", wrap_text=True)
     thin_border = Border(
         left=Side(style='thin', color='DDDDDD'), right=Side(style='thin', color='DDDDDD'),
@@ -104,32 +120,159 @@ def style_excel_file(ws, is_template=False):
     for col in ws.columns:
         max_len = max(len(str(cell.value or '')) for cell in col)
         col_letter = get_column_letter(col[0].column)
-        ws.column_dimensions[col_letter].width = min(max(max_len + 4, 15), 35)
+        ws.column_dimensions[col_letter].width = min(max(max_len + 4, 16), 35)
 
 def export_offers_to_excel(offers: List[Dict]) -> bytes:
     try:
         data = []
         for offer in offers:
+            o_type_raw = offer.get('offer_type', '')
+            o_channel_raw = offer.get('applied_channel', 'browser_and_application')
+            
             buy_p = [str(p.get('id', p)) if isinstance(p, dict) else str(p) for p in offer.get('buy', {}).get('products', [])]
             get_p = [str(p.get('id', p)) if isinstance(p, dict) else str(p) for p in offer.get('get', {}).get('products', [])]
+            
             data.append({
-                'المعرف': offer.get('id', ''), 'اسم العرض': offer.get('name', ''), 'النوع': offer.get('offer_type', ''),
-                'الحالة': 'مفعل' if offer.get('status') == 'active' else 'غير مفعل',
+                'المعرف': offer.get('id', ''), 
+                'اسم العرض': offer.get('name', ''), 
+                'النوع': OFFER_TYPES_MAP.get(o_type_raw, o_type_raw),
+                'منصة العرض': CHANNELS_MAP.get(o_channel_raw, o_channel_raw),
+                'الحالة': 'active' if offer.get('status') == 'active' else 'inactive',
                 'مع كوبون': 'نعم' if offer.get('applied_with_coupon', False) else 'لا',
-                'تاريخ البدء': offer.get('start_date', ''), 'تاريخ الانتهاء': offer.get('expiry_date', ''),
-                'منتجات الشراء': ', '.join(buy_p), 'كمية الشراء': offer.get('buy', {}).get('quantity', 1),
-                'منتجات العرض': ', '.join(get_p), 'كمية العرض': offer.get('get', {}).get('quantity', 1),
-                'الرسالة': offer.get('message', '')
+                'تاريخ البدء': offer.get('start_date', ''), 
+                'تاريخ الانتهاء': offer.get('expiry_date', ''),
+                'منتجات الشراء': ', '.join(buy_p), 
+                'كمية الشراء (X)': offer.get('buy', {}).get('quantity', 1),
+                'منتجات الهدية': ', '.join(get_p), 
+                'كمية الهدية (Y)': offer.get('get', {}).get('quantity', 1),
+                'نوع الخصم المطبق': 'خصم بنسبة' if offer.get('get', {}).get('discount_type') == 'percentage' else 'منتج مجاني',
+                'قيمة أو نسبة الخصم': offer.get('get', {}).get('discount_amount', 0),
+                'الرسالة الترويجية': offer.get('message', '')
             })
         df = pd.DataFrame(data)
         buffer = io.BytesIO()
         with pd.ExcelWriter(buffer, engine='openpyxl') as writer:
             df.to_excel(writer, index=False)
-            style_excel_file(writer.sheets['Sheet1'], is_template=False)
+            style_excel_file(writer.sheets['Sheet1'], is_template=False, header_color="0F1C2E")
         return buffer.getvalue()
     except Exception as e:
-        st.error(f"⚠️ خطأ في التصدير: {str(e)}")
+        st.error(f"⚠️ خطأ في تصدير العروض: {str(e)}")
         return b""
+
+def generate_salla_excel_template() -> bytes:
+    from openpyxl import Workbook
+    output = io.BytesIO()
+    wb = Workbook()
+    ws = wb.active
+    ws.title = "قائمة العروض"
+    
+    ws.append(["💡 إرشادات: حقول (منتجات الهدية، كمية الهدية، نوع الخصم) تخص فقط نوع العرض (اذا اشترى العميل X يحصل على Y). بقية الأنواع تكتفي بقيمة الخصم المباشر."])
+    ws.merge_cells('A1:T1')
+    ws.row_dimensions[1].height = 24
+    
+    columns = [
+        "Action", "Offer_ID", "Offer_Name", "Offer_Type", "Applied_Channel",
+        "Applied_To", "With_Coupon", "Offer_Status", "Start_Date_Time", "Expiry_Date_Time", 
+        "Buy_Type", "Buy_Quantity", "Buy_Products_IDs", "Get_Type", "Get_Quantity", 
+        "Discount_Type", "Discount_Amount", "Get_Products_IDs", "Offer_Message"
+    ]
+    ws.append(columns)
+    ws.append(["create", "", "عرض بلسم الكبير", "اذا اشترى العميل X يحصل على Y", "متصفح وتطبيق المتجر", "product", "لا", "active", "2026-06-24 00:00:00", "2026-12-31 23:59:59", "product", 1, "12345", "product", 1, "منتج مجاني", 0, "67890", "خصم خاص"])
+    
+    # تطبيق لون رأس الجدول المطلوب #00ebcf
+    style_excel_file(ws, is_template=True, header_color="00EBCF")
+    
+    # ربط الخيارات العربية بالقوائم المنسدلة في الإكسيل لمنع الأخطاء
+    types_str = ",".join(OFFER_TYPES_MAP.values())
+    channels_str = ",".join(CHANNELS_MAP.values())
+    
+    dv_action = DataValidation(type="list", formula1='"create,update,delete"', allow_blank=True)
+    ws.add_data_validation(dv_action)
+    dv_action.add("A3:A100")
+    
+    dv_type = DataValidation(type="list", formula1=f'"{types_str}"', allow_blank=True)
+    ws.add_data_validation(dv_type)
+    dv_type.add("D3:D100")
+    
+    dv_channel = DataValidation(type="list", formula1=f'"{channels_str}"', allow_blank=True)
+    ws.add_data_validation(dv_channel)
+    dv_channel.add("E3:E100")
+    
+    dv_coupon = DataValidation(type="list", formula1='"نعم,لا"', allow_blank=True)
+    ws.add_data_validation(dv_coupon)
+    dv_coupon.add("G3:G100")
+    
+    dv_status = DataValidation(type="list", formula1='"active,inactive"', allow_blank=True)
+    ws.add_data_validation(dv_status)
+    dv_status.add("H3:H100")
+    
+    dv_dtype = DataValidation(type="list", formula1='"منتج مجاني,خصم بنسبة"', allow_blank=True)
+    ws.add_data_validation(dv_dtype)
+    dv_dtype.add("P3:P100")
+    
+    wb.save(output)
+    return output.getvalue()
+
+def process_excel_import(df: pd.DataFrame) -> Dict:
+    results = {"success": [], "errors": []}
+    headers = get_headers()
+    if not headers:
+        results["errors"].append("❌ الرجاء إدخال مفتاح الربط أولاً")
+        return results
+    
+    for idx, row in df.iterrows():
+        if row.isna().all() or str(row.iloc[0]).strip().startswith("📋") or str(row.iloc[0]).strip().startswith("💡"): continue
+        try:
+            action = str(row.get('Action', 'create')).strip().lower()
+            offer_name = str(row.get('Offer_Name', 'عرض جديد')).strip()
+            offer_id = row.get('Offer_ID')
+            if offer_id and pd.notna(offer_id): offer_id = int(float(offer_id))
+            
+            # تحويل القيم العربية القادمة من الإكسيل إلى القيم الإنجليزية المقبولة في API سلة
+            arabic_type = str(row.get('Offer_Type', '')).strip()
+            arabic_channel = str(row.get('Applied_Channel', '')).strip()
+            
+            api_type = REV_OFFER_TYPES_MAP.get(arabic_type, "buy_x_get_y")
+            api_channel = REV_CHANNELS_MAP.get(arabic_channel, "browser_and_application")
+            
+            disc_type_raw = str(row.get('Discount_Type', '')).strip()
+            api_disc_type = "percentage" if disc_type_raw == "خصم بنسبة" else "free-product"
+            
+            offer_data = {
+                "name": offer_name,
+                "offer_type": api_type,
+                "applied_channel": api_channel,
+                "applied_to": str(row.get('Applied_To', 'product')).strip(),
+                "start_date": str(row.get('Start_Date_Time', datetime.now().strftime('%Y-%m-%d %H:%M:%S'))),
+                "expiry_date": str(row.get('Expiry_Date_Time', datetime.now().strftime('%Y-%m-%d %H:%M:%S'))),
+                "message": str(row.get('Offer_Message', '')).strip(),
+                "status": str(row.get('Offer_Status', 'active')).strip().lower(),
+                "applied_with_coupon": str(row.get('With_Coupon', 'لا')).strip() == 'نعم',
+                "buy": {"type": str(row.get('Buy_Type', 'product')).strip(), "quantity": int(row.get('Buy_Quantity', 1))},
+                "get": {"type": str(row.get('Get_Type', 'product')).strip(), "quantity": int(row.get('Get_Quantity', 1)), "discount_type": api_disc_type}
+            }
+            
+            for key, col_name in [("buy", "Buy_Products_IDs"), ("get", "Get_Products_IDs")]:
+                p_str = str(row.get(col_name, '')).strip()
+                if p_str and p_str != 'nan':
+                    ids = [int(p) for p in re.split(r'[,\s;]+', p_str) if p.strip().isdigit()]
+                    if ids: offer_data[key]["products"] = ids
+                    
+            disc_amt = float(row.get('Discount_Amount', 0) or 0)
+            if disc_amt > 0: offer_data["get"]["discount_amount"] = disc_amt
+
+            if action == 'create':
+                res = safe_api_request("POST", SALLA_API_URL, headers, json=offer_data)
+                if res: results["success"].append(f"✅ تم إنشاء العرض: {offer_name}")
+            elif action == 'update' and offer_id:
+                res = safe_api_request("PUT", f"{SALLA_API_URL}/{offer_id}", headers, json=offer_data)
+                if res: results["success"].append(f"✅ تم تحديث العرض ID: {offer_id}")
+            elif action == 'delete' and offer_id:
+                res = safe_api_request("DELETE", f"{SALLA_API_URL}/{offer_id}", headers)
+                if res: results["success"].append(f"✅ تم حذف العرض ID: {offer_id}")
+        except Exception as e:
+            results["errors"].append(f"❌ خطأ في الصف {idx+1}: {str(e)}")
+    return results
 
 def export_products_to_excel(products: List[Dict]) -> bytes:
     try:
@@ -149,7 +292,7 @@ def export_products_to_excel(products: List[Dict]) -> bytes:
             
             data.append({
                 'المعرف': p.get('id', ''), 'الاسم': p.get('name', ''), 'SKU': p.get('sku', ''),
-                'السعر الأساسي': base_price, 'السعر المخفض': sale_price if sale_price > 0 else 'لا يوجد',
+                'السعر الأساسي الأصل': base_price, 'السعر المخفض الحالي': sale_price if sale_price > 0 else 'لا يوجد',
                 'خاضع للضريبة': 'نعم' if p.get('with_tax', True) else 'لا',
                 'العنوان الترويجي': promo_title, 'العنوان الفرعي': promo_sub,
                 'تاريخ بداية التخفيض': sale_start, 'تاريخ نهاية التخفيض': sale_end,
@@ -160,106 +303,15 @@ def export_products_to_excel(products: List[Dict]) -> bytes:
         buffer = io.BytesIO()
         with pd.ExcelWriter(buffer, engine='openpyxl') as writer:
             df.to_excel(writer, index=False)
-            style_excel_file(writer.sheets['Sheet1'], is_template=False)
+            style_excel_file(writer.sheets['Sheet1'], is_template=False, header_color="0F1C2E")
         return buffer.getvalue()
     except Exception as e:
-        st.error(f"⚠️ خطأ في التصدير: {str(e)}")
+        st.error(f"⚠️ خطأ في تصدير المنتجات: {str(e)}")
         return b""
 
-def generate_salla_excel_template() -> bytes:
-    from openpyxl import Workbook
-    output = io.BytesIO()
-    wb = Workbook()
-    ws = wb.active
-    ws.title = "قائمة العروض"
-    
-    ws.append(["📋 تعليمات: يرجى استخدام القوائم المنسدلة المدمجة داخل الخلايا لمنع حدوث أي خطأ في الإدخال."])
-    ws.merge_cells('A1:S1')
-    ws.row_dimensions[1].height = 24
-    
-    columns = [
-        "Action", "Offer_ID", "Offer_Name", "Offer_Type", "Applied_Channel",
-        "Applied_To", "With_Coupon", "Offer_Status", "Start_Date_Time", "Expiry_Date_Time", 
-        "Buy_Type", "Buy_Quantity", "Buy_Products_IDs", "Get_Type", "Get_Quantity", 
-        "Discount_Type", "Discount_Amount", "Get_Products_IDs", "Offer_Message"
-    ]
-    ws.append(columns)
-    ws.append(["create", "", "1000 / عرض 1+1 مجاناً", "buy_x_get_y", "browser_and_application", "product", "لا", "active", "2026-06-23 12:00:00", "2026-12-31 23:59:59", "product", 1, "12345", "product", 1, "free-product", 0, "67890", "عرض 1+1 مجاناً"])
-    
-    style_excel_file(ws, is_template=True)
-    
-    dv_action = DataValidation(type="list", formula1='"create,update,delete"', allow_blank=True)
-    ws.add_data_validation(dv_action)
-    dv_action.add("A3:A100")
-    
-    dv_coupon = DataValidation(type="list", formula1='"نعم,لا"', allow_blank=True)
-    ws.add_data_validation(dv_coupon)
-    dv_coupon.add("G3:G100")
-    
-    dv_status = DataValidation(type="list", formula1='"active,inactive"', allow_blank=True)
-    ws.add_data_validation(dv_status)
-    dv_status.add("H3:H100")
-    
-    wb.save(output)
-    return output.getvalue()
-
-def process_excel_import(df: pd.DataFrame) -> Dict:
-    results = {"success": [], "errors": []}
-    headers = get_headers()
-    if not headers:
-        results["errors"].append("❌ الرجاء إدخال مفتاح الربط أولاً")
-        return results
-    
-    for idx, row in df.iterrows():
-        if row.isna().all() or str(row.iloc[0]).strip().startswith("📋"): continue
-        try:
-            action = str(row.get('Action', 'create')).strip().lower()
-            offer_name = str(row.get('Offer_Name', 'عرض جديد')).strip()
-            offer_id = row.get('Offer_ID')
-            if offer_id and pd.notna(offer_id):
-                offer_id = int(float(offer_id))
-            
-            offer_data = {
-                "name": offer_name,
-                "offer_type": str(row.get('Offer_Type', 'buy_x_get_y')).strip(),
-                "applied_channel": "browser_and_application",
-                "applied_to": str(row.get('Applied_To', 'product')).strip(),
-                "start_date": str(row.get('Start_Date_Time', datetime.now().strftime('%Y-%m-%d %H:%M:%S'))),
-                "expiry_date": str(row.get('Expiry_Date_Time', datetime.now().strftime('%Y-%m-%d %H:%M:%S'))),
-                "message": str(row.get('Offer_Message', '')).strip(),
-                "status": str(row.get('Offer_Status', 'active')).strip().lower(),
-                "applied_with_coupon": str(row.get('With_Coupon', 'لا')).strip() == 'نعم',
-                "buy": {"type": str(row.get('Buy_Type', 'product')).strip(), "quantity": int(row.get('Buy_Quantity', 1))},
-                "get": {"type": str(row.get('Get_Type', 'product')).strip(), "quantity": int(row.get('Get_Quantity', 1)), "discount_type": str(row.get('Discount_Type', 'percentage')).strip()}
-            }
-            
-            for key, col_name in [("buy", "Buy_Products_IDs"), ("get", "Get_Products_IDs")]:
-                p_str = str(row.get(col_name, '')).strip()
-                if p_str and p_str != 'nan':
-                    ids = [int(p) for p in re.split(r'[,\s;]+', p_str) if p.strip().isdigit()]
-                    if ids: offer_data[key]["products"] = ids
-
-            if action == 'create':
-                res = safe_api_request("POST", SALLA_API_URL, headers, json=offer_data)
-                if res: results["success"].append(f"✅ تم إنشاء العرض: {offer_name}")
-            elif action == 'update' and offer_id:
-                res = safe_api_request("PUT", f"{SALLA_API_URL}/{offer_id}", headers, json=offer_data)
-                if res: results["success"].append(f"✅ تم تحديث العرض ID: {offer_id}")
-            elif action == 'delete' and offer_id:
-                res = safe_api_request("DELETE", f"{SALLA_API_URL}/{offer_id}", headers)
-                if res: results["success"].append(f"✅ تم حذف العرض ID: {offer_id}")
-        except Exception as e:
-            results["errors"].append(f"❌ خطأ في الصف {idx+1}: {str(e)}")
-    return results
-
 def update_product_status(product_id: int, status: str) -> bool:
-    """تعديل الحالة باستخدام رابط الميثود الصارم لـ سلة لمنع تداخل أو مسح الأسعار"""
     headers = get_headers()
     if not headers: return False
-    
-    # الطلب الصحيح والمضمون 100% لتحديث الظهور دون تلمس حقول الأسعار
     url = f"https://api.salla.dev/admin/v2/products/{product_id}/status"
-    payload = {"status": status}
-    
-    res = safe_api_request("POST", url, headers, json=payload)
+    res = safe_api_request("POST", url, headers, json={"status": status})
     return res is not None
