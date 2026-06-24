@@ -2,7 +2,8 @@ import streamlit as st
 from utils import (
     get_headers, safe_float, get_customers_list, create_customer, update_customer_api,
     delete_customer_api, get_customer_groups_list, create_customer_group,
-    update_customer_group_api, delete_customer_group_api
+    update_customer_group_api, delete_customer_group_api,
+    export_customers_to_excel, export_customer_groups_to_excel
 )
 
 def render_customers_page():
@@ -11,11 +12,10 @@ def render_customers_page():
     headers = get_headers()
     if not headers: return
 
-    # تقسيم الصفحة إلى علامات تبويب: إدارة العملاء / إدارة المجموعات
     tab_customers, tab_groups = st.tabs(["👤 إدارة ملفات العملاء", "🏷️ المجموعات والتصنيفات"])
 
     # ==========================================
-    # علامة التبويب الأولى: إدارة العملاء
+    # 👤 علامة التبويب الأولى: إدارة العملاء
     # ==========================================
     with tab_customers:
         st.markdown("### 👤 التحكم في بيانات العملاء والمشتريات")
@@ -27,7 +27,7 @@ def render_customers_page():
                 c_first = st.text_input("الاسم الأول للعميل:", key="c_first_new")
                 c_last = st.text_input("اسم العائلة:", key="c_last_new")
                 c_email = st.text_input("البريد الإلكتروني:", key="c_email_new")
-                c_gender = st.selectbox("الجنس:", ["male", "female"], format_func=lambda x: "ذكر" if x=="male" else "أنثى", key="c_gen_new")
+                c_gender = st.selectbox("الجنس:", ["male", "female"], format_func=lambda x: "ذكر" if x=="male" else "أنثى", key="c_gender_new")
             with cc2:
                 c_mobile = st.text_input("رقم الجوال (بدون صفر أو رمز الدولة):", key="c_mob_new")
                 c_code = st.text_input("رمز الدولة للجوال:", value="+966", key="c_code_new")
@@ -45,23 +45,33 @@ def render_customers_page():
 
         st.divider()
         
-        # البحث عن عميل ومزامنة الكشف
+        # شريط البحث والجلب
         search_kw = st.text_input("🔍 ابحث عن عميل برقم الجوال، البريد الإلكتروني أو الاسم:")
         with st.spinner("جاري جلب بيانات العملاء..."):
             res_cust = get_customers_list(keyword=search_kw)
             
         if res_cust and res_cust.get("data"):
             customers = res_cust["data"]
+            
+            # زر تصدير العملاء المنسق باحترافية
+            st.download_button(
+                label="📥 تصدير قائمة العملاء الحالية إلى Excel",
+                data=export_customers_to_excel(customers),
+                file_name="Balsem_Customers_Report.xlsx",
+                mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                key="export_customers_btn_excel"
+            )
+            st.markdown("<br>", unsafe_allow_html=True)
+
             for idx, cust in enumerate(customers):
                 cust_id = cust.get('id', 'N/A')
                 full_name = f"{cust.get('first_name', '')} {cust.get('last_name', '')}"
                 
-                # استخراج المنطقة والمشتريات الحركية بدقة بناءً على التوثيق
                 stats = cust.get('stats', {})
                 orders_count = stats.get('orders_count', 0) if isinstance(stats, dict) else 0
                 orders_amount = safe_float(stats.get('orders_amount', 0.0)) if isinstance(stats, dict) else 0.0
                 
-                # ترويسة العميل الجمالية
+                # ترويسة الحاوية الفاخرة للعميل
                 st.markdown(f"""
                     <div style="background: linear-gradient(135deg, #0f1c2e 0%, #1a365d 100%); 
                                 padding: 12px 20px; border-radius: 12px 12px 0px 0px; 
@@ -71,7 +81,6 @@ def render_customers_page():
                     </div>
                 """, unsafe_allow_html=True)
                 
-                # جسم الحاوية المنفصل للبيانات المحددة
                 with st.container():
                     st.markdown("""
                         <div style="background-color: #ffffff; padding: 20px; border-radius: 0px 0px 12px 12px; 
@@ -94,27 +103,33 @@ def render_customers_page():
                                 st.success(" تم حذف العميل بنجاح!")
                                 st.rerun()
                                 
-                    # نموذج مراجعة وتعديل بيانات العميل الفردي
+                    # ✅ تصحيح الـ NameError بالاعتماد الكامل على كائن cust بدلاً من p المتداخل سابقاً
                     with st.expander("✏️ مراجعة وتحديث ملف هذا العميل", expanded=False):
                         ec1, ec2 = st.columns(2)
                         with ec1:
-                            ed_f_name = st.text_input("الاسم الأول:", value=p.get('first_name', ''), key=f"ed_fn_{p_id}_{idx}")
-                            ed_l_name = st.text_input("الاسم الأخير:", value=p.get('last_name', ''), key=f"ed_ln_{p_id}_{idx}")
+                            ed_f_name = st.text_input("الاسم الأول:", value=cust.get('first_name', ''), key=f"ed_fn_{cust_id}_{idx}")
+                            ed_l_name = st.text_input("الاسم الأخير:", value=cust.get('last_name', ''), key=f"ed_ln_{cust_id}_{idx}")
                         with ec2:
-                            ed_mail = st.text_input("تحديث الإيميل:", value=p.get('email', ''), key=f"ed_em_{p_id}_{idx}")
-                            ed_loc = st.text_input("تحديث المنطقة / العنوان الحركي:", value=str(p.get('location', '')), key=f"ed_lc_{p_id}_{idx}")
-                        if st.button("💾 حفظ تحديثات الملف للعميل", key=f"btn_sv_c_{cust_id}_{idx}", type="primary", use_container_width=True):
-                            payload_update = {"first_name": ed_f_name, "last_name": ed_l_name, "email": ed_mail, "location": ed_loc}
+                            ed_mail = st.text_input("تحديث الإيميل:", value=cust.get('email', ''), key=f"ed_em_{cust_id}_{idx}")
+                            ed_loc = st.text_input("تحديث المنطقة / العنوان الحركي:", value=str(cust.get('location', '')), key=f"ed_lc_{cust_id}_{idx}")
+                        
+                        if st.button("💾 حفظ تحديثات ملف العميل", key=f"btn_sv_c_{cust_id}_{idx}", type="primary", use_container_width=True):
+                            payload_update = {
+                                "first_name": ed_f_name, 
+                                "last_name": ed_l_name, 
+                                "email": ed_mail, 
+                                "location": ed_loc
+                            }
                             if update_customer_api(cust_id, payload_update):
                                 st.success("✅ تم تحديث بيانات العميل بنجاح!")
                                 st.rerun()
 
                     st.markdown("</div>", unsafe_allow_html=True)
         else:
-            st.warning("⚠️ لا يوجد عملاء يطابقون خيارات البحث الفردية الحالية.")
+            st.warning("⚠️ لا يوجد عملاء يطابقون خيارات البحث الحالية.")
 
     # ==========================================
-    # علامة التبويب الثانية: إدارة مجموعات العملاء
+    # 🏷️ علامة التبويب الثانية: إدارة مجموعات العملاء
     # ==========================================
     with tab_groups:
         st.markdown("### 🏷️ تجميع وتصنيف مجموعات العملاء المتقدمة")
@@ -126,7 +141,7 @@ def render_customers_page():
             g_symbol = st.selectbox("العامل الرياضي المطبق للشرط:", [">", "<", "between"])
             g_val = st.number_input("قيمة الشرط المستهدفة:", min_value=0.0, value=100.0)
             
-            if st.button("🚀 اعتماد وإنشاء مصفوفة المجموعة الجديدة", type="primary", use_container_width=True):
+            if st.button("🚀 إنشاء مصفوفة المجموعة الجديدة", type="primary", use_container_width=True):
                 group_payload = {
                     "name": g_name,
                     "conditions": [{"type": g_cond_type, "symbol": g_symbol, "value": g_val}],
@@ -143,11 +158,21 @@ def render_customers_page():
             
         if res_groups and res_groups.get("data"):
             groups = res_groups["data"]
+            
+            # زر تصدير مجموعات العملاء المنسق باحترافية
+            st.download_button(
+                label="📥 تصدير مجموعات العملاء الحالية إلى Excel",
+                data=export_customer_groups_to_excel(groups),
+                file_name="Balsem_Customer_Groups_Report.xlsx",
+                mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                key="export_groups_btn_excel"
+            )
+            st.markdown("<br>", unsafe_allow_html=True)
+
             for g_idx, group in enumerate(groups):
                 group_id = group.get('id', 'N/A')
                 group_name = group.get('name', 'تصنيف غير مسمى')
                 
-                # ترويسة المجموعة الداكنة الفخمة
                 st.markdown(f"""
                     <div style="background: linear-gradient(135deg, #1f2d3d 0%, #2c3e50 100%); 
                                 padding: 12px 20px; border-radius: 12px 12px 0px 0px; 
@@ -156,7 +181,6 @@ def render_customers_page():
                     </div>
                 """, unsafe_allow_html=True)
                 
-                # جسم حاوية المجموعات المنفصل
                 with st.container():
                     st.markdown("""
                         <div style="background-color: #fafbfc; padding: 20px; border-radius: 0px 0px 12px 12px; 
@@ -173,12 +197,11 @@ def render_customers_page():
                                 st.success(" تم حذف مجموعة العملاء وتفكيك الأصناف المربوطة بها!")
                                 st.rerun()
                                 
-                    # نموذج مراجعة وتحديث حقول المجموعات تلقائياً
                     with st.expander("✏️ مراجعة وتحديث مسمى هذه المجموعة", expanded=False):
                         ed_g_name = st.text_input("تعديل اسم المجموعة الحالية:", value=group_name, key=f"ed_gn_in_{group_id}_{g_idx}")
                         if st.button("💾 حفظ تحديثات اسم المجموعة", key=f"btn_sv_g_{group_id}_{g_idx}", type="primary", use_container_width=True):
                             if update_customer_group_api(group_id, {"name": ed_g_name}):
-                                st.success("✅ تم تحديث مسمى المجموعة بنجاح في سلة!")
+                                st.success("✅ تم تحديث مسمى المجموعة بنجاح!")
                                 st.rerun()
 
                     st.markdown("</div>", unsafe_allow_html=True)
