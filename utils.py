@@ -16,6 +16,7 @@ logger = logging.getLogger(__name__)
 
 SALLA_API_URL = "https://api.salla.dev/admin/v2/specialoffers"
 
+# قواميس التدوين والترجمة الموحدة مع منصة سلة
 OFFER_TYPES_MAP = {
     "buy_x_get_y": "اذا اشترى العميل X يحصل على Y",
     "fixed_amount": "مبلغ ثابت من قيمة مشتريات العميل",
@@ -182,7 +183,7 @@ def generate_salla_excel_template() -> bytes:
     ws = wb.active
     ws.title = "قائمة العروض"
     
-    ws.append(["💡 إرشادات سلة: يرجى اختيار القيم بدقة من القوائم المنسدلة الظاهرة داخل الخلايا لضمان نجاح الرفع والربط."])
+    ws.append(["💡 إرشادات سلة المحدثة: تم تصحيح أماكن القوائم المنسدلة لـ Buy_Type و Get_Type لتعمل باللغة العربية كلياً وبشكل صحيح."])
     ws.merge_cells('A1:W1')
     ws.row_dimensions[1].height = 24
     
@@ -194,7 +195,7 @@ def generate_salla_excel_template() -> bytes:
         "Discount_Type", "Discount_Amount", "Get_Products_IDs", "Offer_Message"
     ]
     ws.append(columns)
-    ws.append(["create", "", "1001 / عرض 1+1 مجاناً", "اذا اشترى العميل X يحصل على Y", "متصفح وتطبيق المتجر", "منتجات مختارة", "لا", "10239", "active", "2026-06-24 12:00:00", "2026-12-31 23:59:59", 0, 150, 0, "منتج", 1, "12345", "منتج", 1, "منتج مجاني", 0, "67890", "عرض 1+1 مجاناً"])
+    ws.append(["create", "", "عرض بلسم المطور", "اذا اشترى العميل X يحصل على Y", "متصفح وتطبيق المتجر", "منتجات مختارة", "لا", "10239", "active", "2026-06-24 12:00:00", "2026-12-31 23:59:59", 0, 150, 0, "منتج", 1, "12345", "منتج", 1, "منتج مجاني", 0, "67890", "خصم بلسم المميز"])
     
     style_excel_file(ws, is_template=True, header_color="00EBCF")
     
@@ -220,11 +221,9 @@ def generate_salla_excel_template() -> bytes:
     dv_status = DataValidation(type="list", formula1='"active,inactive"', allow_blank=True)
     ws.add_data_validation(dv_status); dv_status.add("I3:I100")
     
-    # ✅ تصحيح الإحداثيات هنا لتصبح O3:O100 بدلاً من N
     dv_btype = DataValidation(type="list", formula1='"منتج,تصنيف"', allow_blank=True)
     ws.add_data_validation(dv_btype); dv_btype.add("O3:O100")
     
-    # ✅ تصحيح الإحداثيات هنا لتصبح R3:R100 بدلاً من Q
     dv_gtype = DataValidation(type="list", formula1='"منتج,تصنيف"', allow_blank=True)
     ws.add_data_validation(dv_gtype); dv_gtype.add("R3:R100")
     
@@ -342,3 +341,112 @@ def update_product_status(product_id: int, status: str) -> bool:
     url = f"https://api.salla.dev/admin/v2/products/{product_id}/status"
     res = safe_api_request("POST", url, headers, json={"status": status})
     return res is not None
+
+# ==========================================================
+# 👥 دوال إدارة ونشر وتصدير العملاء والمجموعات (المسترجعة بالكامل)
+# ==========================================================
+
+def get_customers_list(keyword: str = "") -> Optional[Dict]:
+    headers = get_headers()
+    if not headers: return None
+    url = "https://api.salla.dev/admin/v2/customers"
+    params = {}
+    if keyword: params["keyword"] = keyword
+    return safe_api_request("GET", url, headers, params=params)
+
+def create_customer(customer_data: Dict) -> bool:
+    headers = get_headers()
+    if not headers: return False
+    url = "https://api.salla.dev/admin/v2/customers"
+    res = safe_api_request("POST", url, headers, json=customer_data)
+    return res is not None
+
+def update_customer_api(customer_id: int, customer_data: Dict) -> bool:
+    headers = get_headers()
+    if not headers: return False
+    url = f"https://api.salla.dev/admin/v2/customers/{customer_id}"
+    res = safe_api_request("PUT", url, headers, json=customer_data)
+    return res is not None
+
+def delete_customer_api(customer_id: int) -> bool:
+    headers = get_headers()
+    if not headers: return False
+    url = f"https://api.salla.dev/admin/v2/customers/{customer_id}"
+    res = safe_api_request("DELETE", url, headers)
+    return res is not None
+
+def get_customer_groups_list() -> Optional[Dict]:
+    headers = get_headers()
+    if not headers: return None
+    url = "https://api.salla.dev/admin/v2/customers/groups"
+    return safe_api_request("GET", url, headers)
+
+def create_customer_group(group_data: Dict) -> bool:
+    headers = get_headers()
+    if not headers: return False
+    url = "https://api.salla.dev/admin/v2/customers/groups"
+    res = safe_api_request("POST", url, headers, json=group_data)
+    return res is not None
+
+def update_customer_group_api(group_id: int, group_data: Dict) -> bool:
+    headers = get_headers()
+    if not headers: return False
+    url = f"https://api.salla.dev/admin/v2/customers/groups/{group_id}"
+    res = safe_api_request("PUT", url, headers, json=group_data)
+    return res is not None
+
+def delete_customer_group_api(group_id: int) -> bool:
+    headers = get_headers()
+    if not headers: return False
+    url = f"https://api.salla.dev/admin/v2/customers/groups/{group_id}"
+    res = safe_api_request("DELETE", url, headers)
+    return res is not None
+
+def export_customers_to_excel(customers: List[Dict]) -> bytes:
+    try:
+        data = []
+        for cust in customers:
+            stats = cust.get('stats', {})
+            orders_count = stats.get('orders_count', 0) if isinstance(stats, dict) else 0
+            orders_amount = safe_float(stats.get('orders_amount', 0.0)) if isinstance(stats, dict) else 0.0
+            
+            data.append({
+                'معرف العميل (ID)': cust.get('id', ''),
+                'الاسم الأول': cust.get('first_name', ''),
+                'اسم العائلة': cust.get('last_name', ''),
+                'البريد الإلكتروني': cust.get('email', ''),
+                'الجنس': 'ذكر' if cust.get('gender') == 'male' else 'أنثى',
+                'رمز الدولة': cust.get('mobile_code', ''),
+                'رقم الجوال': cust.get('mobile', ''),
+                'المدينة': cust.get('city', ''),
+                'المنطقة / العنوان': cust.get('location', ''),
+                'عدد الطلبات المنجزة': orders_count,
+                'إجمالي قيمة المشتريات (SAR)': orders_amount
+            })
+        df = pd.DataFrame(data)
+        buffer = io.BytesIO()
+        with pd.ExcelWriter(buffer, engine='openpyxl') as writer:
+            df.to_excel(writer, index=False)
+            style_excel_file(writer.sheets['Sheet1'], is_template=False, header_color="0F1C2E")
+        return buffer.getvalue()
+    except Exception as e:
+        st.error(f"⚠️ خطأ في تصدير تقرير العملاء: {str(e)}")
+        return b""
+
+def export_customer_groups_to_excel(groups: List[Dict]) -> bytes:
+    try:
+        data = []
+        for g in groups:
+            data.append({
+                'معرف المجموعة (Group ID)': g.get('id', ''),
+                'اسم وتسمية المجموعة': g.get('name', '')
+            })
+        df = pd.DataFrame(data)
+        buffer = io.BytesIO()
+        with pd.ExcelWriter(buffer, engine='openpyxl') as writer:
+            df.to_excel(writer, index=False)
+            style_excel_file(writer.sheets['Sheet1'], is_template=False, header_color="0F1C2E")
+        return buffer.getvalue()
+    except Exception as e:
+        st.error(f"⚠️ خطأ في تصدير تقرير مجموعات العملاء: {str(e)}")
+        return b""
