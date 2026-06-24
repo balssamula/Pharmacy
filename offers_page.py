@@ -85,9 +85,8 @@ def render_offers_page():
     
     with col_bulk2:
         with st.popover("📅 تمديد العروض المنتهية"):
-            st.markdown("تمديد العروض التي تنتهي in تاريخ محدد")
+            st.markdown("تمديد العروض التي تنتهي في تاريخ محدد")
             
-            # ✅ منتقي التاريخ والوقت للتاريخ المستهدف
             st.markdown("**📅 تاريخ انتهاء العرض الحالي:**")
             col_date1, col_time1 = st.columns(2)
             with col_date1:
@@ -105,7 +104,6 @@ def render_offers_page():
                 )
             target_datetime = datetime.combine(target_date, target_time)
             
-            # ✅ منتقي التاريخ والوقت للتاريخ الجديد
             st.markdown("**📅 التاريخ الجديد للتمديد:**")
             col_date2, col_time2 = st.columns(2)
             with col_date2:
@@ -125,7 +123,6 @@ def render_offers_page():
             
             target_str = target_datetime.strftime('%Y-%m-%d')
             
-            # ✅ عرض عدد العروض التي ستتمدد
             matching_offers = []
             for offer in raw_offers:
                 exp_date = offer.get('expiry_date', '')
@@ -145,14 +142,11 @@ def render_offers_page():
                         for offer in matching_offers:
                             offer_id = offer.get('id')
                             if offer_id:
-                                # ✅ جلب العرض الحالي وتحديث تاريخ الانتهاء فقط
                                 current = safe_api_request("GET", f"{SALLA_API_URL}/{offer_id}", headers)
                                 if current and current.get('data'):
                                     offer_data = current['data']
-                                    # ✅ تحديث تاريخ الانتهاء فقط
                                     offer_data['expiry_date'] = new_datetime_str
                                     
-                                    # ✅ تم إزالة وسم [cite] المصنع خطأً وتنظيف السطر بالكامل لمنع الـ NameError
                                     if 'buy' in offer_data and isinstance(offer_data['buy'], dict):
                                         if 'products' in offer_data['buy'] and isinstance(offer_data['buy']['products'], list):
                                             offer_data['buy']['products'] = [p.get('id') if isinstance(p, dict) else p for p in offer_data['buy']['products']]
@@ -168,7 +162,6 @@ def render_offers_page():
                                     if 'customer_groups' in offer_data and isinstance(offer_data['customer_groups'], list):
                                         offer_data['customer_groups'] = [g.get('id') if isinstance(g, dict) else g for g in offer_data['customer_groups']]
                                     
-                                    # إزالة الحقول غير القابلة للتعديل
                                     for key in ['id', 'created_at', 'updated_at', 'show_price_after_discount', 'show_discounts_table_message']:
                                         offer_data.pop(key, None)
                                     
@@ -185,7 +178,8 @@ def render_offers_page():
                             st.rerun()
     
     with col_bulk3:
-        if st.button("📥 تصدير العروض المفلترة", use_container_width=True, type="secondary"):
+        # ✅ حل المشكلة: إسناد مفتاح فريد للزر العلوي
+        if st.button("📥 تصدير العروض المفلترة", use_container_width=True, type="secondary", key="bulk_export_filtered_top"):
             st.session_state["export_filtered"] = True
             st.rerun()
     
@@ -196,13 +190,13 @@ def render_offers_page():
         st.markdown("### 📝 تفاصيل العرض الأساسية")
         c1, c2 = st.columns(2)
         with c1:
-            new_offer_name = st.text_input("اسم العرض الجديد:")
+            new_offer_name = st.text_input("اسم العرض الجديد:", key="cre_offer_name_input")
             new_offer_type_ar = st.selectbox("نوع العرض:", list(OFFER_TYPES_MAP.values()), key="creation_type_box_ar")
             new_applied_to_ar = st.selectbox("يتم تطبيق العرض على:", list(APPLIED_TO_MAP.values()), key="creation_applied_to_ar")
             new_with_coupon = st.selectbox("تطبيق العرض مع كوبون التخفيض؟", ["لا", "نعم"], key="new_coupon_creation")
         with c2:
-            new_message = st.text_input("نص رسالة العرض:")
-            new_channel_ar = st.selectbox("منصة نشر العرض:", list(CHANNELS_MAP.values()))
+            new_message = st.text_input("نص رسالة العرض:", key="cre_offer_msg_input")
+            new_channel_ar = st.selectbox("منصة نشر العرض:", list(CHANNELS_MAP.values()), key="new_channel_creation")
             
             st.markdown("**📅 تاريخ بدء العرض:**")
             col_start_date, col_start_time = st.columns(2)
@@ -221,7 +215,7 @@ def render_offers_page():
                 new_expiry_time_val = st.time_input("اختر الوقت:", value=default_end_time, key="new_expiry_time", step=60)
             new_expiry_date = datetime.combine(new_expiry_date_val, new_expiry_time_val).strftime('%Y-%m-%d %H:%M:%S')
             
-        new_cust_groups_input = st.text_input("معرفات مجموعة العملاء المشمولة (مفصولة بفاصلة ,) - اتركها فارغة للكل:", placeholder="مثال: 10294, 33451")
+        new_cust_groups_input = st.text_input("معرفات مجموعة العملاء المشمولة (مفصولة بفاصلة ,) - اتركها فارغة للكل:", placeholder="مثال: 10294, 33451", key="new_cust_groups_creation")
 
         selected_type_key = [k for k, v in OFFER_TYPES_MAP.items() if v == new_offer_type_ar][0]
         selected_channel_key = [k for k, v in CHANNELS_MAP.items() if v == new_channel_ar][0]
@@ -241,18 +235,17 @@ def render_offers_page():
         if selected_type_key == "buy_x_get_y":
             col_bx, col_by = st.columns(2)
             with col_bx:
-                new_buy_type = st.selectbox("نوع شرط الشراء X:", ["product", "category"])
-                new_buy_qty = st.number_input("كمية الشراء (X):", min_value=1, value=1)
-                new_buy_products = st.text_input("(IDs) - منتجات الشراء (إذا اشترى العميل):")
+                new_buy_type = st.selectbox("نوع شرط الشراء X:", ["product", "category"], key="cre_buy_type_select")
+                new_buy_qty = st.number_input("كمية الشراء (X):", min_value=1, value=1, key="cre_buy_qty_input")
+                new_buy_products = st.text_input("(IDs) - منتجات الشراء (إذا اشترى العميل):", key="cre_buy_products_input")
             with col_by:
-                new_get_type = st.selectbox("نوع صنف الهدية الممنوحة Y:", ["product", "category"])
-                new_get_qty = st.number_input("كمية القطع الممنوحة مجاناً (Y):", min_value=1, value=1)
-                new_get_products = st.text_input("(IDs) - منتجات العرض الممنوح (يحصل على):")
+                new_get_type = st.selectbox("نوع صنف الهدية الممنوحة Y:", ["product", "category"], key="cre_get_type_select")
+                new_get_qty = st.number_input("كمية القطع الممنوحة مجاناً (Y):", min_value=1, value=1, key="cre_get_qty_input")
+                new_get_products = st.text_input("(IDs) - منتجات العرض الممنوح (يحصل على):", key="cre_get_products_input")
             
             new_discount_type_ar = st.selectbox("نوع التخفيض المطبق على Y:", ["منتج مجاني", "خصم بنسبة"], key="cre_dtype_ar")
-            
             if new_discount_type_ar == "خصم بنسبة":
-                new_discount_amount = st.number_input("نسبة الخصم المطبقة على Y (%):", min_value=1.0, max_value=100.0, value=50.0)
+                new_discount_amount = st.number_input("نسبة الخصم المطبقة على Y (%):", min_value=1.0, max_value=100.0, value=50.0, key="cre_discount_amt_buyx")
                 new_discount_type = "percentage"
             else:
                 new_discount_amount = 0.0
@@ -260,8 +253,8 @@ def render_offers_page():
         else:
             col_p1, col_p2 = st.columns(2)
             with col_p1:
-                new_discount_amount = st.number_input("قيمة أو نسبة التخفيض:", min_value=0.0, value=10.0)
-                new_buy_products = st.text_input("(IDs) منتجات التخفيض (مفصولة بفاصلة ,):")
+                new_discount_amount = st.number_input("قيمة أو نسبة التخفيض:", min_value=0.0, value=10.0, key="cre_discount_amt_direct")
+                new_buy_products = st.text_input("(IDs) منتجات التخفيض (مفصولة بفاصلة ,):", key="cre_buy_products_direct")
             with col_p2:
                 st.caption("عروض النسبة والمبالغ المقطوعة والسعر الثابت تطبق بشكل فوري ومباشر على أصناف المستودع المحددة دون اشتراط هدايا معها.")
             new_buy_type = "product"
@@ -305,8 +298,8 @@ def render_offers_page():
     # --- أدوات التصفية والبحث ---
     st.markdown("🔍 أدوات التصفية والبحث المتقدمة عن العروض")
     f1, f2, f3 = st.columns(3)
-    with f1: search_offer = st.text_input("🔎 ابحث باسم العرض أو بالمعرف الرقمي:")
-    with f2: status_filter = st.selectbox("📌 حالة نشاط وظهور العرض بالمتجر:", ["الكل", "نشط", "غير نشط"])
+    with f1: search_offer = st.text_input("🔎 ابحث باسم العرض أو بالمعرف الرقمي:", key="filter_search_input")
+    with f2: status_filter = st.selectbox("📌 حالة نشاط وظهور العرض بالمتجر:", ["الكل", "نشط", "غير نشط"], key="filter_status_select")
     with f3: 
         filter_date = st.date_input("📅 ابحث عن تاريخ انتهاء العرض:", value=None, key="filter_date_input")
 
@@ -340,7 +333,8 @@ def render_offers_page():
     if filtered_offers and len(filtered_offers) < len(raw_offers):
         col_export_filtered1, col_export_filtered2 = st.columns([1, 5])
         with col_export_filtered1:
-            if st.button("📥 تصدير العروض المفلترة", use_container_width=True, type="secondary"):
+            # ✅ حل المشكلة: إسناد مفتاح فريد ومختلف للزر السفلي المفلتر
+            if st.button("📥 تصدير العروض المفلترة", use_container_width=True, type="secondary", key="bulk_export_filtered_bottom"):
                 if filtered_offers:
                     excel_data = export_offers_to_excel(filtered_offers)
                     if excel_data:
@@ -424,7 +418,6 @@ def render_offers_page():
             col_x, col_y = st.columns(2)
             with col_x:
                 st.markdown("<b style='color:#0f1c2e;'>🛒 مجموعة الشراء (X) - [إذا اشترى العميل]:</b>", unsafe_allow_html=True)
-                # ✅ الحل البرمجي لربط وعرض المنتجات والتصنيفات معاً لمنع اختفاء المسميات
                 buy_obj = offer.get('buy', {})
                 buy_products = buy_obj.get('products', [])
                 buy_categories = buy_obj.get('categories', [])
@@ -503,7 +496,6 @@ def render_offers_page():
                 buy_obj = offer.get('buy', {})
                 get_obj = offer.get('get', {})
                 
-                # ✅ استخراج المعرفات الفعلية من كائنات المنتجات
                 buy_p_ids_list = []
                 for p in buy_obj.get('products', []):
                     if isinstance(p, dict):
@@ -559,8 +551,8 @@ def render_offers_page():
                 with col_ed_start_date:
                     ed_start_date_val = st.date_input(
                         "اختر التاريخ:",
-                        value=safe_parse_date(offer.get('start_date', datetime.now().strftime('%Y-%m-%d %H:%M:%S'))).date() if safe_parse_date(offer.get('start_date')) else datetime.now().date(),
-                        key=f"ed_start_date_{offer_id}_{idx}"
+                        value=datetime.now().date(),
+                        key=f"ed_s_date_{offer_id}_{idx}"
                     )
                 with col_ed_start_time:
                     ed_start_time_val = st.time_input(
@@ -577,7 +569,7 @@ def render_offers_page():
                     ed_end_date_val = st.date_input(
                         "اختر التاريخ:",
                         value=safe_parse_date(offer.get('expiry_date', datetime.now().strftime('%Y-%m-%d %H:%M:%S'))).date() if safe_parse_date(offer.get('expiry_date')) else (datetime.now() + timedelta(days=30)).date(),
-                        key=f"ed_end_date_{offer_id}_{idx}"
+                        key=f"ed_e_date_{offer_id}_{idx}"
                     )
                 with col_ed_end_time:
                     ed_end_time_val = st.time_input(
