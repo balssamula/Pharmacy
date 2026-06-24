@@ -182,7 +182,7 @@ def generate_salla_excel_template() -> bytes:
     ws = wb.active
     ws.title = "قائمة العروض"
     
-    ws.append(["💡 إرشادات سلة المحدثة: تم تلوين صف العنوان بـ #00ddc2 وحقن القائمة المنسدلة لـ Discount_Type بنجاح للاختيار المباشر."])
+    ws.append(["💡 إرشادات سلة: يرجى اختيار القيم بدقة من القوائم المنسدلة الظاهرة داخل الخلايا لضمان نجاح الرفع والربط."])
     ws.merge_cells('A1:W1')
     ws.row_dimensions[1].height = 24
     
