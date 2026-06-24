@@ -45,6 +45,15 @@ APPLIED_TO_MAP = {
 }
 REV_APPLIED_TO_MAP = {v: k for k, v in APPLIED_TO_MAP.items()}
 
+def safe_float(val: Any, default: float = 0.0) -> float:
+    """دالة حاسمة لمنع ظهور الـ TypeError عند معالجة قيم سلة الفارغة"""
+    if val is None:
+        return default
+    try:
+        return float(val)
+    except (ValueError, TypeError):
+        return default
+        
 def safe_parse_date(date_str: Optional[str]) -> Optional[datetime]:
     if not date_str: return None
     for fmt in ('%Y-%m-%d %H:%M:%S', '%Y-%m-%d', '%d-%m-%Y', '%a %b %d %Y %H:%M:%S', '%Y-%m-%dT%H:%M:%S'):
