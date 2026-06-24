@@ -11,22 +11,23 @@ from offers_page import render_offers_page
 from products_page import render_products_page
 
 # ==============================================================================================
-# CSS الاحترافي الحاسم لمنع تداخل الكلمات البرمجية (expand_more / arrow_down) وتلوين الأزرار المطلوبة
+# CSS الاحترافي الحاسم لعزل خط كايرو عن عناصر الرموز والـ Ligatures (expand_more و arrow_down)
 # ==============================================================================================
 st.markdown("""
     <style>
     @import url('https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700&display=swap');
     
-    /* حصر وسم خط كايرو على العناصر والنصوص الصافية لمنع تشويه ودمج أيقونات النظام الداعمة */
-    html, body, .stApp, h1, h2, h3, h4, h5, h6, p, label, input, select, textarea, 
-    div[data-testid="stMarkdownContainer"] p {
+    /* تطبيق خط كايرو بشكل انتقائي دقيق وحماية الأزرار والـ Collapse الافتراضية من التشوه البصري */
+    html, body, .stApp, h1, h2, h3, h4, h5, h6, p, label, input, select, textarea,
+    div[data-testid="stMarkdownContainer"] p, div.stSelectbox div {
         font-family: 'Cairo', sans-serif !important;
     }
     
-    /* حماية شاملة تمنع تحويل أيقونات الخيارات والـ expander والـ popover الافتراضية إلى كلمات نصية */
+    /* منع وإلغاء تطبيق خط كايرو على أيقونات نظام Streamlit لمنع تداخل نصوصها ورموزها البرمجية */
     .stIcon, [data-testid="stIcon"], [class^="st-"] svg, svg, i,
     span[data-testid="stIconVisibility"], summary svg, button svg,
-    [data-base-ui="icon"], [class*="Icon"], summary::after {
+    [data-base-ui="icon"], [class*="Icon"], summary::after,
+    .st-emotion-cache-p6w706, .st-emotion-cache-1n76uvr, [data-testid="stExpander"] svg {
         font-family: inherit !important;
     }
     
@@ -72,7 +73,7 @@ if "admin_password" not in st.session_state: st.session_state["admin_password"] 
 if not st.session_state["logged_in"]:
     _, col2, _ = st.columns([1, 2, 1])
     with col2:
-        st.markdown("<h3 style='text-align:center;'>🏥 تسجيل الدخول - منظومة العروض الخاصة والمنتجات</h3>", unsafe_allow_html=True)
+        st.markdown("<h3 style='text-align:center;'>### 🏥 تسجيل الدخول - مدير العروض الخاصة  والمنتجات الذكي</h3>", unsafe_allow_html=True)
         st.divider()
         token = st.text_input("🔑 مفتاح الربط (Access Token):", type="password")
         un = st.text_input("👤 اسم المستخدم:")
@@ -86,7 +87,7 @@ if not st.session_state["logged_in"]:
                 st.error("❌ عذراً، تأكد من صحة البيانات والتوكن المرفق!")
     st.stop()
 
-st.markdown("<h1 style='color:#0f1c2e;'>🏥 لوحة التحكم الإدارية لإدارة العروض الخاصة والمنتجات </h1>", unsafe_allow_html=True)
+st.markdown("<h1 style='color:#0f1c2e;'>🏥 لوحة التحكم الإدارية للعروض الخاصة والمنتجات</h1>", unsafe_allow_html=True)
 st.markdown("---")
 
 c_tok, c_pwd, _ = st.columns([2, 2, 4])
@@ -109,11 +110,11 @@ st.divider()
 st.sidebar.markdown("### 🏪 أقسام المنظومة")
 page = st.sidebar.radio(
     "انتقل بين الواجهات الفنية:",
-    ["لوحة إدارة العروض الخاصة الحالية", "مركز إدارة المنتجات"]
+    ["لوحة إدارة وتصفية العروض الحالية", "مركز جرد وفحص مستودع المنتجات"]
 )
 
 st.sidebar.divider()
-if st.sidebar.button("🔄 تحديث البيانات ", use_container_width=True, type="primary"):
+if st.sidebar.button("🔄 تحديث البيانات", use_container_width=True, type="primary"):
     st.rerun()
 
 if st.sidebar.button("🚪 تسجيل الخروج", use_container_width=True, type="primary"):
