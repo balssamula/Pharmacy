@@ -34,8 +34,7 @@ def render_offers_page():
                 data=export_offers_to_excel(raw_offers),
                 file_name=f"offers_export_{datetime.now().strftime('%Y%m%d')}.xlsx",
                 mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-                use_container_width=True,
-                type="primary"
+                use_container_width=True
             )
 
     uploaded_file = st.file_uploader("📂 تحميل واستيراد ملف العروض الترويجية (XLSX):", type=["xlsx"])
@@ -87,45 +86,24 @@ def render_offers_page():
         with st.popover("📅 تمديد العروض المنتهية"):
             st.markdown("تمديد العروض التي تنتهي في تاريخ محدد")
             
-            # ✅ منتقي التاريخ والوقت للتاريخ المستهدف
             st.markdown("**📅 تاريخ انتهاء العرض الحالي:**")
             col_date1, col_time1 = st.columns(2)
             with col_date1:
-                target_date = st.date_input(
-                    "اختر التاريخ:",
-                    value=datetime.now().date(),
-                    key="bulk_extend_target_date"
-                )
+                target_date = st.date_input("اختر التاريخ:", value=datetime.now().date(), key="bulk_extend_target_date")
             with col_time1:
-                target_time = st.time_input(
-                    "اختر الوقت:",
-                    value=datetime.now().time().replace(minute=59, second=59),
-                    key="bulk_extend_target_time",
-                    step=60
-                )
+                target_time = st.time_input("اختر الوقت:", value=datetime.now().time().replace(minute=59, second=59), key="bulk_extend_target_time", step=60)
             target_datetime = datetime.combine(target_date, target_time)
             
-            # ✅ منتقي التاريخ والوقت للتاريخ الجديد
             st.markdown("**📅 التاريخ الجديد للتمديد:**")
             col_date2, col_time2 = st.columns(2)
             with col_date2:
-                new_date = st.date_input(
-                    "اختر التاريخ الجديد:",
-                    value=datetime.now().date() + timedelta(days=30),
-                    key="bulk_extend_new_date"
-                )
+                new_date = st.date_input("اختر التاريخ الجديد:", value=datetime.now().date() + timedelta(days=30), key="bulk_extend_new_date")
             with col_time2:
-                new_time = st.time_input(
-                    "اختر الوقت الجديد:",
-                    value=datetime.now().time().replace(minute=59, second=59),
-                    key="bulk_extend_new_time",
-                    step=60
-                )
+                new_time = st.time_input("اختر الوقت الجديد:", value=datetime.now().time().replace(minute=59, second=59), key="bulk_extend_new_time", step=60)
             new_datetime = datetime.combine(new_date, new_time)
             
             target_str = target_datetime.strftime('%Y-%m-%d')
             
-            # ✅ عرض عدد العروض التي ستتمدد
             matching_offers = []
             for offer in raw_offers:
                 exp_date = offer.get('expiry_date', '')
@@ -145,22 +123,32 @@ def render_offers_page():
                         for offer in matching_offers:
                             offer_id = offer.get('id')
                             if offer_id:
-                                # ✅ جلب العرض الحالي وتحديث تاريخ الانتهاء فقط
                                 current = safe_api_request("GET", f"{SALLA_API_URL}/{offer_id}", headers)
                                 if current and current.get('data'):
                                     offer_data = current['data']
-                                    # ✅ تحديث تاريخ الانتهاء فقط
                                     offer_data['expiry_date'] = new_datetime_str
-                                    # ✅ إزالة الحقول غير القابلة للتعديل
-                                    for key in ['id', 'created_at', 'updated_at']:
+                                    
+                                    # ✅ الحل الجذري لخطأ 500: استخراج المعرفات الرقمية الصافية بدلاً من كائنات المنتجات الكاملة[cite: 11, 12]
+                                    if 'buy' in offer_data and isinstance(offer_data['buy'], dict):
+                                        if 'products' in offer_data['buy'] and isinstance(offer_data['buy']['products'], list):
+                                            offer_data['buy']['products'] = [p.get('id') if isinstance(p, dict) else p for p in offer_data['buy']['products']][cite: 11]
+                                        if 'categories' in offer_data['buy'] and isinstance(offer_data['buy']['categories'], list):
+                                            offer_data['buy']['categories'] = [c.get('id') if isinstance(c, dict) else c for c in offer_data['buy']['categories']][cite: 11]
+                                            
+                                    if 'get' in offer_data and isinstance(offer_data['get'], dict):
+                                        if 'products' in offer_data['get'] and isinstance(offer_data['get']['products'], list):
+                                            offer_data['get']['products'] = [p.get('id') if isinstance(p, dict) else p for p in offer_data['get']['products']][cite: 11]
+                                        if 'categories' in offer_data['get'] and isinstance(offer_data['get']['categories'], list):
+                                            offer_data['get']['categories'] = [c.get('id') if isinstance(c, dict) else c for c in offer_data['get']['categories']][cite: 11]
+                                            
+                                    if 'customer_groups' in offer_data and isinstance(offer_data['customer_groups'], list):
+                                        offer_data['customer_groups'] = [g.get('id') if isinstance(g, dict) else g for g in offer_data['customer_groups']][cite: 11]
+                                    
+                                    # إزالة الحقول غير القابلة للتعديل
+                                    for key in ['id', 'created_at', 'updated_at', 'show_price_after_discount', 'show_discounts_table_message']:
                                         offer_data.pop(key, None)
                                     
-                                    res = safe_api_request(
-                                        "PUT",
-                                        f"{SALLA_API_URL}/{offer_id}",
-                                        headers,
-                                        json=offer_data
-                                    )
+                                    res = safe_api_request("PUT", f"{SALLA_API_URL}/{offer_id}", headers, json=offer_data)
                                     if res:
                                         success_count += 1
                         st.success(f"✅ تم تمديد {success_count} عرض بنجاح من أصل {len(matching_offers)}")
@@ -190,36 +178,17 @@ def render_offers_page():
             st.markdown("**📅 تاريخ بدء العرض:**")
             col_start_date, col_start_time = st.columns(2)
             with col_start_date:
-                new_start_date_val = st.date_input(
-                    "اختر التاريخ:",
-                    value=datetime.now().date(),
-                    key="new_start_date"
-                )
+                new_start_date_val = st.date_input("اختر التاريخ:", value=datetime.now().date(), key="new_start_date")
             with col_start_time:
-                new_start_time_val = st.time_input(
-                    "اختر الوقت:",
-                    value=datetime.now().time().replace(minute=0, second=0),
-                    key="new_start_time",
-                    step=60
-                )
+                new_start_time_val = st.time_input("اختر الوقت:", value=datetime.now().time().replace(minute=0, second=0), key="new_start_time", step=60)
             new_start_date = datetime.combine(new_start_date_val, new_start_time_val).strftime('%Y-%m-%d %H:%M:%S')
             
             st.markdown("**📅 تاريخ انتهاء العرض:**")
             col_end_date, col_end_time = st.columns(2)
             with col_end_date:
-                new_expiry_date_val = st.date_input(
-                    "اختر التاريخ:",
-                    value=datetime.now().date() + timedelta(days=30),
-                    key="new_expiry_date"
-                )
+                new_expiry_date_val = st.date_input("اختر التاريخ:", value=datetime.now().date() + timedelta(days=30), key="new_expiry_date")
             with col_end_time:
-                default_end_time = datetime.now().time().replace(hour=23, minute=59, second=59)
-                new_expiry_time_val = st.time_input(
-                    "اختر الوقت:",
-                    value=default_end_time,
-                    key="new_expiry_time",
-                    step=60
-                )
+                new_expiry_time_val = st.time_input("اختر الوقت:", value=datetime.now().time().replace(hour=23, minute=59, second=59), key="new_expiry_time", step=60)
             new_expiry_date = datetime.combine(new_expiry_date_val, new_expiry_time_val).strftime('%Y-%m-%d %H:%M:%S')
             
         new_cust_groups_input = st.text_input("معرفات مجموعة العملاء المشمولة (مفصولة بفاصلة ,) - اتركها فارغة للكل:", placeholder="مثال: 10294, 33451")
@@ -251,7 +220,6 @@ def render_offers_page():
                 new_get_products = st.text_input("(IDs) - منتجات العرض الممنوح (يحصل على):")
             
             new_discount_type_ar = st.selectbox("نوع التخفيض المطبق على Y:", ["منتج مجاني", "خصم بنسبة"], key="cre_dtype_ar")
-            
             if new_discount_type_ar == "خصم بنسبة":
                 new_discount_amount = st.number_input("نسبة الخصم المطبقة على Y (%):", min_value=1.0, max_value=100.0, value=50.0)
                 new_discount_type = "percentage"
@@ -308,16 +276,10 @@ def render_offers_page():
     f1, f2, f3 = st.columns(3)
     with f1: search_offer = st.text_input("🔎 ابحث باسم العرض أو بالمعرف الرقمي:")
     with f2: status_filter = st.selectbox("📌 حالة نشاط وظهور العرض بالمتجر:", ["الكل", "نشط", "غير نشط"])
-    with f3: 
-        filter_date = st.date_input(
-            "📅 ابحث عن تاريخ انتهاء العرض:",
-            value=None,
-            key="filter_date_input"
-        )
+    with f3: filter_date = st.date_input("📅 ابحث عن تاريخ انتهاء العرض:", value=None, key="filter_date_input")
 
     now = datetime.now()
     
-    # تصفية العروض
     filtered_offers = []
     for offer in raw_offers:
         offer_id = offer.get('id', 'N/A')
@@ -327,16 +289,10 @@ def render_offers_page():
         start_date = safe_parse_date(offer.get('start_date'))
         exp_date = safe_parse_date(offer.get('expiry_date'))
         
-        if search_offer and (search_offer.lower() not in offer_name.lower() and search_offer not in str(offer_id)):
-            continue
-        if status_filter == "نشط" and status != "active":
-            continue
-        if status_filter == "غير نشط" and status == "active":
-            continue
-        
-        if filter_date:
-            if not exp_date or exp_date.date() != filter_date:
-                continue
+        if search_offer and (search_offer.lower() not in offer_name.lower() and search_offer not in str(offer_id)): continue
+        if status_filter == "نشط" and status != "active": continue
+        if status_filter == "غير نشط" and status == "active": continue
+        if filter_date and (not exp_date or exp_date.date() != filter_date): continue
         
         filtered_offers.append(offer)
     
@@ -367,7 +323,7 @@ def render_offers_page():
         </div>
     """, unsafe_allow_html=True)
 
-    # عرض العروض
+    # عرض العروض الحالية
     for idx, offer in enumerate(filtered_offers):
         offer_id = offer.get('id', 'N/A')
         offer_name = offer.get('name', 'عرض بدون اسم')
@@ -429,11 +385,12 @@ def render_offers_page():
             col_x, col_y = st.columns(2)
             with col_x:
                 st.markdown("<b style='color:#0f1c2e;'>🛒 مجموعة الشراء (X) - [إذا اشترى العميل]:</b>", unsafe_allow_html=True)
-                # ✅ عرض المعرفات الفعلية بدلاً من "جميع الأصناف المشمولة"
+                # ✅ الحل البرمجي لربط وعرض المنتجات والتصنيفات معاً لمنع اختفاء المسميات[cite: 2, 12]
                 buy_obj = offer.get('buy', {})
                 buy_products = buy_obj.get('products', [])
-                if buy_products:
-                    buy_text = parse_products_cleanly({'products': buy_products, 'categories': buy_obj.get('categories', [])})
+                buy_categories = buy_obj.get('categories', [])
+                if buy_products or buy_categories:
+                    buy_text = parse_products_cleanly({'products': buy_products, 'categories': buy_categories})[cite: 12]
                 else:
                     buy_text = "جميع الأصناف المشمولة"
                 st.text(buy_text)
@@ -442,8 +399,9 @@ def render_offers_page():
                 st.markdown("<b style='color:#0f1c2e;'>🎁 مجموعة المنح والهدية (Y) - [يحصل على]:</b>", unsafe_allow_html=True)
                 get_obj = offer.get('get', {})
                 get_products = get_obj.get('products', [])
-                if get_products:
-                    get_text = parse_products_cleanly({'products': get_products, 'categories': get_obj.get('categories', [])})
+                get_categories = get_obj.get('categories', [])
+                if get_products or get_categories:
+                    get_text = parse_products_cleanly({'products': get_products, 'categories': get_categories})[cite: 12]
                 else:
                     get_text = "جميع الأصناف المشمولة"
                 st.text(get_text)
@@ -506,21 +464,16 @@ def render_offers_page():
                 buy_obj = offer.get('buy', {})
                 get_obj = offer.get('get', {})
                 
-                # ✅ استخراج المعرفات الفعلية من كائنات المنتجات
                 buy_p_ids_list = []
                 for p in buy_obj.get('products', []):
-                    if isinstance(p, dict):
-                        buy_p_ids_list.append(str(p.get('id', '')))
-                    else:
-                        buy_p_ids_list.append(str(p))
+                    if isinstance(p, dict): buy_p_ids_list.append(str(p.get('id', '')))
+                    else: buy_p_ids_list.append(str(p))
                 buy_p_ids = ",".join(buy_p_ids_list) if buy_p_ids_list else ""
                 
                 get_p_ids_list = []
                 for p in get_obj.get('products', []):
-                    if isinstance(p, dict):
-                        get_p_ids_list.append(str(p.get('id', '')))
-                    else:
-                        get_p_ids_list.append(str(p))
+                    if isinstance(p, dict): get_p_ids_list.append(str(p.get('id', '')))
+                    else: get_p_ids_list.append(str(p))
                 get_p_ids = ",".join(get_p_ids_list) if get_p_ids_list else ""
                 
                 if selected_ed_type_key == "buy_x_get_y":
@@ -560,35 +513,17 @@ def render_offers_page():
                 st.markdown("**📅 تعديل تاريخ بدء العرض:**")
                 col_ed_start_date, col_ed_start_time = st.columns(2)
                 with col_ed_start_date:
-                    ed_start_date_val = st.date_input(
-                        "اختر التاريخ:",
-                        value=safe_parse_date(offer.get('start_date', datetime.now().strftime('%Y-%m-%d %H:%M:%S'))).date() if safe_parse_date(offer.get('start_date')) else datetime.now().date(),
-                        key=f"ed_start_date_{offer_id}_{idx}"
-                    )
+                    ed_start_date_val = st.date_input("اختر التاريخ:", value=safe_parse_date(offer.get('start_date', datetime.now().strftime('%Y-%m-%d %H:%M:%S'))).date() if safe_parse_date(offer.get('start_date')) else datetime.now().date(), key=f"ed_start_date_{offer_id}_{idx}")
                 with col_ed_start_time:
-                    ed_start_time_val = st.time_input(
-                        "اختر الوقت:",
-                        value=safe_parse_date(offer.get('start_date', datetime.now().strftime('%Y-%m-%d %H:%M:%S'))).time() if safe_parse_date(offer.get('start_date')) else datetime.now().time(),
-                        key=f"ed_start_time_{offer_id}_{idx}",
-                        step=60
-                    )
+                    ed_start_time_val = st.time_input("اختر الوقت:", value=safe_parse_date(offer.get('start_date', datetime.now().strftime('%Y-%m-%d %H:%M:%S'))).time() if safe_parse_date(offer.get('start_date')) else datetime.now().time(), key=f"ed_start_time_{offer_id}_{idx}", step=60)
                 ed_start = datetime.combine(ed_start_date_val, ed_start_time_val).strftime('%Y-%m-%d %H:%M:%S')
                 
                 st.markdown("**📅 تعديل تاريخ انتهاء العرض:**")
                 col_ed_end_date, col_ed_end_time = st.columns(2)
                 with col_ed_end_date:
-                    ed_end_date_val = st.date_input(
-                        "اختر التاريخ:",
-                        value=safe_parse_date(offer.get('expiry_date', datetime.now().strftime('%Y-%m-%d %H:%M:%S'))).date() if safe_parse_date(offer.get('expiry_date')) else (datetime.now() + timedelta(days=30)).date(),
-                        key=f"ed_end_date_{offer_id}_{idx}"
-                    )
+                    ed_end_date_val = st.date_input("اختر التاريخ:", value=safe_parse_date(offer.get('expiry_date', datetime.now().strftime('%Y-%m-%d %H:%M:%S'))).date() if safe_parse_date(offer.get('expiry_date')) else (datetime.now() + timedelta(days=30)).date(), key=f"ed_end_date_{offer_id}_{idx}")
                 with col_ed_end_time:
-                    ed_end_time_val = st.time_input(
-                        "اختر الوقت:",
-                        value=safe_parse_date(offer.get('expiry_date', datetime.now().strftime('%Y-%m-%d %H:%M:%S'))).time() if safe_parse_date(offer.get('expiry_date')) else datetime.now().time().replace(hour=23, minute=59, second=59),
-                        key=f"ed_end_time_{offer_id}_{idx}",
-                        step=60
-                    )
+                    ed_end_time_val = st.time_input("اختر الوقت:", value=safe_parse_date(offer.get('expiry_date', datetime.now().strftime('%Y-%m-%d %H:%M:%S'))).time() if safe_parse_date(offer.get('expiry_date')) else datetime.now().time().replace(hour=23, minute=59, second=59), key=f"ed_end_time_{offer_id}_{idx}", step=60)
                 ed_end = datetime.combine(ed_end_date_val, ed_end_time_val).strftime('%Y-%m-%d %H:%M:%S')
                 
                 if st.button("💾 اعتماد وحفظ العرض المحدث", key=f"sv_of_{offer_id}_{idx}", type="primary", use_container_width=True):
