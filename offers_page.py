@@ -61,7 +61,6 @@ def render_offers_page():
     col_bulk1, col_bulk2, col_bulk3 = st.columns(3)
     
     with col_bulk1:
-        # زر إيقاف جميع العروض المفعلة دفعة واحدة
         if st.button("⏹️ إيقاف جميع العروض المفعلة", use_container_width=True, type="primary"):
             active_offers = [o for o in raw_offers if o.get('status') == 'active']
             if not active_offers:
@@ -85,7 +84,6 @@ def render_offers_page():
                         st.rerun()
     
     with col_bulk2:
-        # ✅ زر تمديد العروض المنتهية مع منتقي التاريخ والوقت المتكامل
         with st.popover("📅 تمديد العروض المنتهية"):
             st.markdown("تمديد العروض التي تنتهي في تاريخ محدد")
             
@@ -101,8 +99,9 @@ def render_offers_page():
             with col_time1:
                 target_time = st.time_input(
                     "اختر الوقت:",
-                    value=datetime.now().time(),
-                    key="bulk_extend_target_time"
+                    value=datetime.now().time().replace(minute=59, second=59),
+                    key="bulk_extend_target_time",
+                    step=60  # خطوات الدقائق الكاملة
                 )
             target_datetime = datetime.combine(target_date, target_time)
             
@@ -118,8 +117,9 @@ def render_offers_page():
             with col_time2:
                 new_time = st.time_input(
                     "اختر الوقت الجديد:",
-                    value=datetime.now().time(),
-                    key="bulk_extend_new_time"
+                    value=datetime.now().time().replace(minute=59, second=59),
+                    key="bulk_extend_new_time",
+                    step=60  # خطوات الدقائق الكاملة
                 )
             new_datetime = datetime.combine(new_date, new_time)
             
@@ -142,13 +142,10 @@ def render_offers_page():
                         for offer in matching_offers:
                             offer_id = offer.get('id')
                             if offer_id:
-                                # جلب العرض الحالي
                                 current = safe_api_request("GET", f"{SALLA_API_URL}/{offer_id}", headers)
                                 if current and current.get('data'):
                                     offer_data = current['data']
-                                    # تحديث تاريخ الانتهاء فقط
                                     offer_data['expiry_date'] = new_datetime_str
-                                    # إزالة الحقول غير القابلة للتعديل
                                     for key in ['id', 'created_at', 'updated_at']:
                                         offer_data.pop(key, None)
                                     
@@ -165,14 +162,13 @@ def render_offers_page():
                             st.rerun()
     
     with col_bulk3:
-        # زر تصدير العروض المفلترة
         if st.button("📥 تصدير العروض المفلترة", use_container_width=True, type="secondary"):
             st.session_state["export_filtered"] = True
             st.rerun()
     
     st.divider()
 
-    # --- حاوية إنشاء عرض جديد متكامل ---
+    # --- حاوية إنشاء عرض جديد ---
     with st.expander("➕ إنشاء عرض ترويجي جديد", expanded=False):
         st.markdown("### 📝 تفاصيل العرض الأساسية")
         c1, c2 = st.columns(2)
@@ -185,7 +181,7 @@ def render_offers_page():
             new_message = st.text_input("نص رسالة العرض:")
             new_channel_ar = st.selectbox("منصة نشر العرض:", list(CHANNELS_MAP.values()))
             
-            # ✅ منتقي التاريخ والوقت لبدء العرض
+            # ✅ منتقي التاريخ والوقت مع دعم الدقائق الكاملة
             st.markdown("**📅 تاريخ بدء العرض:**")
             col_start_date, col_start_time = st.columns(2)
             with col_start_date:
@@ -197,12 +193,13 @@ def render_offers_page():
             with col_start_time:
                 new_start_time_val = st.time_input(
                     "اختر الوقت:",
-                    value=datetime.now().time(),
-                    key="new_start_time"
+                    value=datetime.now().time().replace(minute=0, second=0),
+                    key="new_start_time",
+                    step=60  # ✅ خطوات الدقائق الكاملة (كل دقيقة)
                 )
             new_start_date = datetime.combine(new_start_date_val, new_start_time_val).strftime('%Y-%m-%d %H:%M:%S')
             
-            # ✅ منتقي التاريخ والوقت لانتهاء العرض
+            # ✅ منتقي التاريخ والوقت مع دعم الدقائق الكاملة حتى 23:59:59
             st.markdown("**📅 تاريخ انتهاء العرض:**")
             col_end_date, col_end_time = st.columns(2)
             with col_end_date:
@@ -212,10 +209,13 @@ def render_offers_page():
                     key="new_expiry_date"
                 )
             with col_end_time:
+                # ✅ تعيين الوقت الافتراضي إلى 23:59:59 للحصول على الدقائق الكاملة
+                default_end_time = datetime.now().time().replace(hour=23, minute=59, second=59)
                 new_expiry_time_val = st.time_input(
                     "اختر الوقت:",
-                    value=datetime.now().time(),
-                    key="new_expiry_time"
+                    value=default_end_time,
+                    key="new_expiry_time",
+                    step=60  # ✅ خطوات الدقائق الكاملة
                 )
             new_expiry_date = datetime.combine(new_expiry_date_val, new_expiry_time_val).strftime('%Y-%m-%d %H:%M:%S')
             
@@ -300,13 +300,12 @@ def render_offers_page():
 
     st.divider()
 
-    # --- أدوات التصفية والبحث المتقدمة عن العروض ---
+    # --- أدوات التصفية والبحث ---
     st.markdown("🔍 أدوات التصفية والبحث المتقدمة عن العروض")
     f1, f2, f3 = st.columns(3)
     with f1: search_offer = st.text_input("🔎 ابحث باسم العرض أو بالمعرف الرقمي:")
     with f2: status_filter = st.selectbox("📌 حالة نشاط وظهور العرض بالمتجر:", ["الكل", "نشط", "غير نشط"])
     with f3: 
-        # ✅ منتقي تاريخ للبحث
         filter_date = st.date_input(
             "📅 ابحث عن تاريخ انتهاء العرض:",
             value=None,
@@ -338,10 +337,8 @@ def render_offers_page():
         
         filtered_offers.append(offer)
     
-    # تخزين العروض المفلترة في session_state للتصدير
     st.session_state["filtered_offers"] = filtered_offers
     
-    # ✅ زر تصدير العروض المفلترة
     if filtered_offers and len(filtered_offers) < len(raw_offers):
         col_export_filtered1, col_export_filtered2 = st.columns([1, 5])
         with col_export_filtered1:
@@ -360,7 +357,6 @@ def render_offers_page():
     
     st.divider()
     
-    # عرض عدد العروض المفلترة
     st.markdown(f"""
         <div style="background: #f0f4f8; padding: 8px 16px; border-radius: 8px; margin-bottom: 14px; border-right: 4px solid #00b4d8;">
             <strong>📊 عدد العروض: {len(filtered_offers)} عرض</strong>
@@ -530,7 +526,7 @@ def render_offers_page():
                     ed_get_products = ""
                     ed_disc_type = "percentage" if selected_ed_type_key == "percentage" else "fixed_amount"
 
-                # ✅ منتقي التاريخ والوقت لتعديل تاريخ البدء
+                # ✅ منتقي التاريخ والوقت مع دعم الدقائق الكاملة
                 st.markdown("**📅 تعديل تاريخ بدء العرض:**")
                 col_ed_start_date, col_ed_start_time = st.columns(2)
                 with col_ed_start_date:
@@ -543,11 +539,12 @@ def render_offers_page():
                     ed_start_time_val = st.time_input(
                         "اختر الوقت:",
                         value=safe_parse_date(offer.get('start_date', datetime.now().strftime('%Y-%m-%d %H:%M:%S'))).time() if safe_parse_date(offer.get('start_date')) else datetime.now().time(),
-                        key=f"ed_start_time_{offer_id}_{idx}"
+                        key=f"ed_start_time_{offer_id}_{idx}",
+                        step=60
                     )
                 ed_start = datetime.combine(ed_start_date_val, ed_start_time_val).strftime('%Y-%m-%d %H:%M:%S')
                 
-                # ✅ منتقي التاريخ والوقت لتعديل تاريخ الانتهاء
+                # ✅ منتقي التاريخ والوقت مع دعم الدقائق الكاملة حتى 23:59:59
                 st.markdown("**📅 تعديل تاريخ انتهاء العرض:**")
                 col_ed_end_date, col_ed_end_time = st.columns(2)
                 with col_ed_end_date:
@@ -557,10 +554,12 @@ def render_offers_page():
                         key=f"ed_end_date_{offer_id}_{idx}"
                     )
                 with col_ed_end_time:
+                    # ✅ تعيين الوقت الافتراضي إلى 23:59:59
                     ed_end_time_val = st.time_input(
                         "اختر الوقت:",
-                        value=safe_parse_date(offer.get('expiry_date', datetime.now().strftime('%Y-%m-%d %H:%M:%S'))).time() if safe_parse_date(offer.get('expiry_date')) else datetime.now().time(),
-                        key=f"ed_end_time_{offer_id}_{idx}"
+                        value=safe_parse_date(offer.get('expiry_date', datetime.now().strftime('%Y-%m-%d %H:%M:%S'))).time() if safe_parse_date(offer.get('expiry_date')) else datetime.now().time().replace(hour=23, minute=59, second=59),
+                        key=f"ed_end_time_{offer_id}_{idx}",
+                        step=60
                     )
                 ed_end = datetime.combine(ed_end_date_val, ed_end_time_val).strftime('%Y-%m-%d %H:%M:%S')
                 
