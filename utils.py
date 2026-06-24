@@ -16,7 +16,7 @@ logger = logging.getLogger(__name__)
 
 SALLA_API_URL = "https://api.salla.dev/admin/v2/specialoffers"
 
-# قواميس الترطيب والربط الموحدة بناءً على منصة سلة
+# الخرائط الموحدة لترجمة خيارات منصة سلة بالكامل للعربية
 OFFER_TYPES_MAP = {
     "buy_x_get_y": "اذا اشترى العميل X يحصل على Y",
     "fixed_amount": "مبلغ ثابت من قيمة مشتريات العميل",
@@ -35,9 +35,19 @@ CHANNELS_MAP = {
 }
 REV_CHANNELS_MAP = {v: k for k, v in CHANNELS_MAP.items()}
 
+APPLIED_TO_MAP = {
+    "all": "جميع المنتجات",
+    "product": "منتجات مختارة",
+    "category": "تصنيفات مختارة",
+    "paymentMethod": "طرق دفع مختارة",
+    "brand": "علامات تجارية مختارة",
+    "tag": "وسوم مختارة"
+}
+REV_APPLIED_TO_MAP = {v: k for k, v in APPLIED_TO_MAP.items()}
+
 def safe_parse_date(date_str: Optional[str]) -> Optional[datetime]:
     if not date_str: return None
-    for fmt in ('%Y-%m-%d %H:%M:%S', '%Y-%m-%d', '%a %b %d %Y %H:%M:%S', '%Y-%m-%dT%H:%M:%S'):
+    for fmt in ('%Y-%m-%d %H:%M:%S', '%Y-%m-%d', '%d-%m-%Y', '%a %b %d %Y %H:%M:%S', '%Y-%m-%dT%H:%M:%S'):
         try:
             clean_str = re.sub(r' GMT.*$', '', str(date_str)).replace('T', ' ')
             return datetime.strptime(clean_str[:19], fmt.replace('T', ' '))
@@ -45,15 +55,16 @@ def safe_parse_date(date_str: Optional[str]) -> Optional[datetime]:
     return None
 
 def parse_products_cleanly(offer_section: Dict) -> str:
+    """تحليل دقيق للأصناف المشمولة لمنع تداخل اسم العرض"""
     if not offer_section or not isinstance(offer_section, dict):
-        return "كل منتجات المتجر"
-    clean_elements = []
+        return "جميع الأصناف المشمولة"
     
+    clean_elements = []
     products = offer_section.get('products', [])
     if products and isinstance(products, list):
         for p in products:
             if isinstance(p, dict):
-                clean_elements.append(f"• صنف: {p.get('name', 'غير معرف')} [ID: {p.get('id', 'N/A')}] [SKU: {p.get('sku', 'لا يوجد SKU')}]")
+                clean_elements.append(f"• صنف: {p.get('name', 'غير معرف')} [ID: {p.get('id', 'N/A')}] [SKU: {p.get('sku', 'N/A')}]")
             else:
                 clean_elements.append(f"• معرف منتج رقم: {p}")
                 
@@ -65,7 +76,7 @@ def parse_products_cleanly(offer_section: Dict) -> str:
             else:
                 clean_elements.append(f"• معرف تصنيف رقم: {c}")
                 
-    return "\n".join(clean_elements) if clean_elements else "كل الأصناف المشمولة"
+    return "\n".join(clean_elements) if clean_elements else "جميع الأصناف المشمولة"
 
 def get_flat_price(price_field: Any) -> float:
     if not price_field: return 0.0
@@ -97,7 +108,7 @@ def get_headers():
 
 def style_excel_file(ws, is_template=False, header_color="0F1C2E"):
     header_fill = PatternFill(start_color=header_color, end_color=header_color, fill_type="solid")
-    header_font = Font(name="Segoe UI", size=11, bold=True, color="FFFFFF" if header_color != "00ebcf" else "0F1C2E")
+    header_font = Font(name="Segoe UI", size=11, bold=True, color="0F1C2E" if header_color == "00EBCF" else "FFFFFF")
     center_alignment = Alignment(horizontal="center", vertical="center", wrap_text=True)
     thin_border = Border(
         left=Side(style='thin', color='DDDDDD'), right=Side(style='thin', color='DDDDDD'),
@@ -126,28 +137,27 @@ def export_offers_to_excel(offers: List[Dict]) -> bytes:
     try:
         data = []
         for offer in offers:
-            o_type_raw = offer.get('offer_type', '')
-            o_channel_raw = offer.get('applied_channel', 'browser_and_application')
+            o_type = offer.get('offer_type', '')
+            o_chan = offer.get('applied_channel', 'browser_and_application')
+            o_app = offer.get('applied_to', 'product')
             
             buy_p = [str(p.get('id', p)) if isinstance(p, dict) else str(p) for p in offer.get('buy', {}).get('products', [])]
             get_p = [str(p.get('id', p)) if isinstance(p, dict) else str(p) for p in offer.get('get', {}).get('products', [])]
             
             data.append({
-                'المعرف': offer.get('id', ''), 
-                'اسم العرض': offer.get('name', ''), 
-                'النوع': OFFER_TYPES_MAP.get(o_type_raw, o_type_raw),
-                'منصة العرض': CHANNELS_MAP.get(o_channel_raw, o_channel_raw),
-                'الحالة': 'active' if offer.get('status') == 'active' else 'inactive',
-                'مع كوبون': 'نعم' if offer.get('applied_with_coupon', False) else 'لا',
-                'تاريخ البدء': offer.get('start_date', ''), 
-                'تاريخ الانتهاء': offer.get('expiry_date', ''),
-                'منتجات الشراء': ', '.join(buy_p), 
-                'كمية الشراء (X)': offer.get('buy', {}).get('quantity', 1),
-                'منتجات الهدية': ', '.join(get_p), 
-                'كمية الهدية (Y)': offer.get('get', {}).get('quantity', 1),
-                'نوع الخصم المطبق': 'خصم بنسبة' if offer.get('get', {}).get('discount_type') == 'percentage' else 'منتج مجاني',
-                'قيمة أو نسبة الخصم': offer.get('get', {}).get('discount_amount', 0),
-                'الرسالة الترويجية': offer.get('message', '')
+                'المعرف': offer.get('id', ''), 'اسم العرض': offer.get('name', ''), 
+                'النوع': OFFER_TYPES_MAP.get(o_type, o_type), 'منصة العرض': CHANNELS_MAP.get(o_chan, o_chan),
+                'تطبيق العرض على': APPLIED_TO_MAP.get(o_app, o_app), 'الحالة': offer.get('status', 'active'),
+                'مع كوبون التخفيض': 'نعم' if offer.get('applied_with_coupon', False) else 'لا',
+                'تاريخ البدء': offer.get('start_date', ''), 'تاريخ الانتهاء': offer.get('expiry_date', ''),
+                'الحد الأقصى للخصم': offer.get('max_discount_amount', 0),
+                'الحد الأدنى لمبلغ الشراء': offer.get('min_purchase_amount', 0),
+                'الحد الأدنى لكمية المنتجات': offer.get('min_items_count', 0),
+                'Buy_Type': offer.get('buy', {}).get('type', 'product'),
+                'كمية الشراء (X)': offer.get('buy', {}).get('quantity', 1), 'منتجات الشراء': ', '.join(buy_p),
+                'Get_Type': offer.get('get', {}).get('type', 'product'),
+                'الكمية المجانية (Y)': offer.get('get', {}).get('quantity', 1), 'المنتجات المجانية': ', '.join(get_p),
+                'قيمة أو نسبة الخصم': offer.get('get', {}).get('discount_amount', 0), 'نص رسالة العرض': offer.get('message', '')
             })
         df = pd.DataFrame(data)
         buffer = io.BytesIO()
@@ -166,49 +176,50 @@ def generate_salla_excel_template() -> bytes:
     ws = wb.active
     ws.title = "قائمة العروض"
     
-    ws.append(["💡 إرشادات: حقول (منتجات الهدية، كمية الهدية، نوع الخصم) تخص فقط نوع العرض (اذا اشترى العميل X يحصل على Y). بقية الأنواع تكتفي بقيمة الخصم المباشر."])
-    ws.merge_cells('A1:T1')
+    ws.append(["💡 إرشادات سلة: يرجى اختيار القيم بدقة من القوائم المنسدلة الظاهرة داخل الخلايا لضمان نجاح التدوين والربط السحابي."])
+    ws.merge_cells('A1:U1')
     ws.row_dimensions[1].height = 24
     
     columns = [
         "Action", "Offer_ID", "Offer_Name", "Offer_Type", "Applied_Channel",
-        "Applied_To", "With_Coupon", "Offer_Status", "Start_Date_Time", "Expiry_Date_Time", 
+        "Applied_To", "With_Coupon", "Offer_Status", "Start_Date_Time", "Expiry_Date_Time",
+        "Max_Discount_Amount", "Min_Purchase_Amount", "Min_Items_Count",
         "Buy_Type", "Buy_Quantity", "Buy_Products_IDs", "Get_Type", "Get_Quantity", 
         "Discount_Type", "Discount_Amount", "Get_Products_IDs", "Offer_Message"
     ]
     ws.append(columns)
-    ws.append(["create", "", "عرض بلسم الكبير", "اذا اشترى العميل X يحصل على Y", "متصفح وتطبيق المتجر", "product", "لا", "active", "2026-06-24 00:00:00", "2026-12-31 23:59:59", "product", 1, "12345", "product", 1, "منتج مجاني", 0, "67890", "خصم خاص"])
+    ws.append(["create", "", "8009 / عرض 1+1 مجاناً", "اذا اشترى العميل X يحصل على Y", "متصفح وتطبيق المتجر", "منتجات مختارة", "لا", "active", "2026-06-24 12:00:00", "2026-12-31 23:59:59", 0, 100, 0, "product", 1, "12345", "product", 1, "منتج مجاني", 0, "67890", "عرض 1+1 مجاناً"])
     
-    # تطبيق لون رأس الجدول المطلوب #00ebcf
-    style_excel_file(ws, is_template=True, header_color="00EBCF")
+    style_excel_file(ws, is_template=True, header_color="00ddc2")
     
-    # ربط الخيارات العربية بالقوائم المنسدلة في الإكسيل لمنع الأخطاء
+    # حقن القوائم المنسدلة لـ Buy_Type و Get_Type و نطاق التطبيق والنوع والمنصات
     types_str = ",".join(OFFER_TYPES_MAP.values())
     channels_str = ",".join(CHANNELS_MAP.values())
+    applied_str = ",".join(APPLIED_TO_MAP.values())
     
     dv_action = DataValidation(type="list", formula1='"create,update,delete"', allow_blank=True)
-    ws.add_data_validation(dv_action)
-    dv_action.add("A3:A100")
+    ws.add_data_validation(dv_action); dv_action.add("A3:A100")
     
     dv_type = DataValidation(type="list", formula1=f'"{types_str}"', allow_blank=True)
-    ws.add_data_validation(dv_type)
-    dv_type.add("D3:D100")
+    ws.add_data_validation(dv_type); dv_type.add("D3:D100")
     
     dv_channel = DataValidation(type="list", formula1=f'"{channels_str}"', allow_blank=True)
-    ws.add_data_validation(dv_channel)
-    dv_channel.add("E3:E100")
+    ws.add_data_validation(dv_channel); dv_channel.add("E3:E100")
+    
+    dv_applied = DataValidation(type="list", formula1=f'"{applied_str}"', allow_blank=True)
+    ws.add_data_validation(dv_applied); dv_applied.add("F3:F100")
     
     dv_coupon = DataValidation(type="list", formula1='"نعم,لا"', allow_blank=True)
-    ws.add_data_validation(dv_coupon)
-    dv_coupon.add("G3:G100")
+    ws.add_data_validation(dv_coupon); dv_coupon.add("G3:G100")
     
     dv_status = DataValidation(type="list", formula1='"active,inactive"', allow_blank=True)
-    ws.add_data_validation(dv_status)
-    dv_status.add("H3:H100")
+    ws.add_data_validation(dv_status); dv_status.add("H3:H100")
     
-    dv_dtype = DataValidation(type="list", formula1='"منتج مجاني,خصم بنسبة"', allow_blank=True)
-    ws.add_data_validation(dv_dtype)
-    dv_dtype.add("P3:P100")
+    dv_btype = DataValidation(type="list", formula1='"product,category"', allow_blank=True)
+    ws.add_data_validation(dv_btype); dv_btype.add("N3:N100")
+    
+    dv_gtype = DataValidation(type="list", formula1='"product,category"', allow_blank=True)
+    ws.add_data_validation(dv_gtype); dv_gtype.add("Q3:Q100")
     
     wb.save(output)
     return output.getvalue()
@@ -228,28 +239,21 @@ def process_excel_import(df: pd.DataFrame) -> Dict:
             offer_id = row.get('Offer_ID')
             if offer_id and pd.notna(offer_id): offer_id = int(float(offer_id))
             
-            # تحويل القيم العربية القادمة من الإكسيل إلى القيم الإنجليزية المقبولة في API سلة
-            arabic_type = str(row.get('Offer_Type', '')).strip()
-            arabic_channel = str(row.get('Applied_Channel', '')).strip()
-            
-            api_type = REV_OFFER_TYPES_MAP.get(arabic_type, "buy_x_get_y")
-            api_channel = REV_CHANNELS_MAP.get(arabic_channel, "browser_and_application")
-            
-            disc_type_raw = str(row.get('Discount_Type', '')).strip()
-            api_disc_type = "percentage" if disc_type_raw == "خصم بنسبة" else "free-product"
+            api_type = REV_OFFER_TYPES_MAP.get(str(row.get('Offer_Type', '')).strip(), "buy_x_get_y")
+            api_channel = REV_CHANNELS_MAP.get(str(row.get('Applied_Channel', '')).strip(), "browser_and_application")
+            api_applied = REV_APPLIED_TO_MAP.get(str(row.get('Applied_To', '')).strip(), "product")
             
             offer_data = {
-                "name": offer_name,
-                "offer_type": api_type,
-                "applied_channel": api_channel,
-                "applied_to": str(row.get('Applied_To', 'product')).strip(),
+                "name": offer_name, "offer_type": api_type, "applied_channel": api_channel, "applied_to": api_applied,
                 "start_date": str(row.get('Start_Date_Time', datetime.now().strftime('%Y-%m-%d %H:%M:%S'))),
                 "expiry_date": str(row.get('Expiry_Date_Time', datetime.now().strftime('%Y-%m-%d %H:%M:%S'))),
-                "message": str(row.get('Offer_Message', '')).strip(),
-                "status": str(row.get('Offer_Status', 'active')).strip().lower(),
+                "message": str(row.get('Offer_Message', '')).strip(), "status": str(row.get('Offer_Status', 'active')).strip().lower(),
                 "applied_with_coupon": str(row.get('With_Coupon', 'لا')).strip() == 'نعم',
+                "max_discount_amount": float(row.get('Max_Discount_Amount', 0) or 0),
+                "min_purchase_amount": float(row.get('Min_Purchase_Amount', 0) or 0),
+                "min_items_count": int(row.get('Min_Items_Count', 0) or 0),
                 "buy": {"type": str(row.get('Buy_Type', 'product')).strip(), "quantity": int(row.get('Buy_Quantity', 1))},
-                "get": {"type": str(row.get('Get_Type', 'product')).strip(), "quantity": int(row.get('Get_Quantity', 1)), "discount_type": api_disc_type}
+                "get": {"type": str(row.get('Get_Type', 'product')).strip(), "quantity": int(row.get('Get_Quantity', 1)), "discount_type": "percentage" if "نسبة" in str(row.get('Discount_Type', '')) else "free-product"}
             }
             
             for key, col_name in [("buy", "Buy_Products_IDs"), ("get", "Get_Products_IDs")]:
@@ -292,7 +296,7 @@ def export_products_to_excel(products: List[Dict]) -> bytes:
             
             data.append({
                 'المعرف': p.get('id', ''), 'الاسم': p.get('name', ''), 'SKU': p.get('sku', ''),
-                'السعر الأساسي الأصل': base_price, 'السعر المخفض الحالي': sale_price if sale_price > 0 else 'لا يوجد',
+                'السعر الأساسي': base_price, 'السعر المخفض': sale_price if sale_price > 0 else 'لا يوجد',
                 'خاضع للضريبة': 'نعم' if p.get('with_tax', True) else 'لا',
                 'العنوان الترويجي': promo_title, 'العنوان الفرعي': promo_sub,
                 'تاريخ بداية التخفيض': sale_start, 'تاريخ نهاية التخفيض': sale_end,
