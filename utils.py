@@ -335,3 +335,63 @@ def update_product_status(product_id: int, status: str) -> bool:
     url = f"https://api.salla.dev/admin/v2/products/{product_id}/status"
     res = safe_api_request("POST", url, headers, json={"status": status})
     return res is not None
+
+# ==========================================
+# دوال إدارة العملاء والمجموعات (Salla API)
+# ==========================================
+
+def get_customers_list(keyword: str = "") -> Optional[Dict]:
+    headers = get_headers()
+    if not headers: return None
+    url = "https://api.salla.dev/admin/v2/customers"
+    params = {}
+    if keyword: params["keyword"] = keyword
+    return safe_api_request("GET", url, headers, params=params)
+
+def create_customer(customer_data: Dict) -> bool:
+    headers = get_headers()
+    if not headers: return False
+    url = "https://api.salla.dev/admin/v2/customers"
+    res = safe_api_request("POST", url, headers, json=customer_data)
+    return res is not None
+
+def update_customer_api(customer_id: int, customer_data: Dict) -> bool:
+    headers = get_headers()
+    if not headers: return False
+    url = f"https://api.salla.dev/admin/v2/customers/{customer_id}"
+    res = safe_api_request("PUT", url, headers, json=customer_data)
+    return res is not None
+
+def delete_customer_api(customer_id: int) -> bool:
+    headers = get_headers()
+    if not headers: return False
+    url = f"https://api.salla.dev/admin/v2/customers/{customer_id}"
+    res = safe_api_request("DELETE", url, headers)
+    return res is not None
+
+def get_customer_groups_list() -> Optional[Dict]:
+    headers = get_headers()
+    if not headers: return None
+    url = "https://api.salla.dev/admin/v2/customers/groups"
+    return safe_api_request("GET", url, headers)
+
+def create_customer_group(group_data: Dict) -> bool:
+    headers = get_headers()
+    if not headers: return False
+    url = "https://api.salla.dev/admin/v2/customers/groups"
+    res = safe_api_request("POST", url, headers, json=group_data)
+    return res is not None
+
+def update_customer_group_api(group_id: int, group_data: Dict) -> bool:
+    headers = get_headers()
+    if not headers: return False
+    url = f"https://api.salla.dev/admin/v2/customers/groups/{group_id}"
+    res = safe_api_request("PUT", url, headers, json=group_data)
+    return res is not None
+
+def delete_customer_group_api(group_id: int) -> bool:
+    headers = get_headers()
+    if not headers: return False
+    url = f"https://api.salla.dev/admin/v2/customers/groups/{group_id}"
+    res = safe_api_request("DELETE", url, headers)
+    return res is not None
