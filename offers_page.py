@@ -145,12 +145,21 @@ def render_offers_page():
                         if success_count > 0: st.rerun()
     
     with col_bulk3:
-        if st.button("📥 تصدير العروض المفلترة", use_container_width=True, type="secondary", key="bulk_export_filtered_top"):
-            st.session_state["export_filtered"] = True
-            st.rerun()
+        # الاستفادة من العروض المفلترة المخزنة في الجلسة من التحديث السابق لزر التصدير العلوي
+        if "filtered_offers" in st.session_state and st.session_state["filtered_offers"] and len(st.session_state["filtered_offers"]) < len(raw_offers):
+            st.download_button(
+                label="📥 تصدير العروض المفلترة",
+                data=export_offers_to_excel(st.session_state["filtered_offers"]),
+                file_name=f"filtered_offers_export_{datetime.now().strftime('%Y%m%d_%H%M%S')}.xlsx",
+                mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                key="bulk_export_filtered_top_active",
+                use_container_width=True,
+                type="secondary"
+            )
+        else:
+            if st.button("📥 تصدير العروض المفلترة", use_container_width=True, type="secondary", key="bulk_export_filtered_top_disabled"):
+                st.info("💡 يرجى كتابة أو اختيار فلاتر البحث في الأسفل أولاً، ليقوم الزر بحصرها وتصديرها فوراً!")
     
-    st.divider()
-
     # --- حاوية إنشاء عرض جديد ---
     with st.expander("➕ إنشاء عرض ترويجي جديد", expanded=False):
         st.markdown("### 📝 تفاصيل العرض الأساسية")
@@ -288,21 +297,16 @@ def render_offers_page():
     st.session_state["filtered_offers"] = filtered_offers
     
     if filtered_offers and len(filtered_offers) < len(raw_offers):
-        col_export_filtered1, col_export_filtered2 = st.columns([1, 5])
-        with col_export_filtered1:
-            if st.button("📥 تصدير العروض المفلترة", use_container_width=True, type="secondary", key="bulk_export_filtered_bottom"):
-                excel_data = export_offers_to_excel(filtered_offers)
-                if excel_data:
-                    st.download_button(
-                        label="📥 تحميل العروض المفلترة",
-                        data=excel_data,
-                        file_name=f"filtered_offers_export_{datetime.now().strftime('%Y%m%d_%H%M%S')}.xlsx",
-                        mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-                        key="download_filtered_offers",
-                        type="primary"
-                    )
-    
-    st.divider()
+        # تحويله إلى زر تحميل مباشر دون وضعه داخل st.button لمنع اختفائه أثناء الـ Rerun
+        st.download_button(
+            label="📥 اضغط هنا لتحميل ملف العروض المفلترة الحالية مباشرة",
+            data=export_offers_to_excel(filtered_offers),
+            file_name=f"filtered_offers_export_{datetime.now().strftime('%Y%m%d_%H%M%S')}.xlsx",
+            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            key="direct_download_filtered_offers_bottom_final",
+            type="primary",
+            use_container_width=True
+        )
     
     st.markdown(f"""
         <div style="background: #f0f4f8; padding: 8px 16px; border-radius: 8px; margin-bottom: 14px; border-right: 4px solid #00b4d8;">
