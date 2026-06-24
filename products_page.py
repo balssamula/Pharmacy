@@ -13,9 +13,9 @@ def render_products_page():
     if prod_res and prod_res.get("data"):
         products = prod_res["data"]
         
-        if st.button("📥 تصدير كشف المنتجات الحالية إلى Excel", type="primary", key="export_all_prod_excel_green"):
+        if st.button("📥 تصدير كشف المنتجات الحالية إلى Excel", key="export_all_prod_excel_green"):
             ex_data = export_products_to_excel(products)
-            st.download_button("اضغط هنا لتحميل كشف المنتجات بالكامل", ex_data, "Balsem_Inventory_Report.xlsx", mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", type="primary")
+            st.download_button("اضغط هنا للتحميل.....", ex_data, "Products_Inventory_Report.xlsx", mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", type="primary")
             
         st.divider()
         search_query = st.text_input("🔍 ابحث عن منتج (اسم أو SKU أو ID):")
@@ -78,7 +78,7 @@ def render_products_page():
                 with c_info:
                     st.markdown(f"🆔 **معرف المنتج الفريد:** `{p_id}`")
                     st.markdown(f"🔢 **رقم الصنف (SKU):** `{p_sku}`")
-                    st.markdown(f"📢 **العنوان الترويجي للصنف:** <span style='color:#e67e22; font-weight:bold;'>{p_promotion}</span>", unsafe_allow_html=True)
+                    st.markdown(f"📢 **العنوان الترويجي:** <span style='color:#e67e22; font-weight:bold;'>{p_promotion}</span>", unsafe_allow_html=True)
                     tax_status_text = "🟢 نعم (خاضع للضريبة)" if p.get('with_tax', True) else "⚪ لا (معفى من الضريبة)"
                     st.markdown(f"📊 **خاضع للضريبة:** {tax_status_text}")
                     st.markdown(f"🔗 **معاينة الصنف:** [🌐 تصفح رابط المنتج في المتجر]({p_url})")
