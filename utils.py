@@ -395,3 +395,53 @@ def delete_customer_group_api(group_id: int) -> bool:
     url = f"https://api.salla.dev/admin/v2/customers/groups/{group_id}"
     res = safe_api_request("DELETE", url, headers)
     return res is not None
+
+def export_customers_to_excel(customers: List[Dict]) -> bytes:
+    try:
+        data = []
+        for cust in customers:
+            stats = cust.get('stats', {})
+            orders_count = stats.get('orders_count', 0) if isinstance(stats, dict) else 0
+            orders_amount = safe_float(stats.get('orders_amount', 0.0)) if isinstance(stats, dict) else 0.0
+            
+            data.append({
+                'معرف العميل (ID)': cust.get('id', ''),
+                'الاسم الأول': cust.get('first_name', ''),
+                'اسم العائلة': cust.get('last_name', ''),
+                'البريد الإلكتروني': cust.get('email', ''),
+                'الجنس': 'ذكر' if cust.get('gender') == 'male' else 'أنثى',
+                'رمز الدولة': cust.get('mobile_code', ''),
+                'رقم الجوال': cust.get('mobile', ''),
+                'المدينة': cust.get('city', ''),
+                'المنطقة / العنوان': cust.get('location', ''),
+                'عدد الطلبات المنجزة': orders_count,
+                'إجمالي قيمة المشتريات (SAR)': orders_amount
+            })
+        df = pd.DataFrame(data)
+        buffer = io.BytesIO()
+        with pd.ExcelWriter(buffer, engine='openpyxl') as writer:
+            df.to_excel(writer, index=False)
+            # تنسيق الجدول باللون الكحلي الداكن الفخم لصف العنوان
+            style_excel_file(writer.sheets['Sheet1'], is_template=False, header_color="0F1C2E")
+        return buffer.getvalue()
+    except Exception as e:
+        st.error(f"⚠️ خطأ في تصدير تقرير العملاء: {str(e)}")
+        return b""
+
+def export_customer_groups_to_excel(groups: List[Dict]) -> bytes:
+    try:
+        data = []
+        for g in groups:
+            data.append({
+                'معرف المجموعة (Group ID)': g.get('id', ''),
+                'اسم وتسمية المجموعة': g.get('name', '')
+            })
+        df = pd.DataFrame(data)
+        buffer = io.BytesIO()
+        with pd.ExcelWriter(buffer, engine='openpyxl') as writer:
+            df.to_excel(writer, index=False)
+            style_excel_file(writer.sheets['Sheet1'], is_template=False, header_color="0F1C2E")
+        return buffer.getvalue()
+    except Exception as e:
+        st.error(f"⚠️ خطأ في تصدير تقرير مجموعات العملاء: {str(e)}")
+        return b""
