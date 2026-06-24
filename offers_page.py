@@ -77,57 +77,31 @@ def render_offers_page():
                                 headers, 
                                 json={"status": "inactive"}
                             )
-                            if res:
-                                success_count += 1
+                            if res: success_count += 1
                     st.success(f"✅ تم إيقاف {success_count} عرض بنجاح من أصل {len(active_offers)}")
-                    if success_count > 0:
-                        st.rerun()
+                    if success_count > 0: st.rerun()
     
     with col_bulk2:
         with st.popover("📅 تمديد العروض المنتهية"):
             st.markdown("تمديد العروض التي تنتهي في تاريخ محدد")
-            
             st.markdown("**📅 تاريخ انتهاء العرض الحالي:**")
             col_date1, col_time1 = st.columns(2)
             with col_date1:
-                target_date = st.date_input(
-                    "اختر التاريخ:",
-                    value=datetime.now().date(),
-                    key="bulk_extend_target_date"
-                )
+                target_date = st.date_input("اختر التاريخ:", value=datetime.now().date(), key="bulk_extend_target_date")
             with col_time1:
-                target_time = st.time_input(
-                    "اختر الوقت:",
-                    value=datetime.now().time().replace(minute=59, second=59),
-                    key="bulk_extend_target_time",
-                    step=60
-                )
+                target_time = st.time_input("اختر الوقت:", value=datetime.now().time().replace(minute=59, second=59), key="bulk_extend_target_time", step=60)
             target_datetime = datetime.combine(target_date, target_time)
             
             st.markdown("**📅 التاريخ الجديد للتمديد:**")
             col_date2, col_time2 = st.columns(2)
             with col_date2:
-                new_date = st.date_input(
-                    "اختر التاريخ الجديد:",
-                    value=datetime.now().date() + timedelta(days=30),
-                    key="bulk_extend_new_date"
-                )
+                new_date = st.date_input("اختر التاريخ الجديد:", value=datetime.now().date() + timedelta(days=30), key="bulk_extend_new_date")
             with col_time2:
-                new_time = st.time_input(
-                    "اختر الوقت الجديد:",
-                    value=datetime.now().time().replace(minute=59, second=59),
-                    key="bulk_extend_new_time",
-                    step=60
-                )
+                new_time = st.time_input("اختر الوقت الجديد:", value=datetime.now().time().replace(minute=59, second=59), key="bulk_extend_new_time", step=60)
             new_datetime = datetime.combine(new_date, new_time)
             
             target_str = target_datetime.strftime('%Y-%m-%d')
-            
-            matching_offers = []
-            for offer in raw_offers:
-                exp_date = offer.get('expiry_date', '')
-                if exp_date and exp_date.startswith(target_str):
-                    matching_offers.append(offer)
+            matching_offers = [o for o in raw_offers if o.get('expiry_date', '') and o.get('expiry_date', '').startswith(target_str)]
             
             st.info(f"📊 عدد العروض التي تنتهي في {target_str}: **{len(matching_offers)}** عرض")
             st.info(f"📅 سيتم تمديدها إلى **{new_datetime.strftime('%Y-%m-%d %H:%M:%S')}**")
@@ -165,20 +139,12 @@ def render_offers_page():
                                     for key in ['id', 'created_at', 'updated_at', 'show_price_after_discount', 'show_discounts_table_message']:
                                         offer_data.pop(key, None)
                                     
-                                    res = safe_api_request(
-                                        "PUT",
-                                        f"{SALLA_API_URL}/{offer_id}",
-                                        headers,
-                                        json=offer_data
-                                    )
-                                    if res:
-                                        success_count += 1
+                                    res = safe_api_request("PUT", f"{SALLA_API_URL}/{offer_id}", headers, json=offer_data)
+                                    if res: success_count += 1
                         st.success(f"✅ تم تمديد {success_count} عرض بنجاح من أصل {len(matching_offers)}")
-                        if success_count > 0:
-                            st.rerun()
+                        if success_count > 0: st.rerun()
     
     with col_bulk3:
-        # ✅ حل المشكلة: إسناد مفتاح فريد للزر العلوي
         if st.button("📥 تصدير العروض المفلترة", use_container_width=True, type="secondary", key="bulk_export_filtered_top"):
             st.session_state["export_filtered"] = True
             st.rerun()
@@ -211,8 +177,7 @@ def render_offers_page():
             with col_end_date:
                 new_expiry_date_val = st.date_input("اختر التاريخ:", value=datetime.now().date() + timedelta(days=30), key="new_expiry_date")
             with col_end_time:
-                default_end_time = datetime.now().time().replace(hour=23, minute=59, second=59)
-                new_expiry_time_val = st.time_input("اختر الوقت:", value=default_end_time, key="new_expiry_time", step=60)
+                new_expiry_time_val = st.time_input("اختر الوقت:", value=datetime.now().time().replace(hour=23, minute=59, second=59), key="new_expiry_time", step=60)
             new_expiry_date = datetime.combine(new_expiry_date_val, new_expiry_time_val).strftime('%Y-%m-%d %H:%M:%S')
             
         new_cust_groups_input = st.text_input("معرفات مجموعة العملاء المشمولة (مفصولة بفاصلة ,) - اتركها فارغة للكل:", placeholder="مثال: 10294, 33451", key="new_cust_groups_creation")
@@ -296,16 +261,14 @@ def render_offers_page():
     st.divider()
 
     # --- أدوات التصفية والبحث ---
-    st.markdown("🔍 أدوات التصفية والبحث المتقدمة عن العروض")
+    st.markdown(" 🔍 أدوات التصفية والبحث المتقدمة عن العروض")
     f1, f2, f3 = st.columns(3)
     with f1: search_offer = st.text_input("🔎 ابحث باسم العرض أو بالمعرف الرقمي:", key="filter_search_input")
     with f2: status_filter = st.selectbox("📌 حالة نشاط وظهور العرض بالمتجر:", ["الكل", "نشط", "غير نشط"], key="filter_status_select")
-    with f3: 
-        filter_date = st.date_input("📅 ابحث عن تاريخ انتهاء العرض:", value=None, key="filter_date_input")
+    with f3: filter_date = st.date_input("📅 ابحث عن تاريخ انتهاء العرض:", value=None, key="filter_date_input")
 
     now = datetime.now()
     
-    # تصفية العروض
     filtered_offers = []
     for offer in raw_offers:
         offer_id = offer.get('id', 'N/A')
@@ -315,16 +278,10 @@ def render_offers_page():
         start_date = safe_parse_date(offer.get('start_date'))
         exp_date = safe_parse_date(offer.get('expiry_date'))
         
-        if search_offer and (search_offer.lower() not in offer_name.lower() and search_offer not in str(offer_id)):
-            continue
-        if status_filter == "نشط" and status != "active":
-            continue
-        if status_filter == "غير نشط" and status == "active":
-            continue
-        
-        if filter_date:
-            if not exp_date or exp_date.date() != filter_date:
-                continue
+        if search_offer and (search_offer.lower() not in offer_name.lower() and search_offer not in str(offer_id)): continue
+        if status_filter == "نشط" and status != "active": continue
+        if status_filter == "غير نشط" and status == "active": continue
+        if filter_date and (not exp_date or exp_date.date() != filter_date): continue
         
         filtered_offers.append(offer)
     
@@ -333,19 +290,17 @@ def render_offers_page():
     if filtered_offers and len(filtered_offers) < len(raw_offers):
         col_export_filtered1, col_export_filtered2 = st.columns([1, 5])
         with col_export_filtered1:
-            # ✅ حل المشكلة: إسناد مفتاح فريد ومختلف للزر السفلي المفلتر
             if st.button("📥 تصدير العروض المفلترة", use_container_width=True, type="secondary", key="bulk_export_filtered_bottom"):
-                if filtered_offers:
-                    excel_data = export_offers_to_excel(filtered_offers)
-                    if excel_data:
-                        st.download_button(
-                            label="📥 تحميل العروض المفلترة",
-                            data=excel_data,
-                            file_name=f"filtered_offers_export_{datetime.now().strftime('%Y%m%d_%H%M%S')}.xlsx",
-                            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-                            key="download_filtered_offers",
-                            type="primary"
-                        )
+                excel_data = export_offers_to_excel(filtered_offers)
+                if excel_data:
+                    st.download_button(
+                        label="📥 تحميل العروض المفلترة",
+                        data=excel_data,
+                        file_name=f"filtered_offers_export_{datetime.now().strftime('%Y%m%d_%H%M%S')}.xlsx",
+                        mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                        key="download_filtered_offers",
+                        type="primary"
+                    )
     
     st.divider()
     
@@ -361,15 +316,22 @@ def render_offers_page():
         offer_id = offer.get('id', 'N/A')
         offer_name = offer.get('name', 'عرض بدون اسم')
         status = offer.get('status', 'inactive')
-        o_type_raw = offer.get('offer_type', '')
-        o_channel_raw = offer.get('applied_channel', 'browser_and_application')
-        o_applied_raw = offer.get('applied_to', 'product')
         
-        start_date = safe_parse_date(offer.get('start_date'))
-        exp_date = safe_parse_date(offer.get('expiry_date'))
+        # ✅ الاستدعاء التفصيلي الحي لكل عرض لحل مشكلة اختفاء مسميات الأصناف ومجموعات العملاء
+        with st.spinner(f"جاري جلب تفاصيل العرض: {offer_name}..."):
+            detailed_res = safe_api_request("GET", f"{SALLA_API_URL}/{offer_id}", headers)
+            offer_data = detailed_res.get("data", offer) if detailed_res else offer
+
+        o_type_raw = offer_data.get('offer_type', '')
+        o_channel_raw = offer_data.get('applied_channel', 'browser_and_application')
+        o_applied_raw = offer_data.get('applied_to', 'product')
+        
+        start_date = safe_parse_date(offer_data.get('start_date'))
+        exp_date = safe_parse_date(offer_data.get('expiry_date'))
         
         badge = "🟢 نشط بالمتجر" if status == "active" else "🔴 متوقف حالياً"
         
+        # الشارات الصارمة الثلاثية المحدثة
         if start_date and start_date > now:
             exp_badge = "⏳ لم يبدأ بعد"
         elif exp_date and exp_date < now:
@@ -401,24 +363,24 @@ def render_offers_page():
                 st.markdown(f"⚙️ **نوع العرض:** `{OFFER_TYPES_MAP.get(o_type_raw, o_type_raw)}`")
                 st.markdown(f"📺 **قناة نشر العرض:** `{CHANNELS_MAP.get(o_channel_raw, o_channel_raw)}`")
                 st.markdown(f"🎯 **يتم تطبيق العرض على:** `{APPLIED_TO_MAP.get(o_applied_raw, o_applied_raw)}`")
-                st.markdown(f"📅 **توقيت بدء العرض:** `{offer.get('start_date', 'غير محدد')}`")
+                st.markdown(f"📅 **توقيت بدء العرض:** `{offer_data.get('start_date', 'غير محدد')}`")
             with cy:
-                st.markdown(f"📅 **توقيت انتهاء العرض:** `{offer.get('expiry_date', 'بدون تاريخ (مستمر)')}`")
-                st.markdown(f"🛡️ **الحد الأقصى للخصم:** `{offer.get('max_discount_amount', 0)} SAR` | 💵 **الحد الأدنى للشراء:** `{offer.get('min_purchase_amount', 0)} SAR`")
+                st.markdown(f"📅 **توقيت انتهاء العرض:** `{offer_data.get('expiry_date', 'بدون تاريخ (مستمر)')}`")
+                st.markdown(f"🛡️ **الحد الأقصى للخصم:** `{offer_data.get('max_discount_amount', 0)} SAR` | 💵 **الحد الأدنى للشراء:** `{offer_data.get('min_purchase_amount', 0)} SAR`")
                 
-                c_groups_raw = offer.get('customer_groups', [])
+                c_groups_raw = offer_data.get('customer_groups', [])
                 c_groups_rendered = ", ".join([str(g.get('name', g.get('id', g))) if isinstance(g, dict) else str(g) for g in c_groups_raw]) if c_groups_raw else "كل المجموعات"
                 st.markdown(f"👥 **مجموعة العملاء المستهدفة:** `{c_groups_rendered}`")
                 
-                st.markdown(f"**🔖 تطبيق العرض مع كوبون التخفيض؟** `{'نعم' if offer.get('applied_with_coupon') else 'لا يطبق'}`")
-                st.markdown(f"**📢 نص رسالة العرض:** *{offer.get('message', 'لا توجد رسالة مرفقة')}*")
+                st.markdown(f"**🔖 تطبيق العرض مع كوبون التخفيض؟** `{'نعم' if offer_data.get('applied_with_coupon') else 'لا يطبق'}`")
+                st.markdown(f"**📢 نص رسالة العرض:** *{offer_data.get('message', 'لا توجد رسالة مرفقة')}*")
                 
             st.markdown("<hr style='margin: 15px 0; border-top: 1px dashed #e2e8f0;'>", unsafe_allow_html=True)
             
             col_x, col_y = st.columns(2)
             with col_x:
                 st.markdown("<b style='color:#0f1c2e;'>🛒 مجموعة الشراء (X) - [إذا اشترى العميل]:</b>", unsafe_allow_html=True)
-                buy_obj = offer.get('buy', {})
+                buy_obj = offer_data.get('buy', {})
                 buy_products = buy_obj.get('products', [])
                 buy_categories = buy_obj.get('categories', [])
                 if buy_products or buy_categories:
@@ -429,7 +391,7 @@ def render_offers_page():
                 st.caption(f"الكمية المطلوبة: {buy_obj.get('quantity', 1)} قطعة")
             with col_y:
                 st.markdown("<b style='color:#0f1c2e;'>🎁 مجموعة المنح والهدية (Y) - [يحصل على]:</b>", unsafe_allow_html=True)
-                get_obj = offer.get('get', {})
+                get_obj = offer_data.get('get', {})
                 get_products = get_obj.get('products', [])
                 get_categories = get_obj.get('categories', [])
                 if get_products or get_categories:
@@ -451,7 +413,7 @@ def render_offers_page():
                     st.rerun()
             with b2:
                 if st.button("🔖 عكس تطبيق العرض مع الكوبون ⏯", key=f"t_cp_{offer_id}_{idx}", use_container_width=True):
-                    safe_api_request("PUT", f"{SALLA_API_URL}/{offer_id}", headers, json={"applied_with_coupon": not offer.get('applied_with_coupon', False)})
+                    safe_api_request("PUT", f"{SALLA_API_URL}/{offer_id}", headers, json={"applied_with_coupon": not offer_data.get('applied_with_coupon', False)})
                     st.rerun()
             with b3:
                 if st.button("🗑️ حذف العرض بالكامل", key=f"t_dl_{offer_id}_{idx}", use_container_width=True, type="primary"):
@@ -462,7 +424,7 @@ def render_offers_page():
             with st.expander("✏️ تعديل ومراجعة العرض الترويجي", expanded=False):
                 st.markdown("✏️ تعديل البيانات والخيارات الأساسية")
                 ed_name = st.text_input("تحديث إسم العرض:", value=offer_name, key=f"ed_n_{offer_id}_{idx}")
-                ed_msg = st.text_input("تحديث نص رسالة العرض:", value=offer.get('message', ''), key=f"ed_m_{offer_id}_{idx}")
+                ed_msg = st.text_input("تحديث نص رسالة العرض:", value=offer_data.get('message', ''), key=f"ed_m_{offer_id}_{idx}")
                 
                 ec1, ec2, ec3 = st.columns(3)
                 with ec1:
@@ -474,42 +436,30 @@ def render_offers_page():
                     ed_chan_ar = st.selectbox("تعديل منصة نشر العرض:", list(CHANNELS_MAP.values()), index=current_chan_idx, key=f"ed_ch_ar_{offer_id}_{idx}")
                     ed_status = st.selectbox("تعديل حالة العرض:", ["active", "inactive"], index=0 if status == "active" else 1, format_func=lambda x: "مفعل ومباشر" if x == "active" else "مسودة معطلة", key=f"ed_status_field_{offer_id}_{idx}")
                 with ec3:
-                    ed_coupon = st.selectbox("تطبيق العرض مع كوبون التخفيض؟", ["لا", "نعم"], index=1 if offer.get('applied_with_coupon') else 0, key=f"ed_c_{offer_id}_{idx}")
+                    ed_coupon = st.selectbox("تطبيق العرض مع كوبون التخفيض؟", ["لا", "نعم"], index=1 if offer_data.get('applied_with_coupon') else 0, key=f"ed_c_{offer_id}_{idx}")
 
                 selected_ed_type_key = [k for k, v in OFFER_TYPES_MAP.items() if v == ed_type_ar][0]
                 selected_ed_chan_key = [k for k, v in CHANNELS_MAP.items() if v == ed_chan_ar][0]
                 selected_ed_app_key = [k for k, v in APPLIED_TO_MAP.items() if v == ed_applied_ar][0]
 
-                existing_cg_str = ", ".join([str(g.get('id', g)) if isinstance(g, dict) else str(g) for g in offer.get('customer_groups', [])])
+                existing_cg_str = ", ".join([str(g.get('id', g)) if isinstance(g, dict) else str(g) for g in offer_data.get('customer_groups', [])])
                 ed_cust_groups = st.text_input("تعديل مجموعة العملاء المشمولة (ضع بينهم فاصلة):", value=existing_cg_str, key=f"ed_cg_{offer_id}_{idx}")
 
                 st.markdown("⚙️ تعديل خيارات العرض")
                 ecc1, ecc2, ecc3 = st.columns(3)
                 with ecc1:
-                    ed_max_discount = st.number_input("تعديل الحد الأقصى للخصم (SAR):", min_value=0.0, value=safe_float(offer.get('max_discount_amount', 0.0)), key=f"ed_max_d_{offer_id}_{idx}")
+                    ed_max_discount = st.number_input("تعديل الحد الأقصى للخصم (SAR):", min_value=0.0, value=safe_float(offer_data.get('max_discount_amount', 0.0)), key=f"ed_max_d_{offer_id}_{idx}")
                 with ecc2:
-                    ed_min_purchase = st.number_input("تعديل الحد الأدنى لمبلغ الشراء (SAR):", min_value=0.0, value=safe_float(offer.get('min_purchase_amount', 0.0)), key=f"ed_min_p_{offer_id}_{idx}")
+                    ed_min_purchase = st.number_input("تعديل الحد الأدنى لمبلغ الشراء (SAR):", min_value=0.0, value=safe_float(offer_data.get('min_purchase_amount', 0.0)), key=f"ed_min_p_{offer_id}_{idx}")
                 with ecc3:
-                    ed_min_items = st.number_input("تعديل الحد الأدنى لكمية المنتجات (حبة):", min_value=0, value=int(safe_float(offer.get('min_items_count', 0.0))), key=f"ed_min_i_{offer_id}_{idx}")
+                    ed_min_items = st.number_input("تعديل الحد الأدنى لكمية المنتجات (حبة):", min_value=0, value=int(safe_float(offer_data.get('min_items_count', 0.0))), key=f"ed_min_i_{offer_id}_{idx}")
 
                 st.markdown("🛒 تعديل مجموعات الصنف والكميات للعرض")
-                buy_obj = offer.get('buy', {})
-                get_obj = offer.get('get', {})
                 
-                buy_p_ids_list = []
-                for p in buy_obj.get('products', []):
-                    if isinstance(p, dict):
-                        buy_p_ids_list.append(str(p.get('id', '')))
-                    else:
-                        buy_p_ids_list.append(str(p))
+                buy_p_ids_list = [str(p.get('id', '')) if isinstance(p, dict) else str(p) for p in buy_obj.get('products', [])]
                 buy_p_ids = ",".join(buy_p_ids_list) if buy_p_ids_list else ""
                 
-                get_p_ids_list = []
-                for p in get_obj.get('products', []):
-                    if isinstance(p, dict):
-                        get_p_ids_list.append(str(p.get('id', '')))
-                    else:
-                        get_p_ids_list.append(str(p))
+                get_p_ids_list = [str(p.get('id', '')) if isinstance(p, dict) else str(p) for p in get_obj.get('products', [])]
                 get_p_ids = ",".join(get_p_ids_list) if get_p_ids_list else ""
                 
                 if selected_ed_type_key == "buy_x_get_y":
@@ -549,35 +499,17 @@ def render_offers_page():
                 st.markdown("**📅 تعديل تاريخ بدء العرض:**")
                 col_ed_start_date, col_ed_start_time = st.columns(2)
                 with col_ed_start_date:
-                    ed_start_date_val = st.date_input(
-                        "اختر التاريخ:",
-                        value=datetime.now().date(),
-                        key=f"ed_s_date_{offer_id}_{idx}"
-                    )
+                    ed_start_date_val = st.date_input("اختر التاريخ:", value=safe_parse_date(offer_data.get('start_date', datetime.now().strftime('%Y-%m-%d %H:%M:%S'))).date() if safe_parse_date(offer_data.get('start_date')) else datetime.now().date(), key=f"ed_s_date_{offer_id}_{idx}")
                 with col_ed_start_time:
-                    ed_start_time_val = st.time_input(
-                        "اختر الوقت:",
-                        value=safe_parse_date(offer.get('start_date', datetime.now().strftime('%Y-%m-%d %H:%M:%S'))).time() if safe_parse_date(offer.get('start_date')) else datetime.now().time(),
-                        key=f"ed_start_time_{offer_id}_{idx}",
-                        step=60
-                    )
+                    ed_start_time_val = st.time_input("اختر الوقت:", value=safe_parse_date(offer_data.get('start_date', datetime.now().strftime('%Y-%m-%d %H:%M:%S'))).time() if safe_parse_date(offer_data.get('start_date')) else datetime.now().time(), key=f"ed_start_time_{offer_id}_{idx}", step=60)
                 ed_start = datetime.combine(ed_start_date_val, ed_start_time_val).strftime('%Y-%m-%d %H:%M:%S')
                 
                 st.markdown("**📅 تعديل تاريخ انتهاء العرض:**")
                 col_ed_end_date, col_ed_end_time = st.columns(2)
                 with col_ed_end_date:
-                    ed_end_date_val = st.date_input(
-                        "اختر التاريخ:",
-                        value=safe_parse_date(offer.get('expiry_date', datetime.now().strftime('%Y-%m-%d %H:%M:%S'))).date() if safe_parse_date(offer.get('expiry_date')) else (datetime.now() + timedelta(days=30)).date(),
-                        key=f"ed_e_date_{offer_id}_{idx}"
-                    )
+                    ed_end_date_val = st.date_input("اختر التاريخ:", value=safe_parse_date(offer_data.get('expiry_date', datetime.now().strftime('%Y-%m-%d %H:%M:%S'))).date() if safe_parse_date(offer_data.get('expiry_date')) else (datetime.now() + timedelta(days=30)).date(), key=f"ed_e_date_{offer_id}_{idx}")
                 with col_ed_end_time:
-                    ed_end_time_val = st.time_input(
-                        "اختر الوقت:",
-                        value=safe_parse_date(offer.get('expiry_date', datetime.now().strftime('%Y-%m-%d %H:%M:%S'))).time() if safe_parse_date(offer.get('expiry_date')) else datetime.now().time().replace(hour=23, minute=59, second=59),
-                        key=f"ed_end_time_{offer_id}_{idx}",
-                        step=60
-                    )
+                    ed_end_time_val = st.time_input("اختر الوقت:", value=safe_parse_date(offer_data.get('expiry_date', datetime.now().strftime('%Y-%m-%d %H:%M:%S'))).time() if safe_parse_date(offer_data.get('expiry_date')) else datetime.now().time().replace(hour=23, minute=59, second=59), key=f"ed_end_time_{offer_id}_{idx}", step=60)
                 ed_end = datetime.combine(ed_end_date_val, ed_end_time_val).strftime('%Y-%m-%d %H:%M:%S')
                 
                 if st.button("💾Box اعتماد وحفظ العرض المحدث", key=f"sv_of_{offer_id}_{idx}", type="primary", use_container_width=True):
