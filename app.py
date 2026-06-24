@@ -9,6 +9,7 @@ st.set_page_config(
 
 from offers_page import render_offers_page
 from products_page import render_products_page
+from customers_page import render_customers_page
 
 # ==============================================================================================
 # CSS الاحترافي الحاسم لعزل خط كايرو عن عناصر الرموز والـ Ligatures (expand_more و arrow_down)
@@ -110,7 +111,7 @@ st.divider()
 st.sidebar.markdown("### 🏪 أقسام المنظومة")
 page = st.sidebar.radio(
     "انتقل بين الواجهات الإدارية:",
-    ["لوحة إدارة العروض الخاصة الحالية", "مركز إدارة المنتجات"]
+    ["لوحة إدارة العروض الخاصة الحالية", "مركز إدارة المنتجات","مركز إدارة العملاء والمجموعات"]
 )
 
 st.sidebar.divider()
@@ -123,5 +124,7 @@ if st.sidebar.button("🚪 تسجيل الخروج", use_container_width=True, t
 
 if page == "لوحة إدارة العروض الخاصة الحالية":
     render_offers_page()
-else:
+elif page == "مركز إدارة المنتجات":
     render_products_page()
+elif page == "مركز إدارة العملاء والمجموعات":
+    render_customers_page()
