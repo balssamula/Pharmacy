@@ -156,7 +156,7 @@ def export_offers_to_excel(offers: List[Dict]) -> bytes:
                 'Buy_Type': offer.get('buy', {}).get('type', 'product'),
                 'كمية الشراء (X)': offer.get('buy', {}).get('quantity', 1), 'منتجات الشراء': ', '.join(buy_p),
                 'Get_Type': offer.get('get', {}).get('type', 'product'),
-                'الكمية المجانية (Y)': offer.get('get', {}).get('quantity', 1), 'المنتجات المجانية': ', '.join(get_p),
+                'الكمية الممنوحة (Y)': offer.get('get', {}).get('quantity', 1), 'المنتجات الممنوحة': ', '.join(get_p),
                 'قيمة أو نسبة الخصم': offer.get('get', {}).get('discount_amount', 0), 'نص رسالة العرض': offer.get('message', '')
             })
         df = pd.DataFrame(data)
