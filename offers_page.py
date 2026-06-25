@@ -32,7 +32,7 @@ def render_offers_page():
             st.download_button(
                 label="📥 تصدير قائمة العروض الحالية",
                 data=export_offers_to_excel(raw_offers),
-                file_name=f"offers_export_{datetime.now().strftime('%Y%m%d')}.xlsx",
+                file_name=f"Offers_Export_{datetime.now().strftime('%Y%m%d')}.xlsx",
                 mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
                 use_container_width=True,
                 type="primary"
@@ -210,11 +210,11 @@ def render_offers_page():
             col_bx, col_by = st.columns(2)
             with col_bx:
                 new_buy_type = st.selectbox("نوع شرط الشراء X:", ["product", "category"], key="cre_buy_type_select")
-                new_buy_qty = st.number_input("كمية الشراء (X):", min_value=1, value=1, key="cre_buy_qty_input")
+                new_buy_qty = st.number_input("[إذا اشترى] - كمية الشراء (X):", min_value=1, value=1, key="cre_buy_qty_input")
                 new_buy_products = st.text_input("(IDs) - منتجات الشراء (إذا اشترى العميل):", key="cre_buy_products_input")
             with col_by:
                 new_get_type = st.selectbox("نوع صنف الهدية الممنوحة Y:", ["product", "category"], key="cre_get_type_select")
-                new_get_qty = st.number_input("كمية القطع الممنوحة مجاناً (Y):", min_value=1, value=1, key="cre_get_qty_input")
+                new_get_qty = st.number_input("[يحصل على] - كمية/نسبة خصم القطع الممنوحة (Y):", min_value=1, value=1, key="cre_get_qty_input")
                 new_get_products = st.text_input("(IDs) - منتجات العرض الممنوح (يحصل على):", key="cre_get_products_input")
             
             new_discount_type_ar = st.selectbox("نوع التخفيض المطبق على Y:", ["منتج مجاني", "خصم بنسبة"], key="cre_dtype_ar")
@@ -470,11 +470,11 @@ def render_offers_page():
                     eq1, eq2 = st.columns(2)
                     with eq1:
                         ed_buy_type = st.selectbox("تعديل نوع شراء X:", ["product", "category"], index=0 if buy_obj.get('type', 'product') == 'product' else 1, key=f"ed_bt_{offer_id}_{idx}")
-                        ed_buy_qty = st.number_input("تعديل كمية الشراء (X):", min_value=1, value=int(buy_obj.get('quantity', 1)), key=f"ed_bq_{offer_id}_{idx}")
+                        ed_buy_qty = st.number_input("تعديل كمية الشراء - [إذا اشترى] (X):", min_value=1, value=int(buy_obj.get('quantity', 1)), key=f"ed_bq_{offer_id}_{idx}")
                         ed_buy_products = st.text_input("تعديل (IDs) إذا اشترى العميل:", value=buy_p_ids, key=f"ed_bp_ids_{offer_id}_{idx}")
                     with eq2:
                         ed_get_type = st.selectbox("تعديل نوع عرض Y:", ["product", "category"], index=0 if get_obj.get('type', 'product') == 'product' else 1, key=f"ed_gt_{offer_id}_{idx}")
-                        ed_get_qty = st.number_input("تعديل كمية العرض (Y):", min_value=1, value=int(get_obj.get('quantity', 1)), key=f"ed_gq_{offer_id}_{idx}")
+                        ed_get_qty = st.number_input("تعديل كمية العرض - [يحصل على] (Y):", min_value=1, value=int(get_obj.get('quantity', 1)), key=f"ed_gq_{offer_id}_{idx}")
                         ed_get_products = st.text_input("تعديل (IDs) يحصل العميل على:", value=get_p_ids, key=f"ed_gp_ids_{offer_id}_{idx}")
                     
                     current_disc_type_raw = "خصم بنسبة" if get_obj.get('discount_type', 'free-product') == 'percentage' else "منتج مجاني"
