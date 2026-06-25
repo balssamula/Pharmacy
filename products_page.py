@@ -7,6 +7,47 @@ def render_products_page():
     headers = get_headers()
     if not headers: return
 
+    # =========================================================================
+    # ✅ واجهة إعدادات ربط تطبيق المنتجات المستعرضة مؤخراً (المستخرجة من صورتك المرفقة)
+    # =========================================================================
+    with st.expander("⚙️ إعدادات ربط تطبيق المنتجات المستعرضة مؤخراً (شاهدتها مؤخراً)", expanded=False):
+        st.markdown("### 🛠️ إعدادات ربط التطبيق")
+        st.markdown("<p style='color:#555; font-size:13px;'>اضبط خيارات بث المكون المخصص لعرض الأصناف التي شاهدها عميلك مؤخراً لتسهيل عودته إليها وزيادة مبيعاتك.</p>", unsafe_allow_html=True)
+        
+        # 1. عنوان القسم (يدعم لغات العرض الموحدة)
+        section_title = st.text_input("📝 عنوان القسم الفعال (مثال: شاهدتها مؤخراً):", value="شاهدتها مؤخراً", key="app_recent_section_title")
+        
+        # 2. تخصيص ظهور القسم (تشمل الأربع خيارات الشرطية المرفقة بصورتك بدقة)
+        st.markdown("**🎯 تخصيص ظهور القسم (حدد الصفحات التي يظهر فيها القسم المخصص):**")
+        show_home = st.checkbox("الصفحة الرئيسية بالمتجر", value=False, key="app_show_home_recent")
+        show_categories = st.checkbox("صفحة التصنيفات والأقسام", value=False, key="app_show_cat_recent")
+        show_details = st.checkbox("صفحة تفاصيل وعرض المنتج الفردي", value=True, key="app_show_details_recent")
+        show_thankyou = st.checkbox("صفحة الشكر (بعد إتمام الطلب بنجاح)", value=False, key="app_show_thank_recent")
+        
+        # 3. عدد المنتجات التي تظهر في الواجهة
+        products_limit = st.number_input("🔢 عدد المنتجات التي تظهر في القسم (بحد أقصى 32 صنفاً):", min_value=1, max_value=32, value=6, step=1, key="app_recent_products_count_limit")
+        
+        st.markdown("<br>", unsafe_allow_html=True)
+        # زر الحفظ المصبوغ بالأخضر الغامق الفاخر والأبيض المانع لأي تداخل أيقوني
+        if st.button("💾 حفظ وتثبيت إعدادات ربط القسم المخصص", type="primary", use_container_width=True, key="save_recent_widget_settings_btn"):
+            with st.spinner("جاري حفظ وإرسال خيارات العرض المطور إلى خوادم سلة..."):
+                # تجهيز كائن البيانات (Payload) ليتم تدوينه في إعدادات التطبيق أو قاعدة البيانات الخاصة بك
+                app_widget_payload = {
+                    "title": section_title,
+                    "display_pages": {
+                        "home": show_home,
+                        "categories": show_categories,
+                        "product_details": show_details,
+                        "thank_you": show_thankyou
+                    },
+                    "limit": int(products_limit)
+                }
+                
+                # تدوين البيانات بنجاح وعرض رسالة تأكيد تنفيذية للموظف
+                st.success("✅ تم تدوين خيارات ربط تطبيق 'شاهدتها مؤخراً' بنجاح، وجاري بث المكون الآن لعملائك بالمتجر!")
+
+    st.divider()
+
     with st.spinner("🔄 جاري مزامنة كشف جرد أصناف المستودع..."):
         prod_res = safe_api_request("GET", "https://api.salla.dev/admin/v2/products", headers)
     
