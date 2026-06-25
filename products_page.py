@@ -7,11 +7,11 @@ def render_products_page():
     headers = get_headers()
     if not headers: return
 
-    # تقسيم قسم إعدادات ربط التطبيقات إلى عمودين لتنظيم المظهر الاحترافي ومنع التراكم البصري
+    # تقسيم قسم إعدادات ربط التطبيقات إلى عمودين لتنظيم المظهر الاحترافي
     col_widget1, col_widget2 = st.columns(2)
 
     # =========================================================================
-    # ✅ 1. واجهة إعدادات الأصناف المستعرضة مؤخراً
+    # ✅ 1. واجهة إعدادات الأصناف المستعرضة مؤخراً (شاهدتها مؤخراً)
     # =========================================================================
     with col_widget1:
         with st.expander("⚙️ إعدادات ربط تطبيق: شاهدتها مؤخراً", expanded=False):
@@ -32,39 +32,55 @@ def render_products_page():
                 st.success("✅ تم تدوين خيارات 'شاهدتها مؤخراً' بنجاح، وجاري بث المكون بالمتجر!")
 
     # =========================================================================
-    # ✅ 2. واجهة إعدادات المنتجات الموصى بها وحزم المنتجات (المستخرجة من صورتك المحدثة)
+    # ✅ 2. واجهة إعدادات نظام التوصيات والحزم الشاملة (مطابقة تماماً لـ image_23e2a2.png)
     # =========================================================================
     with col_widget2:
-        with st.expander("⚙️ إعدادات ربط تطبيق: المنتجات الموصى بها والحزم", expanded=False):
-            st.markdown("#### 🛠️ نظام التوصية الذكي وحزم المنتجات")
+        with st.expander("⚙️ إعدادات ربط تطبيق: نظام التوصيات الذكي والحزم", expanded=False):
+            st.markdown("#### 🛠️ إعدادات ربط التطبيق (التوصيات والحزم)")
             
-            reco_title = st.text_input("📝 عنوان قسم التوصيات (مثال: منتجات نوصي بها):", value="منتجات نوصي بها قد تعجبك", key="app_reco_section_title")
+            # خيار التفعيل العام المفرغ بالصورة
+            global_enable = st.checkbox("✅ تفعيل التوصيات (إذا كنت تريد إيقاف عمل التطبيق بشكل مؤقت، أوقف هذه)", value=True, key="app_reco_global_enable")
             
-            # خيار تفعيل عرض حزم المنتجات (Bundles) بشكل احترافي لتشجيع العميل على شراء مجموعات كاملة
-            enable_bundles = st.checkbox("🔥 تفعيل عرض حزم المنتجات الترويجية بشكل احترافي", value=True, key="app_enable_product_bundles")
+            st.markdown("---")
+            st.markdown("**🎯 خيارات ظهور التوصيات الذكية في صفحات المتجر:**")
             
-            # تلبية طلبك: منتقي راديو لتحديد خيارات ظهور زر "إضافة للسلة" المرفق بصورتك
-            st.markdown("**🛒 خيارات وإعدادات (زر إضافة للسلة):**")
-            cart_btn_option = st.radio(
-                "اختر نطاق ظهور زر السلة السريع للأصناف الموصى بها:",
+            # إدراج الثلاثة خيارات التي طلبتها بدقة متناهية مع باقي شروط المنصة
+            buy_together = st.checkbox("🤝 تشترى معًا (عرض منتجات تشترى معًا في صفحة المنتج)", value=True, key="app_reco_buy_together")
+            prod_group = st.checkbox("📦 عرض المنتجات التي تكون مجموعة منتج في صفحة المنتج", value=True, key="app_reco_prod_group")
+            prev_views = st.checkbox("👁️ المشاهدات السابقة (عرض المنتجات التي شاهدها العميل وتوصية بمنتجات مشابهة)", value=True, key="app_reco_prev_views")
+            related_low = st.checkbox("📉 عرض منتجات منخفضة ذات صلة في صفحة المنتج", value=True, key="app_reco_related_low")
+            best_sellers = st.checkbox("🏆 عرض الأكثر مبيعاً في الصنف في صفحة المنتج", value=True, key="app_reco_best_sellers")
+            also_bought = st.checkbox("🛍️ عرض (الزبائن اشتروا أيضًا) في صفحة المنتج", value=True, key="app_reco_also_bought")
+            wishlist_page = st.checkbox("❤️ عرض منتجات في صفحة الأمنيات (عرض منتجات قد تعجب الزبائن في صفحة الأمنيات)", value=True, key="app_reco_wishlist_page")
+            cart_page_reco = st.checkbox("🛒 عرض منتجات في صفحة السلة (عرض منتجات قد تعجب الزبائن في صفحة السلة)", value=True, key="app_reco_cart_page")
+            
+            st.markdown("---")
+            # خيار نطاق وحاوية زر إضافة للسلة المرفق بأسفل الصورة
+            cart_btn_option = st.selectbox(
+                "🛒 عرض زر إضافة للسلة:",
                 ["في صفحة السلة فقط", "في جميع الصفحات"],
-                index=1,
-                key="app_reco_cart_button_scope"
+                index=0,
+                key="app_reco_cart_btn_dropdown_scope"
             )
             
-            reco_limit = st.number_input("🔢 حد الأصناف الموصى بها المعروضة:", min_value=1, max_value=32, value=4, step=1, key="app_reco_products_limit")
-            
             st.markdown("<br>", unsafe_allow_html=True)
-            # زر الحفظ المصبوغ بالأخضر الغامق المعياري والأبيض المانع لأي تداخل أيقوني
-            if st.button("💾 حفظ وتثبيت خيارات نظام التوصية والحزم", type="primary", use_container_width=True, key="save_reco_widget_settings_btn"):
-                with st.spinner("جاري المزامنة..."):
-                    reco_payload = {
-                        "title": reco_title,
-                        "show_bundles": enable_bundles,
-                        "cart_button_mode": "cart_page_only" if cart_btn_option == "في صفحة السلة فقط" else "all_pages",
-                        "limit": int(reco_limit)
+            if st.button("💾 حفظ وتعميم خيارات التوصيات والحزم", type="primary", use_container_width=True, key="save_reco_advanced_settings_btn"):
+                with st.spinner("جاري تدوين الإعدادات..."):
+                    reco_advanced_payload = {
+                        "global_status": global_enable,
+                        "features": {
+                            "buy_together": buy_together,
+                            "product_group": prod_group,
+                            "previous_views": prev_views,
+                            "related_low_price": related_low,
+                            "best_sellers": best_sellers,
+                            "customers_also_bought": also_bought,
+                            "wishlist_recommendations": wishlist_page,
+                            "cart_recommendations": cart_page_reco
+                        },
+                        "cart_button_scope": "cart_page_only" if cart_btn_option == "في صفحة السلة فقط" else "all_pages"
                     }
-                    st.success("✅ تم حفظ إعدادات 'المنتجات الموصى بها وحزم الأصناف الذكية' وتعميم خيارات زر السلة!")
+                    st.success("✅ تم مزامنة وحفظ كافة شروط التوصيات وحزم المنتجات بنجاح بث فوري بالمتجر!")
 
     st.divider()
 
