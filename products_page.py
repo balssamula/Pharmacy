@@ -675,4 +675,18 @@ def render_products_page():
                                     with st.spinner("جاري الحفظ..."):
                                         safe_api_request(
                                             "PUT",
-                                            f"https://api.salla.dev/admin/v2/products/{p_id
+                                            f"https://api.salla.dev/admin/v2/products/{p_id}",
+                                            headers,
+                                            json={"promotion_subtitle": new_sub}
+                                        )
+                                        st.success("✅ تم التحديث!")
+                                        st.session_state[f"show_sub_edit_{p_id}"] = False
+                                        st.rerun()
+                            with col_save2:
+                                if st.button("❌ إلغاء", key=f"cancel_sub_{p_id}_{idx}", use_container_width=True):
+                                    st.session_state[f"show_sub_edit_{p_id}"] = False
+                                    st.rerun()
+                
+                st.markdown("</div>", unsafe_allow_html=True)
+    else:
+        st.warning("⚠️ لا توجد منتجات متاحة أو فشلت المزامنة.")
