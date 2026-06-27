@@ -369,7 +369,7 @@ def render_products_page():
         # ==========================================
         col_export1, col_export2, col_export3 = st.columns([1, 1, 4])
         with col_export1:
-            if st.button("📥 تصدير الكشف الكامل", key="export_all_prod_excel_green"):
+            if st.button("📥 تصدير كشف المنتجات الكامل", key="export_all_prod_excel_green"):
                 ex_data = export_products_to_excel(products)
                 if ex_data:
                     st.download_button(
@@ -382,7 +382,7 @@ def render_products_page():
                     )
         
         with col_export2:
-            if st.button("📥 تصدير المفلترة", key="export_filtered_products"):
+            if st.button("📥 تصدير المنتجات المفلترة", key="export_filtered_products"):
                 st.session_state["export_filtered_products"] = True
                 st.rerun()
             
@@ -630,7 +630,7 @@ def render_products_page():
                                 st.rerun()
                     
                     # ✅ زر تعديل الترويج
-                    if st.button("✏️ تعديل الترويج", key=f"edit_promo_btn_{p_id}_{idx}", use_container_width=True):
+                    if st.button("✏️ تعديل العنوان الترويجي", key=f"edit_promo_btn_{p_id}_{idx}", use_container_width=True):
                         st.session_state[f"show_promo_edit_{p_id}"] = True
                     
                     if st.session_state.get(f"show_promo_edit_{p_id}", False):
