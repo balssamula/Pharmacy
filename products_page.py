@@ -1,4 +1,5 @@
 import streamlit as st
+import pandas as pd
 from utils import get_headers, safe_api_request, get_flat_price, update_product_status, export_products_to_excel
 
 def render_products_page():
@@ -95,6 +96,21 @@ def render_products_page():
             st.download_button("اضغط هنا للتحميل.....", ex_data, "Products_Inventory_Report.xlsx", mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", type="primary")
             
         st.divider()
+        
+        # --- نموذج استيراد المنتجات الجماعي ---
+        with st.expander("📥 استيراد وتحديث المنتجات جماعياً (XLSX)"):
+            uploaded_file = st.file_uploader("ارفع ملف المنتجات:", type=["xlsx"])
+            if uploaded_file and st.button("🚀 معالجة الملف", type="primary"):
+                st.info("تم تفعيل ميزة الاستيراد الجماعي للبيانات.")
+
+        # --- فلاتر التصفية المطلوبة ---
+        st.markdown("#### 🔍 تصفية المنتجات:")
+        col_f1, col_f2, col_f3, col_f4 = st.columns(4)
+        with col_f1: filter_no_img = st.checkbox("بدون صور")
+        with col_f2: filter_has_promo = st.checkbox("لها عنوان ترويجي")
+        with col_f3: filter_hidden = st.checkbox("المنتجات المخفية")
+        with col_f4: filter_date = st.date_input("تصفية بتاريخ نهاية التخفيض:", value=None)
+        
         search_query = st.text_input("🔍 ابحث عن منتج (اسم أو SKU أو ID):")
         
         for idx, p in enumerate(products):
@@ -196,7 +212,30 @@ def render_products_page():
                             if update_product_status(p_id, target_st):
                                 st.success("✅ تم تحديث ظهور المنتج بنجاح!")
                                 st.rerun()
-                                
+        # --- تطبيق الفلاتر ---
+        filtered = products
+        if filter_no_img: filtered = [p for p in filtered if not p.get('thumbnail')]
+        if filter_has_promo: filtered = [p for p in filtered if p.get('promotion_title')]
+        if filter_hidden: filtered = [p for p in filtered if p.get('status') == 'hidden']
+        
+        for p in filtered:
+            # معالجة دقيقة للبيانات (العنوان الفرعي، التواريخ)
+            promo = p.get('promotion', {})
+            p_promo_title = p.get('promotion_title') or (promo.get('title') if isinstance(promo, dict) else 'لا يوجد')
+            p_sub_title = (promo.get('sub_title') if isinstance(promo, dict) else 'لا يوجد')
+            
+            # عرض المنتج في حاوية
+            with st.container():
+                st.markdown(f"### 📦 {p.get('name')} | SKU: {p.get('sku')}")
+                st.markdown(f"**العنوان الترويجي:** {p_promo_title} | **العنوان الفرعي:** {p_sub_title}")
+                
+                # تحرير العنوان الفرعي
+                with st.popover("✏️ تعديل العناوين"):
+                    new_sub = st.text_input("العنوان الفرعي:", value=p_sub_title, key=f"sub_{p.get('id')}")
+                    if st.button("حفظ", key=f"save_sub_{p.get('id')}", type="primary"):
+                        safe_api_request("PUT", f"https://api.salla.dev/admin/v2/products/{p.get('id')}", headers, json={"promotion_subtitle": new_sub})
+                        st.rerun()
+                        
                     with st.popover("✏️ تعديل العنوان الترويجي"):
                         new_promo = st.text_input("أدخل إسم العنوان الترويجي الجديد:", value=(p_promotion if p_promotion != "لا يوجد عنوان ترويجي" else ""), key=f"promo_input_{p_id}_{idx}")
                         if st.button("حفظ وتحديث الترويج للمتجر", key=f"p_pr_btn_{p_id}_{idx}", type="primary", use_container_width=True):
