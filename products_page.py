@@ -193,11 +193,19 @@ def render_products_page():
     st.divider()
 
     # ==========================================
-    # ✅ استيراد المنتجات (مع دعم العناوين)
+    # ✅ استيراد وتحديث المنتجات (مع دعم العناوين)
     # ==========================================
     with st.expander("📥 استيراد وتحديث المنتجات جماعياً (XLSX)", expanded=False):
         st.markdown("#### 📤 استيراد المنتجات مع العناوين الترويجية والفرعية")
-        st.info("📋 الصيغة المطلوبة: المعرف (ID), الاسم, SKU, السعر, العنوان الترويجي (promotion_title), العنوان الفرعي (promotion_subtitle), المخزون (quantity)")
+        
+        # عرض الصيغة المطلوبة
+        st.info("""
+        📋 **الصيغة المطلوبة لملف المنتجات:**
+        
+        | المعرف (ID) | السعر (price) | العنوان الترويجي (promotion_title) | العنوان الفرعي (promotion_subtitle) | المخزون (quantity) | الحالة (status) |
+        |--------------|---------------|-----------------------------------|-------------------------------------|--------------------|-----------------|
+        | 12345 | 100 | عرض خاص | خصم 50% | 50 | sale |
+        """)
         
         uploaded_file = st.file_uploader("ارفع ملف المنتجات (XLSX):", type=["xlsx"], key="import_products_file")
         
@@ -208,10 +216,11 @@ def render_products_page():
                 st.info(f"✅ تم تحميل {len(df)} منتج")
                 
                 # ✅ عرض الأعمدة المتوقعة
-                expected_cols = ['id', 'name', 'sku', 'price', 'promotion_title', 'promotion_subtitle', 'quantity']
+                expected_cols = ['id', 'price', 'promotion_title', 'promotion_subtitle', 'quantity']
                 missing_cols = [col for col in expected_cols if col not in df.columns]
                 if missing_cols:
                     st.warning(f"⚠️ الأعمدة المفقودة: {', '.join(missing_cols)}")
+                    st.info("💡 يمكنك استخدام الأعمدة الموجودة في ملفك: " + ", ".join(df.columns.tolist()))
                 else:
                     st.success("✅ جميع الأعمدة المطلوبة موجودة")
                 
@@ -241,7 +250,6 @@ def render_products_page():
                                 if pd.notna(row.get('price')):
                                     update_payload['price'] = float(row.get('price'))
                                 
-                                # ✅ إضافة status إذا كان موجوداً
                                 if pd.notna(row.get('status')):
                                     update_payload['status'] = str(row.get('status'))
                                 
@@ -257,6 +265,7 @@ def render_products_page():
                                         success_count += 1
                                     else:
                                         error_count += 1
+                                        st.error(f"❌ فشل تحديث المنتج ID: {product_id}")
                             except Exception as e:
                                 error_count += 1
                                 st.error(f"❌ خطأ في الصف {idx+1}: {str(e)}")
@@ -275,7 +284,15 @@ def render_products_page():
     # ==========================================
     with st.expander("🏪 استيراد وتحديث كميات الفروع (XLSX)", expanded=False):
         st.markdown("#### 🏪 تحديث كميات المنتجات في الفروع")
-        st.info("📋 الصيغة المطلوبة: product_id, branch_id, quantity")
+        
+        st.info("""
+        📋 **الصيغة المطلوبة لملف كميات الفروع:**
+        
+        | product_id | branch_id | quantity |
+        |------------|-----------|----------|
+        | 12345 | 1 | 30 |
+        | 12345 | 2 | 20 |
+        """)
         
         uploaded_branches_file = st.file_uploader("ارفع ملف كميات الفروع (XLSX):", type=["xlsx"], key="import_branches_file")
         
@@ -289,6 +306,7 @@ def render_products_page():
                 missing_cols = [col for col in expected_cols if col not in df_branches.columns]
                 if missing_cols:
                     st.warning(f"⚠️ الأعمدة المفقودة: {', '.join(missing_cols)}")
+                    st.info("💡 يمكنك استخدام الأعمدة الموجودة في ملفك: " + ", ".join(df_branches.columns.tolist()))
                 else:
                     st.success("✅ جميع الأعمدة المطلوبة موجودة")
                 
@@ -306,7 +324,7 @@ def render_products_page():
                                 if product_id == 0 or branch_id == 0:
                                     continue
                                 
-                                # ✅ تحديث كمية المنتج في الفرع
+                                # تحديث كمية المنتج في الفرع
                                 branch_payload = {
                                     "quantity": quantity
                                 }
@@ -321,6 +339,7 @@ def render_products_page():
                                     success_count += 1
                                 else:
                                     error_count += 1
+                                    st.error(f"❌ فشل تحديث المنتج {product_id} في الفرع {branch_id}")
                             except Exception as e:
                                 error_count += 1
                                 st.error(f"❌ خطأ في الصف {idx+1}: {str(e)}")
@@ -498,11 +517,12 @@ def render_products_page():
             sale_start_date = p.get('sale_start') or (p.get('sale_price', {}).get('start_at') if isinstance(p.get('sale_price'), dict) else None) or "غير محدد"
             sale_end_date = p.get('sale_end') or (p.get('sale_price', {}).get('expired_at') if isinstance(p.get('sale_price'), dict) else None) or "غير محدد"
             
+            # ✅ حالات المنتج
             disp_status = "🟢 معروض" if status == "sale" else "🔴 مخفي"
             img_status = "✅ له صورة" if has_image else "❌ بدون صورة"
-            tax_status = "🟢 (خاضع للضريبة)" if p.get('with_tax', True) else "⚪ (معفى من الضريبة)"
+            tax_status = "🟢 خاضع للضريبة" if p.get('with_tax', True) else "⚪ معفى من الضريبة"
 
-            # ✅ عرض المنتج
+            # ✅ عرض المنتج مع جميع الحالات
             st.markdown(f"""
                 <div style="background: linear-gradient(135deg, #243b55 0%, #141e30 100%); 
                             padding: 12px 18px; border-radius: 12px 12px 0px 0px; 
@@ -512,6 +532,7 @@ def render_products_page():
                     <div style="display: flex; gap: 8px; flex-wrap: wrap;">
                         <span style="background: rgba(255,255,255,0.15); color: #fff; padding: 3px 12px; border-radius: 20px; font-size: 11px;">{disp_status}</span>
                         <span style="background: rgba(255,255,255,0.1); color: #ffca28; padding: 3px 12px; border-radius: 20px; font-size: 11px;">{img_status}</span>
+                        <span style="background: rgba(255,255,255,0.08); color: #a8d8ea; padding: 3px 12px; border-radius: 20px; font-size: 11px;">{tax_status}</span>
                     </div>
                 </div>
             """, unsafe_allow_html=True)
@@ -537,6 +558,7 @@ def render_products_page():
                     
                     st.markdown(f"🔗 [🌐 معاينة المنتج]({p_url})")
                     st.markdown(f"📦 **المخزون:** {p.get('quantity', 0)} حبة | 📈 **المبيعات:** {p.get('sold_quantity', 0)}")
+                    st.markdown(f"📊 **خاضع للضريبة:** {tax_status}")
                     
                     # ✅ زر عرض ارصدة الفروع
                     if st.button("🏪 عرض ارصدة الفروع", key=f"branches_stock_{p_id}_{idx}"):
@@ -653,18 +675,4 @@ def render_products_page():
                                     with st.spinner("جاري الحفظ..."):
                                         safe_api_request(
                                             "PUT",
-                                            f"https://api.salla.dev/admin/v2/products/{p_id}",
-                                            headers,
-                                            json={"promotion_subtitle": new_sub}
-                                        )
-                                        st.success("✅ تم التحديث!")
-                                        st.session_state[f"show_sub_edit_{p_id}"] = False
-                                        st.rerun()
-                            with col_save2:
-                                if st.button("❌ إلغاء", key=f"cancel_sub_{p_id}_{idx}", use_container_width=True):
-                                    st.session_state[f"show_sub_edit_{p_id}"] = False
-                                    st.rerun()
-                
-                st.markdown("</div>", unsafe_allow_html=True)
-    else:
-        st.warning("⚠️ لا توجد منتجات متاحة أو فشلت المزامنة.")
+                                            f"https://api.salla.dev/admin/v2/products/{p_id
