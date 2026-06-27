@@ -500,7 +500,8 @@ def render_products_page():
             
             disp_status = "🟢 معروض" if status == "sale" else "🔴 مخفي"
             img_status = "✅ له صورة" if has_image else "❌ بدون صورة"
-            
+            tax_status_text = "🟢 (خاضع للضريبة)" if p.get('with_tax', True) else "⚪ (معفى من الضريبة)"
+
             # ✅ عرض المنتج
             st.markdown(f"""
                 <div style="background: linear-gradient(135deg, #243b55 0%, #141e30 100%); 
