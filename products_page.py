@@ -1,24 +1,34 @@
 import streamlit as st
 import pandas as pd
-import io
 from datetime import datetime
 from utils import (
     get_headers, safe_api_request, get_flat_price, update_product_status, 
-    export_products_to_excel, upload_product_image_api, update_product_promotions_secure,
-    update_product_tax_secure, get_branches_list, get_product_quantities_by_branch, 
-    generate_quantities_template, process_quantities_import, create_products_template
+    export_products_to_excel, attach_product_image_api, update_product_promotions_secure,
+    update_product_tax_secure, get_branches_list, generate_quantities_template, 
+    process_quantities_import, create_products_template
 )
 
 TAX_EXEMPTION_CAUSES = ["الخدمات المالية", "عقد تأمين على الحياة", "التوريدات العقارية المعفاة", "صادرات السلع من المملكة", "صادرات الخدمات من المملكة", "النقل الدولي للسلع", "النقل الدولي للركاب", "توريد وسائل النقل", "الأدوية والمعدات الطبية"]
 
 def render_products_page():
-    st.markdown("<h2 style='color:#0f1c2e;'>📦 مركز إدارة المنتجات الذكي</h2>", unsafe_allow_html=True)
+    st.markdown("<h2 style='color:#0f1c2e;'>📦 مركز إدارة المنتجات المتقدمة</h2>", unsafe_allow_html=True)
     
     headers = get_headers()
     if not headers: return
 
     with st.spinner("جاري تهيئة الإعدادات..."):
         branches = get_branches_list()
+        
+        # ✅ جلب العروض الترويجية النشطة لتمييز المنتجات المشمولة بها
+        offers_res = safe_api_request("GET", "https://api.salla.dev/admin/v2/specialoffers", headers)
+        active_offers = offers_res.get("data", []) if offers_res else []
+        offer_product_ids = set()
+        for offer in active_offers:
+            if offer.get("status") == "active":
+                for p in offer.get("buy", {}).get("products", []):
+                    offer_product_ids.add(str(p.get("id", p) if isinstance(p, dict) else p))
+                for p in offer.get("get", {}).get("products", []):
+                    offer_product_ids.add(str(p.get("id", p) if isinstance(p, dict) else p))
 
     # =========================================================================
     # ✅ 1. إعدادات ربط التطبيقات الترويجية والذكية وإدارة الفروع
@@ -36,7 +46,7 @@ def render_products_page():
             products_limit = st.number_input("🔢 عدد المنتجات المعروضة:", min_value=1, max_value=32, value=6, key="app_recent_limit")
             
             st.markdown("#### 🛠️ نظام التوصية الذكي والحزم")
-            global_enable = st.checkbox("✅ تفعيل التوصيات", value=True, key="app_reco_global_enable")
+            global_enable = st.checkbox("✅ تفعيل التوصيات في المتجر", value=True, key="app_reco_global_enable")
             buy_together = st.checkbox("🤝 تشترى معًا", value=True, key="app_reco_buy_together")
             prod_group = st.checkbox("📦 عرض المنتجات كحزمة", value=True, key="app_reco_prod_group")
             cart_btn_option = st.selectbox("🛒 عرض زر إضافة للسلة:", ["في صفحة السلة فقط", "في جميع الصفحات"], index=0, key="app_reco_cart_btn")
@@ -45,46 +55,17 @@ def render_products_page():
                 st.success("✅ تم حفظ إعدادات ربط التطبيقات بنجاح!")
 
     with col_widget2:
-        # 🏢 الحاوية المسترجعة: إدارة كميات الفروع والاستيراد
         with st.expander("🏢 التحكم في كميات ومخزون الفروع (استيراد)", expanded=False):
-            st.markdown("#### 📦 إدارة وتحديث كميات الفروع (Bulk Quantities)")
+            st.markdown("#### 📦 إدارة وتحديث كميات الفروع جماعياً (Excel)")
+            st.download_button("📥 تنزيل نموذج استيراد الكميات للفروع", data=generate_quantities_template(), file_name="Salla_Quantities_Template.xlsx", mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", use_container_width=True)
             
-            cb1, cb2 = st.columns(2)
-            with cb1:
-                if st.button("👁️ عرض الفروع وكمياتها الحالية", use_container_width=True):
-                    st.session_state["show_branches_data"] = True
-            with cb2:
-                st.download_button("📥 تحميل نموذج استيراد الكميات", data=generate_quantities_template(), file_name="Salla_Quantities_Template.xlsx", mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", use_container_width=True)
-            
-            uploaded_q_file = st.file_uploader("📂 رفع ملف Excel لتحديث الكميات للفروع:", type=['xlsx'], key="upload_quantities_file")
-            if uploaded_q_file and st.button("🚀 تحديث كميات الفروع", type="primary", use_container_width=True):
+            uploaded_q_file = st.file_uploader("📂 رفع ملف Excel لتحديث الكميات:", type=['xlsx'], key="upload_quantities_file")
+            if uploaded_q_file and st.button("🚀 تحديث كميات الفروع (Bulk)", type="primary", use_container_width=True):
                 df_q = pd.read_excel(uploaded_q_file)
-                with st.spinner("جاري تحديث الكميات في سلة..."):
+                with st.spinner("جاري التحديث في سلة..."):
                     res_q = process_quantities_import(df_q)
                     for m in res_q["success"]: st.success(m)
                     for m in res_q["errors"]: st.error(m)
-            
-            if st.session_state.get("show_branches_data", False):
-                st.divider()
-                with st.spinner("جاري جلب الفروع..."):
-                    if branches:
-                        b_options = {b['name']: b['id'] for b in branches}
-                        sel_branch_name = st.selectbox("اختر الفرع لعرض كمياته:", ["الكل"] + list(b_options.keys()))
-                        b_id = b_options.get(sel_branch_name) if sel_branch_name != "الكل" else None
-                        
-                        quantities_data = get_product_quantities_by_branch(branch_id=b_id, headers=headers)
-                        if quantities_data:
-                            st.info(f"📊 عدد السجلات المتوفرة: {len(quantities_data)}")
-                            q_df = pd.DataFrame(quantities_data)
-                            st.dataframe(q_df[['branch_name', 'sku', 'quantity', 'unlimited_quantity']], use_container_width=True)
-                        else:
-                            st.warning("لا توجد كميات مسجلة لهذا الفرع.")
-                    else:
-                        st.warning("لا توجد فروع مسجلة في المتجر.")
-                
-                if st.button("إخفاء بيانات الفروع", use_container_width=True):
-                    st.session_state["show_branches_data"] = False
-                    st.rerun()
 
             st.download_button("📥 تحميل نموذج استيراد المنتجات", data=create_products_template(), file_name="Salla_Products_Template.xlsx", mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", use_container_width=True)
             uploaded_file = st.file_uploader("ارفع ملف المنتجات (XLSX):", type=["xlsx"], key="import_products_file")
@@ -234,7 +215,7 @@ def render_products_page():
                 except Exception as e:
                     st.error(f"❌ خطأ في قراءة الملف: {str(e)}")
 
-        st.divider()
+    st.divider()
 
     # ==========================================
     # ✅ 2. الفلاتر والبحث في المنتجات
@@ -245,7 +226,7 @@ def render_products_page():
         prod_res = safe_api_request("GET", "https://api.salla.dev/admin/v2/products?per_page=100", headers)
         all_products = prod_res.get("data", []) if prod_res else []
     
-    c_search, c_sort = st.columns([3, 1])
+    c_search, _ = st.columns([3, 1])
     with c_search:
         search_query = st.text_input("ابحث عن منتج (اسم، SKU، ID):", placeholder="أدخل اسم المنتج، أو الرقم التعريفي...")
     
@@ -267,7 +248,6 @@ def render_products_page():
 
     st.divider()
 
-    # --- تطبيق الفلاتر ---
     filtered_products = []
     for p in all_products:
         p_id = str(p.get('id', ''))
@@ -313,10 +293,10 @@ def render_products_page():
         )
 
     # ==========================================
-    # ✅ 3. عرض المنتجات وبطاقاتها الفردية
+    # ✅ 3. عرض المنتجات وبطاقاتها الفردية والتعديلات
     # ==========================================
     for idx, p in enumerate(filtered_products):
-        p_id = p.get('id', 'N/A')
+        p_id = str(p.get('id', 'N/A'))
         p_name = p.get('name', 'منتج بدون اسم')
         p_sku = p.get('sku', 'لا يوجد')
         status = p.get('status', 'sale')
@@ -346,15 +326,19 @@ def render_products_page():
         disp_status = "🟢 معروض بالمتجر" if status == "sale" else "🔴 مخفي في المسودات"
         tax_status_badge = "🧾 خاضع للضريبة" if p.get('with_tax', True) else f"⚪ معفى ({p.get('tax_exemption_cause', 'بدون سبب')})"
         
+        # ✅ شارة إضافية لتوضيح إذا كان المنتج مشمولاً في عرض خاص أم لا
+        offer_badge = "🎁 مشمول في عرض خاص" if p_id in offer_product_ids else ""
+        
         st.markdown(f"""
             <div style="background: linear-gradient(135deg, #243b55 0%, #141e30 100%); 
                         padding: 14px 20px; border-radius: 12px 12px 0px 0px; 
                         margin-top: 25px; display: flex; justify-content: space-between; align-items: center; 
-                        border-bottom: 3px solid #e67e22;">
+                        flex-wrap: wrap; gap: 10px; border-bottom: 3px solid #e67e22;">
                 <span style="color: #ffffff; font-weight: bold; font-size: 15px;">📦 {p_name}</span>
                 <div style="display: flex; gap: 8px; flex-wrap: wrap;">
                     <span style="background: rgba(255,255,255,0.2); color: #fff; padding: 4px 12px; border-radius: 20px; font-size: 11px; font-weight:600;">{disp_status}</span>
                     <span style="background: rgba(0, 235, 207, 0.2); color: #00EBCF; padding: 4px 12px; border-radius: 20px; font-size: 11px; font-weight:600;">{tax_status_badge}</span>
+                    {f"<span style='background: rgba(255, 193, 7, 0.3); color: #FFC107; padding: 4px 12px; border-radius: 20px; font-size: 11px; font-weight:600;'>{offer_badge}</span>" if offer_badge else ""}
                 </div>
             </div>
         """, unsafe_allow_html=True)
@@ -372,7 +356,6 @@ def render_products_page():
                 
                 with st.popover("🖼️ إرفاق وتحديث الصورة"):
                     upload_type = st.radio("طريقة الإرفاق:", ["رفع ملف من الجهاز", "استخدام رابط URL"], key=f"img_mode_{p_id}_{idx}")
-                    
                     if upload_type == "رفع ملف من الجهاز":
                         uploaded_img = st.file_uploader("اختر صورة للمنتج:", type=['png', 'jpg', 'jpeg'], key=f"img_up_{p_id}_{idx}")
                         if uploaded_img is not None and st.button("🚀 رفع الصورة للمنتج", key=f"btn_up_{p_id}_{idx}", type="primary"):
@@ -412,31 +395,28 @@ def render_products_page():
             with c_action:
                 st.markdown("<br>", unsafe_allow_html=True)
                 target_st = "hidden" if status == "sale" else "sale"
-                btn_lbl = "👁️ إخفاء المنتج" if status == "sale" else "👁️ إظهار المنتج"
+                btn_lbl = "👁️ إخفاء المنتج من المتجر" if status == "sale" else "👁️ إظهار المنتج بالمتجر"
                 if st.button(btn_lbl, key=f"sh_{p_id}_{idx}", type="secondary" if status == "sale" else "primary", use_container_width=True):
                     with st.spinner("مزامنة..."):
                         if update_product_status(p_id, target_st):
                             st.success("تم التحديث!")
                             st.rerun()
                             
-                # ✅ نافذة تعديل العناوين (المحمية بحماية السعر الأصلي)
-                with st.popover("✏️ العناوين الترويجية"):
+                with st.popover("✏️ تعديل العناوين"):
                     new_promo = st.text_input("العنوان الترويجي:", value=(p_promotion if p_promotion != "لا يوجد عنوان ترويجي" else ""), key=f"promo_in_{p_id}_{idx}")
                     new_sub = st.text_input("العنوان الفرعي:", value=(p_sub_title if p_sub_title != "لا يوجد عنوان فرعي" else ""), key=f"sub_in_{p_id}_{idx}")
                     
-                    if st.button("💾 حفظ العناوين", key=f"save_promo_{p_id}_{idx}", type="primary", use_container_width=True):
-                        with st.spinner("جاري الحفظ الآمن..."):
+                    if st.button("💾 حفظ العناوين الآمن", key=f"save_promo_{p_id}_{idx}", type="primary", use_container_width=True):
+                        with st.spinner("جاري الحفظ الآمن للأسعار..."):
                             if update_product_promotions_secure(p_id, new_promo, new_sub, headers):
                                 st.success("✅ تم تحديث العناوين بنجاح وبثبات للسعر الأصلي!")
                                 st.rerun()
 
-                # ✅ نافذة إعدادات الضرائب المسترجعة والمحدثة بالكامل
                 with st.popover("🧾 إعدادات الضريبة"):
                     is_taxed = st.checkbox("خاضع للضريبة", value=p.get('with_tax', True), key=f"tax_chk_{p_id}_{idx}")
                     ex_cause = p.get('tax_exemption_cause', '')
-                    
                     if not is_taxed:
-                        cause_idx = TAX_EXEMPTION_CAUSES.index(ex_cause) if ex_cause in TAX_EXEMPTION_CAUSES else 4
+                        cause_idx = TAX_EXEMPTION_CAUSES.index(ex_cause) if ex_cause in TAX_EXEMPTION_CAUSES else 0
                         selected_cause = st.selectbox("سبب الإعفاء من الضريبة:", TAX_EXEMPTION_CAUSES, index=cause_idx, key=f"tax_cause_{p_id}_{idx}")
                     else:
                         selected_cause = ""
@@ -447,32 +427,26 @@ def render_products_page():
                                 st.success("✅ تم تحديث حالة الضريبة بنجاح!")
                                 st.rerun()
 
-                # ✅ نافذة توزيع كميات الفروع بشكل مباشر وصحيح
                 with st.popover("🏢 كميات الفروع"):
                     if not branches:
                         st.warning("لا توجد فروع مسجلة، أو فشل الجلب.")
                     else:
-                        st.markdown("**تعديل واستبدال كمية المنتج في الفروع:**")
-                        current_branch_quantities = get_product_quantities_by_branch(product_id=p_id, headers=headers)
-                        branch_qty_map = {bq.get('branch_id'): bq.get('quantity', 0) for bq in current_branch_quantities}
-                        
+                        st.markdown("**أدخل الكمية الجديدة للفرع (سيتم استبدال الكمية الحالية):**")
                         branch_updates = []
                         for b in branches:
-                            current_qty = branch_qty_map.get(b['id'], 0)
-                            new_q = st.number_input(f"الكمية في: {b['name']}", min_value=0, value=current_qty, step=1, key=f"bq_{p_id}_{b['id']}_{idx}")
-                            
-                            # نجمع فقط التعديلات التي اختلفت عن الكمية الأصلية لتقليل الضغط على السيرفر
-                            if new_q != current_qty:
+                            # السماح للمستخدم بإدخال الكمية الجديدة بشكل مباشر دون الخلط بين المنتجات
+                            new_q = st.number_input(f"تحديث الكمية في: {b['name']}", min_value=0, value=0, step=1, key=f"bq_{p_id}_{b['id']}_{idx}")
+                            if new_q > 0:
                                 branch_updates.append({"sku": p_sku, "branch_id": b['id'], "quantity": new_q, "mode": "overwrite"})
                         
-                        if st.button("💾 حفظ التوزيع بالفروع", key=f"save_bq_{p_id}_{idx}", type="primary", use_container_width=True):
+                        if st.button("💾 حفظ كميات الفروع (للقيم المضافة)", key=f"save_bq_{p_id}_{idx}", type="primary", use_container_width=True):
                             if branch_updates:
-                                with st.spinner("جاري التوزيع والتحديث..."):
-                                    res = safe_api_request("POST", "https://api.salla.dev/admin/v2/products/quantities/bulk", headers, json={"products": branch_updates})
+                                with st.spinner("جاري التوزيع في سلة..."):
+                                    res = safe_api_request("POST", "https://api.salla.dev/admin/v2/products/quantities/bulk", headers, json={"quantities": branch_updates})
                                     if res:
                                         st.success("✅ تم تحديث وتوزيع الكميات!")
                                         st.rerun()
                             else:
-                                st.warning("لم يتم رصد أي تغييرات في الكميات لحفظها.")
+                                st.warning("الرجاء إدخال كميات أكبر من صفر للتحديث.")
 
             st.markdown("</div>", unsafe_allow_html=True)
