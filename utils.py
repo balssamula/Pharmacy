@@ -803,20 +803,26 @@ def create_products_template(products=None) -> bytes:
 def attach_product_image_api(product_id: int, image_bytes: bytes=None, filename: str=None, image_url: str=None) -> bool:
     """رفع وإرفاق صورة للمنتج (إما كملف File أو كرابط URL)"""
     token = st.session_state.get('access_token', '')
-    if not token: return False
+    if not token: 
+        st.error("⚠️ الرجاء إدخال مفتاح الربط أولاً")
+        return False
     
     headers = {"Authorization": f"Bearer {token}"}
     url = f"https://api.salla.dev/admin/v2/products/{product_id}/images"
     
     try:
         if image_url:
-            # إذا كان الاختيار رابط URL، يتم إرساله بصيغة JSON
+            # ✅ إصلاح: إرسال الرابط كـ JSON
             headers["Content-Type"] = "application/json"
-            response = requests.post(url, headers=headers, json={"photo": image_url}, timeout=30)
-        else:
-            # إذا كان الاختيار ملف من الجهاز، يتم إرساله كـ multipart/form-data
+            payload = {"original": image_url}  # استخدام original بدلاً من photo
+            response = requests.post(url, headers=headers, json=payload, timeout=30)
+        elif image_bytes and filename:
+            # ✅ رفع ملف
             files = {'photo': (filename, image_bytes, 'image/jpeg')}
             response = requests.post(url, headers=headers, files=files, timeout=30)
+        else:
+            st.error("⚠️ يجب توفير إما صورة أو رابط")
+            return False
             
         if response.status_code >= 400:
             try: err = response.json()
