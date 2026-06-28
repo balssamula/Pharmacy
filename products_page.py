@@ -1,9 +1,338 @@
 import streamlit as st
 import pandas as pd
 import requests
-import io  # ✅ إضافة import io
+import io
+import json
 from datetime import datetime
 from utils import get_headers, safe_api_request, get_flat_price, update_product_status, export_products_to_excel
+
+# ==========================================
+# ✅ دوال إنشاء النماذج الاحترافية
+# ==========================================
+
+def create_products_template(products=None) -> bytes:
+    """إنشاء نموذج استيراد المنتجات مع قوائم منسدلة"""
+    try:
+        from openpyxl import Workbook
+        from openpyxl.styles import PatternFill, Font, Alignment, Border, Side
+        from openpyxl.worksheet.datavalidation import DataValidation
+        from openpyxl.utils import get_column_letter
+        from openpyxl.styles import numbers
+        
+        wb = Workbook()
+        ws = wb.active
+        ws.title = "قائمة المنتجات"
+        
+        # ✅ تعريف الأعمدة باللغة العربية
+        columns = [
+            "معرف المنتج", "SKU", "اسم المنتج", "نوع المنتج", "حالة المنتج",
+            "السعر (SAR)", "السعر المخفض (SAR)", "بداية التخفيض", "نهاية التخفيض",
+            "كمية غير محدودة", "خاضع للضريبة", "سبب عدم الخضوع",
+            "العنوان الترويجي", "العنوان الفرعي"
+        ]
+        
+        # ✅ تنسيق الرأس
+        header_fill = PatternFill(start_color="1F497D", end_color="1F497D", fill_type="solid")
+        header_font = Font(name="Segoe UI", size=12, bold=True, color="FFFFFF")
+        header_alignment = Alignment(horizontal="center", vertical="center", wrap_text=True)
+        thin_border = Border(
+            left=Side(style='thin', color='CCCCCC'),
+            right=Side(style='thin', color='CCCCCC'),
+            top=Side(style='thin', color='CCCCCC'),
+            bottom=Side(style='thin', color='CCCCCC')
+        )
+        
+        # إضافة الرأس
+        for col_idx, col_name in enumerate(columns, 1):
+            cell = ws.cell(row=1, column=col_idx, value=col_name)
+            cell.fill = header_fill
+            cell.font = header_font
+            cell.alignment = header_alignment
+            cell.border = thin_border
+        
+        # ✅ إضافة بيانات المنتجات الحالية إذا وجدت
+        if products:
+            for row_idx, product in enumerate(products, 2):
+                # معرف المنتج
+                ws.cell(row=row_idx, column=1, value=product.get('id', ''))
+                # SKU
+                ws.cell(row=row_idx, column=2, value=product.get('sku', ''))
+                # اسم المنتج
+                ws.cell(row=row_idx, column=3, value=product.get('name', ''))
+                # نوع المنتج
+                product_type = product.get('type', 'product')
+                type_text = "منتج جاهز" if product_type == "product" else "مجموعة منتجات"
+                ws.cell(row=row_idx, column=4, value=type_text)
+                # حالة المنتج
+                status = product.get('status', 'sale')
+                status_text = "معروض" if status == "sale" else "مخفي"
+                ws.cell(row=row_idx, column=5, value=status_text)
+                # السعر
+                price = get_flat_price(product.get('price', 0))
+                ws.cell(row=row_idx, column=6, value=price)
+                # السعر المخفض
+                sale_price = get_flat_price(product.get('sale_price', 0))
+                ws.cell(row=row_idx, column=7, value=sale_price if sale_price > 0 else '')
+                # بداية التخفيض
+                ws.cell(row=row_idx, column=8, value=product.get('sale_start', ''))
+                # نهاية التخفيض
+                ws.cell(row=row_idx, column=9, value=product.get('sale_end', ''))
+                # كمية غير محدودة
+                unlimited = "نعم" if product.get('unlimited_quantity', False) else "لا"
+                ws.cell(row=row_idx, column=10, value=unlimited)
+                # خاضع للضريبة
+                with_tax = "نعم" if product.get('with_tax', True) else "لا"
+                ws.cell(row=row_idx, column=11, value=with_tax)
+                # سبب عدم الخضوع
+                ws.cell(row=row_idx, column=12, value=product.get('tax_reason_code', ''))
+                # العنوان الترويجي
+                ws.cell(row=row_idx, column=13, value=product.get('promotion_title', ''))
+                # العنوان الفرعي
+                ws.cell(row=row_idx, column=14, value=product.get('promotion_subtitle', ''))
+        else:
+            # ✅ بيانات نموذجية للتعليمات
+            sample_data = [
+                ["", "SKU-001", "منتج جديد", "منتج جاهز", "معروض", 
+                 100, 80, "2026-07-01", "2026-07-31", 
+                 "لا", "نعم", "", "عرض خاص", "خصم 20%"],
+                ["", "SKU-002", "منتج آخر", "مجموعة منتجات", "مخفي", 
+                 200, "", "", "", 
+                 "نعم", "لا", "الأدوية والمعدات الطبية", "", ""]
+            ]
+            for row_idx, row_data in enumerate(sample_data, 2):
+                for col_idx, value in enumerate(row_data, 1):
+                    ws.cell(row=row_idx, column=col_idx, value=value)
+        
+        # ✅ تنسيق البيانات
+        data_font = Font(name="Segoe UI", size=11)
+        data_alignment = Alignment(horizontal="right", vertical="center", wrap_text=True)
+        
+        for row in ws.iter_rows(min_row=2):
+            for cell in row:
+                cell.font = data_font
+                cell.alignment = data_alignment
+                cell.border = thin_border
+        
+        # ✅ ضبط عرض الأعمدة
+        column_widths = {
+            'A': 18,  # معرف المنتج
+            'B': 18,  # SKU
+            'C': 25,  # اسم المنتج
+            'D': 18,  # نوع المنتج
+            'E': 18,  # حالة المنتج
+            'F': 16,  # السعر
+            'G': 18,  # السعر المخفض
+            'H': 20,  # بداية التخفيض
+            'I': 20,  # نهاية التخفيض
+            'J': 18,  # كمية غير محدودة
+            'K': 18,  # خاضع للضريبة
+            'L': 25,  # سبب عدم الخضوع
+            'M': 22,  # العنوان الترويجي
+            'N': 22   # العنوان الفرعي
+        }
+        
+        for col, width in column_widths.items():
+            ws.column_dimensions[col].width = width
+        
+        # ✅ إضافة الفلترة التلقائية
+        ws.auto_filter.ref = f"A1:N{ws.max_row}"
+        
+        # ✅ إضافة القوائم المنسدلة
+        
+        # قائمة نوع المنتج
+        dv_product_type = DataValidation(
+            type="list",
+            formula1='"منتج جاهز,مجموعة منتجات"',
+            allow_blank=True,
+            showErrorMessage=True,
+            errorTitle="نوع منتج غير صحيح",
+            error="الرجاء اختيار: منتج جاهز أو مجموعة منتجات"
+        )
+        ws.add_data_validation(dv_product_type)
+        dv_product_type.add(f"D2:D{ws.max_row}")
+        
+        # قائمة حالة المنتج
+        dv_status = DataValidation(
+            type="list",
+            formula1='"معروض,مخفي"',
+            allow_blank=True,
+            showErrorMessage=True,
+            errorTitle="حالة غير صحيحة",
+            error="الرجاء اختيار: معروض أو مخفي"
+        )
+        ws.add_data_validation(dv_status)
+        dv_status.add(f"E2:E{ws.max_row}")
+        
+        # ✅ قائمة كمية غير محدودة
+        dv_unlimited = DataValidation(
+            type="list",
+            formula1='"نعم,لا"',
+            allow_blank=True,
+            showErrorMessage=True,
+            errorTitle="قيمة غير صحيحة",
+            error="الرجاء اختيار: نعم أو لا"
+        )
+        ws.add_data_validation(dv_unlimited)
+        dv_unlimited.add(f"J2:J{ws.max_row}")
+        
+        # ✅ قائمة خاضع للضريبة
+        dv_tax = DataValidation(
+            type="list",
+            formula1='"نعم,لا"',
+            allow_blank=True,
+            showErrorMessage=True,
+            errorTitle="قيمة غير صحيحة",
+            error="الرجاء اختيار: نعم أو لا"
+        )
+        ws.add_data_validation(dv_tax)
+        dv_tax.add(f"K2:K{ws.max_row}")
+        
+        # ✅ قائمة أسباب عدم الخضوع للضريبة
+        tax_reasons = [
+            "الخدمات المالية",
+            "عقد تأمين على الحياة",
+            "التوريدات العقارية المعفاة من الضريبة المضافة",
+            "صادرات السلع من المملكة",
+            "صادرات الخدمات من المملكة",
+            "النقل الدولي للسلع",
+            "النقل الدولي للركاب",
+            "توريد وسائل النقل المؤهلة",
+            "الأدوية والمعدات الطبية"
+        ]
+        dv_tax_reason = DataValidation(
+            type="list",
+            formula1=f'"{",".join(tax_reasons)}"',
+            allow_blank=True,
+            showErrorMessage=True,
+            errorTitle="سبب غير صحيح",
+            error="الرجاء اختيار سبب مناسب"
+        )
+        ws.add_data_validation(dv_tax_reason)
+        dv_tax_reason.add(f"L2:L{ws.max_row}")
+        
+        # ✅ تنسيق خانات التاريخ
+        date_format = numbers.FORMAT_DATE_DATETIME
+        for row in range(2, ws.max_row + 1):
+            for col in ['H', 'I']:  # بداية ونهاية التخفيض
+                cell = ws[f"{col}{row}"]
+                cell.number_format = date_format
+        
+        # ✅ إضافة تعليمات
+        ws.insert_rows(1)
+        ws.merge_cells('A1:N1')
+        instructions_cell = ws.cell(row=1, column=1)
+        instructions_cell.value = """
+📋 تعليمات التعبئة:
+- معرف المنتج: اتركه فارغاً لإضافة منتج جديد، أو أدخل المعرف لتحديث منتج موجود
+- SKU: رمز المنتج الفريد (اختياري)
+- نوع المنتج: اختر من القائمة المنسدلة
+- حالة المنتج: اختر من القائمة المنسدلة
+- كمية غير محدودة: اختر "نعم" إذا كان المنتج غير محدود الكمية
+- خاضع للضريبة: اختر من القائمة المنسدلة
+- سبب عدم الخضوع: اختر من القائمة المنسدلة (يظهر فقط عند اختيار "لا" في خاضع للضريبة)
+- التواريخ: استخدم الصيغة YYYY-MM-DD
+"""
+        instructions_cell.font = Font(name="Segoe UI", size=11, bold=True, color="1F497D")
+        instructions_cell.alignment = Alignment(horizontal="center", vertical="center", wrap_text=True)
+        ws.row_dimensions[1].height = 100
+        
+        # حفظ الملف
+        output = io.BytesIO()
+        wb.save(output)
+        output.seek(0)
+        return output.getvalue()
+        
+    except Exception as e:
+        st.error(f"⚠️ خطأ في إنشاء النموذج: {str(e)}")
+        return b""
+
+def create_branches_template() -> bytes:
+    """إنشاء نموذج استيراد كميات الفروع"""
+    try:
+        from openpyxl import Workbook
+        from openpyxl.styles import PatternFill, Font, Alignment, Border, Side
+        from openpyxl.worksheet.datavalidation import DataValidation
+        
+        wb = Workbook()
+        ws = wb.active
+        ws.title = "كميات الفروع"
+        
+        # ✅ تعريف الأعمدة باللغة العربية
+        columns = [
+            "معرف المنتج", "معرف الفرع", "الكمية"
+        ]
+        
+        # ✅ تنسيق الرأس
+        header_fill = PatternFill(start_color="1F497D", end_color="1F497D", fill_type="solid")
+        header_font = Font(name="Segoe UI", size=12, bold=True, color="FFFFFF")
+        header_alignment = Alignment(horizontal="center", vertical="center", wrap_text=True)
+        thin_border = Border(
+            left=Side(style='thin', color='CCCCCC'),
+            right=Side(style='thin', color='CCCCCC'),
+            top=Side(style='thin', color='CCCCCC'),
+            bottom=Side(style='thin', color='CCCCCC')
+        )
+        
+        # إضافة الرأس
+        for col_idx, col_name in enumerate(columns, 1):
+            cell = ws.cell(row=1, column=col_idx, value=col_name)
+            cell.fill = header_fill
+            cell.font = header_font
+            cell.alignment = header_alignment
+            cell.border = thin_border
+        
+        # ✅ بيانات نموذجية
+        sample_data = [
+            ["12345", "1", "30"],
+            ["12345", "2", "20"],
+            ["", "", ""]
+        ]
+        for row_idx, row_data in enumerate(sample_data, 2):
+            for col_idx, value in enumerate(row_data, 1):
+                ws.cell(row=row_idx, column=col_idx, value=value)
+        
+        # ✅ تنسيق البيانات
+        data_font = Font(name="Segoe UI", size=11)
+        data_alignment = Alignment(horizontal="right", vertical="center")
+        
+        for row in ws.iter_rows(min_row=2):
+            for cell in row:
+                cell.font = data_font
+                cell.alignment = data_alignment
+                cell.border = thin_border
+        
+        # ✅ ضبط عرض الأعمدة
+        ws.column_dimensions['A'].width = 20
+        ws.column_dimensions['B'].width = 20
+        ws.column_dimensions['C'].width = 15
+        
+        # ✅ إضافة الفلترة التلقائية
+        ws.auto_filter.ref = f"A1:C{ws.max_row}"
+        
+        # ✅ إضافة تعليمات
+        ws.insert_rows(1)
+        ws.merge_cells('A1:C1')
+        instructions_cell = ws.cell(row=1, column=1)
+        instructions_cell.value = """
+📋 تعليمات التعبئة:
+- معرف المنتج: أدخل معرف المنتج من قائمة المنتجات
+- معرف الفرع: أدخل معرف الفرع من قائمة الفروع
+- الكمية: أدخل الكمية المتوفرة في الفرع
+"""
+        instructions_cell.font = Font(name="Segoe UI", size=11, bold=True, color="1F497D")
+        instructions_cell.alignment = Alignment(horizontal="center", vertical="center", wrap_text=True)
+        ws.row_dimensions[1].height = 80
+        
+        # حفظ الملف
+        output = io.BytesIO()
+        wb.save(output)
+        output.seek(0)
+        return output.getvalue()
+        
+    except Exception as e:
+        st.error(f"⚠️ خطأ في إنشاء النموذج: {str(e)}")
+        return b""
+
 
 def render_products_page():
     st.markdown("<h2 style='color:#0f1c2e;'>📦 مركز إدارة المنتجات الذكي</h2>", unsafe_allow_html=True)
@@ -18,9 +347,6 @@ def render_products_page():
     
     col_widget1, col_widget2 = st.columns(2)
 
-    # =========================================================================
-    # ✅ 1. إعدادات المنتجات المقترحة
-    # =========================================================================
     with col_widget1:
         with st.expander("🔄 إعدادات المنتجات المقترحة", expanded=False):
             st.markdown("#### 🛠️ إعدادات عرض المنتجات المقترحة")
@@ -41,9 +367,6 @@ def render_products_page():
             if st.button("💾 تطبيق الإعدادات", type="primary", use_container_width=True, key="apply_recent_settings"):
                 st.success("✅ تم تطبيق إعدادات المنتجات المقترحة بنجاح!")
 
-    # =========================================================================
-    # ✅ 2. إعدادات التوصيات الذكية
-    # =========================================================================
     with col_widget2:
         with st.expander("🧠 إعدادات نظام التوصيات الذكي", expanded=False):
             st.markdown("#### 🛠️ إعدادات توصيات المنتجات الذكية")
@@ -85,52 +408,65 @@ def render_products_page():
     st.divider()
 
     # ==========================================
-    # ✅ استيراد وتحديث المنتجات
+    # ✅ استيراد المنتجات (مع جميع الميزات)
     # ==========================================
-    with st.expander("📥 استيراد وتحديث المنتجات جماعياً (XLSX)", expanded=False):
-        st.markdown("#### 📤 استيراد المنتجات مع جميع البيانات")
+    with st.expander("📥 استيراد وتحديث المنتجات", expanded=False):
+        st.markdown("#### 📤 استيراد وتحديث المنتجات")
         
-        # ✅ زر تحميل النموذج
-        col_template1, col_template2 = st.columns([1, 3])
-        with col_template1:
-            if st.button("📥 تحميل نموذج المنتجات", use_container_width=True):
-                # ✅ إضافة import io تم في الأعلى
-                template_data = {
-                    'id': ['', ''],
-                    'name': ['منتج جديد', 'منتج آخر'],
-                    'product_type': ['منتج جاهز', 'مجموعة منتجات'],
-                    'price': [100, 200],
-                    'sale_price': [80, 0],
-                    'sale_start': ['2026-07-01', ''],
-                    'sale_end': ['2026-07-31', ''],
-                    'quantity': [50, 0],
-                    'unlimited_quantity': ['لا', 'نعم'],
-                    'with_tax': ['نعم', 'لا'],
-                    'tax_reason': ['', 'غير خاضع للضريبة'],
-                    'promotion_title': ['عرض خاص', ''],
-                    'promotion_subtitle': ['خصم 20%', ''],
-                    'status': ['sale', 'sale'],
-                    'sku': ['SKU-001', 'SKU-002']
-                }
-                df_template = pd.DataFrame(template_data)
-                buffer = io.BytesIO()
-                with pd.ExcelWriter(buffer, engine='openpyxl') as writer:
-                    df_template.to_excel(writer, index=False, sheet_name='قائمة المنتجات')
-                buffer.seek(0)
-                st.download_button(
-                    label="📥 تحميل النموذج",
-                    data=buffer.getvalue(),
-                    file_name="products_template.xlsx",
-                    mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-                    key="download_template"
-                )
+        # ✅ تحميل المنتجات الحالية للتصدير
+        current_products = None
+        with st.spinner("🔄 جاري تحميل المنتجات الحالية..."):
+            prod_res = safe_api_request("GET", "https://api.salla.dev/admin/v2/products", headers)
+            if prod_res and prod_res.get("data"):
+                current_products = prod_res["data"]
+        
+        # ✅ أزرار تحميل النماذج
+        col_templates1, col_templates2, col_templates3 = st.columns(3)
+        
+        with col_templates1:
+            if st.button("📥 تحميل نموذج فارغ", use_container_width=True):
+                excel_data = create_products_template()
+                if excel_data:
+                    st.download_button(
+                        label="📥 تحميل النموذج الفارغ",
+                        data=excel_data,
+                        file_name="products_template.xlsx",
+                        mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                        key="download_template_empty"
+                    )
+        
+        with col_templates2:
+            if current_products and st.button("📥 تحميل المنتجات الحالية", use_container_width=True):
+                excel_data = create_products_template(current_products)
+                if excel_data:
+                    st.download_button(
+                        label="📥 تحميل المنتجات الحالية",
+                        data=excel_data,
+                        file_name=f"products_current_{datetime.now().strftime('%Y%m%d')}.xlsx",
+                        mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                        key="download_template_current"
+                    )
+        
+        with col_templates3:
+            if st.button("📥 تحميل نموذج الفروع", use_container_width=True):
+                excel_data = create_branches_template()
+                if excel_data:
+                    st.download_button(
+                        label="📥 تحميل نموذج الفروع",
+                        data=excel_data,
+                        file_name="branches_quantities_template.xlsx",
+                        mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                        key="download_branches_template"
+                    )
         
         st.info("""
-        📋 **الصيغة المطلوبة لملف المنتجات:**
-        
-        | id | name | product_type | price | sale_price | sale_start | sale_end | quantity | unlimited_quantity | with_tax | tax_reason | promotion_title | promotion_subtitle | status | sku |
-        |----|------|--------------|-------|------------|------------|----------|----------|-------------------|----------|------------|-----------------|-------------------|--------|-----|
-        | 12345 | منتج | منتج جاهز | 100 | 80 | 2026-07-01 | 2026-07-31 | 50 | لا | نعم | | عرض خاص | خصم 20% | sale | SKU-001 |
+        📋 **الميزات الجديدة في النموذج:**
+        - ✅ جدول احترافي مع ألوان مميزة
+        - ✅ أسماء الأعمدة باللغة العربية
+        - ✅ فلترة تلقائية للبيانات
+        - ✅ قوائم منسدلة لكل من: نوع المنتج، حالة المنتج، كمية غير محدودة، خاضع للضريبة، سبب عدم الخضوع
+        - ✅ يمكنك تحديث المنتجات الحالية أو إضافة منتجات جديدة
+        - ✅ تم إزالة عمود الكمية (استخدم كمية غير محدودة)
         """)
         
         uploaded_file = st.file_uploader("ارفع ملف المنتجات (XLSX):", type=["xlsx"], key="import_products_file")
@@ -141,132 +477,146 @@ def render_products_page():
                 st.dataframe(df, use_container_width=True)
                 st.info(f"✅ تم تحميل {len(df)} منتج")
                 
-                if st.button("🚀 معالجة وتحديث المنتجات", type="primary"):
-                    with st.spinner("🔄 جاري تحديث المنتجات..."):
-                        success_count = 0
-                        error_count = 0
-                        
-                        for idx, row in df.iterrows():
-                            try:
-                                product_id = row.get('id')
-                                if pd.isna(product_id) or product_id == '':
-                                    # إنشاء منتج جديد
-                                    product_data = {
-                                        "name": str(row.get('name', 'منتج جديد')),
-                                        "price": float(row.get('price', 0)) if pd.notna(row.get('price')) else 0,
-                                        "quantity": int(row.get('quantity', 0)) if pd.notna(row.get('quantity')) else 0,
-                                        "type": "product",
-                                        "status": str(row.get('status', 'sale')),
-                                        "sku": str(row.get('sku', '')) if pd.notna(row.get('sku')) else None
-                                    }
-                                    
-                                    # ✅ كمية غير محدودة
-                                    if pd.notna(row.get('unlimited_quantity')):
-                                        product_data['unlimited_quantity'] = str(row.get('unlimited_quantity')) == 'نعم'
-                                    
-                                    if pd.notna(row.get('sale_price')) and float(row.get('sale_price')) > 0:
-                                        product_data['sale_price'] = float(row.get('sale_price'))
-                                    
-                                    if pd.notna(row.get('sale_start')):
-                                        product_data['sale_start'] = str(row.get('sale_start'))
-                                    
-                                    if pd.notna(row.get('sale_end')):
-                                        product_data['sale_end'] = str(row.get('sale_end'))
-                                    
-                                    if pd.notna(row.get('promotion_title')):
-                                        product_data['promotion_title'] = str(row.get('promotion_title'))
-                                    
-                                    if pd.notna(row.get('promotion_subtitle')):
-                                        product_data['promotion_subtitle'] = str(row.get('promotion_subtitle'))
-                                    
-                                    if pd.notna(row.get('with_tax')):
-                                        product_data['with_tax'] = str(row.get('with_tax')) == 'نعم'
-                                    
-                                    if pd.notna(row.get('tax_reason')):
-                                        product_data['tax_reason_code'] = str(row.get('tax_reason'))
-                                    
-                                    product_type = str(row.get('product_type', 'منتج جاهز'))
-                                    if product_type == 'مجموعة منتجات':
-                                        product_data['type'] = 'group_products'
-                                    
-                                    response = safe_api_request(
-                                        "POST",
-                                        "https://api.salla.dev/admin/v2/products",
-                                        headers,
-                                        json=product_data
-                                    )
-                                    if response:
-                                        success_count += 1
-                                    else:
-                                        error_count += 1
-                                else:
-                                    # تحديث منتج موجود
-                                    product_id = int(float(product_id))
-                                    update_payload = {}
-                                    
-                                    if pd.notna(row.get('name')):
-                                        update_payload['name'] = str(row.get('name'))
-                                    
-                                    if pd.notna(row.get('price')):
-                                        update_payload['price'] = float(row.get('price'))
-                                    
-                                    if pd.notna(row.get('sale_price')) and float(row.get('sale_price')) > 0:
-                                        update_payload['sale_price'] = float(row.get('sale_price'))
-                                    
-                                    if pd.notna(row.get('sale_start')):
-                                        update_payload['sale_start'] = str(row.get('sale_start'))
-                                    
-                                    if pd.notna(row.get('sale_end')):
-                                        update_payload['sale_end'] = str(row.get('sale_end'))
-                                    
-                                    if pd.notna(row.get('quantity')):
-                                        update_payload['quantity'] = int(row.get('quantity'))
-                                    
-                                    # ✅ كمية غير محدودة
-                                    if pd.notna(row.get('unlimited_quantity')):
-                                        update_payload['unlimited_quantity'] = str(row.get('unlimited_quantity')) == 'نعم'
-                                    
-                                    if pd.notna(row.get('promotion_title')):
-                                        update_payload['promotion_title'] = str(row.get('promotion_title'))
-                                    
-                                    if pd.notna(row.get('promotion_subtitle')):
-                                        update_payload['promotion_subtitle'] = str(row.get('promotion_subtitle'))
-                                    
-                                    if pd.notna(row.get('status')):
-                                        update_payload['status'] = str(row.get('status'))
-                                    
-                                    if pd.notna(row.get('with_tax')):
-                                        update_payload['with_tax'] = str(row.get('with_tax')) == 'نعم'
-                                    
-                                    if pd.notna(row.get('tax_reason')):
-                                        update_payload['tax_reason_code'] = str(row.get('tax_reason'))
-                                    
-                                    if pd.notna(row.get('sku')):
-                                        update_payload['sku'] = str(row.get('sku'))
-                                    
-                                    if update_payload:
+                # ✅ عرض الأعمدة المتوقعة
+                expected_cols = ['معرف المنتج', 'SKU', 'اسم المنتج', 'نوع المنتج', 'حالة المنتج']
+                missing_cols = [col for col in expected_cols if col not in df.columns]
+                if missing_cols:
+                    st.warning(f"⚠️ الأعمدة المفقودة: {', '.join(missing_cols)}")
+                    st.info("💡 تأكد من استخدام النموذج الصحيح")
+                else:
+                    st.success("✅ جميع الأعمدة المطلوبة موجودة")
+                    
+                    if st.button("🚀 معالجة وتحديث المنتجات", type="primary"):
+                        with st.spinner("🔄 جاري تحديث المنتجات..."):
+                            success_count = 0
+                            error_count = 0
+                            
+                            for idx, row in df.iterrows():
+                                try:
+                                    # ✅ التحقق من وجود معرف المنتج
+                                    product_id = row.get('معرف المنتج')
+                                    if pd.isna(product_id) or product_id == '':
+                                        # ✅ إضافة منتج جديد
+                                        product_data = {
+                                            "name": str(row.get('اسم المنتج', 'منتج جديد')),
+                                            "price": float(row.get('السعر (SAR)', 0)) if pd.notna(row.get('السعر (SAR)')) else 0,
+                                            "type": "product",
+                                            "status": "sale",
+                                            "sku": str(row.get('SKU', '')) if pd.notna(row.get('SKU')) else None
+                                        }
+                                        
+                                        # نوع المنتج
+                                        product_type = str(row.get('نوع المنتج', 'منتج جاهز'))
+                                        if product_type == 'مجموعة منتجات':
+                                            product_data['type'] = 'group_products'
+                                        
+                                        # حالة المنتج
+                                        status_text = str(row.get('حالة المنتج', 'معروض'))
+                                        product_data['status'] = 'sale' if status_text == 'معروض' else 'hidden'
+                                        
+                                        # السعر المخفض
+                                        if pd.notna(row.get('السعر المخفض (SAR)')) and float(row.get('السعر المخفض (SAR)')) > 0:
+                                            product_data['sale_price'] = float(row.get('السعر المخفض (SAR)'))
+                                        
+                                        # بداية ونهاية التخفيض
+                                        if pd.notna(row.get('بداية التخفيض')):
+                                            product_data['sale_start'] = str(row.get('بداية التخفيض'))
+                                        if pd.notna(row.get('نهاية التخفيض')):
+                                            product_data['sale_end'] = str(row.get('نهاية التخفيض'))
+                                        
+                                        # كمية غير محدودة
+                                        if pd.notna(row.get('كمية غير محدودة')):
+                                            product_data['unlimited_quantity'] = str(row.get('كمية غير محدودة')) == 'نعم'
+                                        
+                                        # خاضع للضريبة
+                                        if pd.notna(row.get('خاضع للضريبة')):
+                                            product_data['with_tax'] = str(row.get('خاضع للضريبة')) == 'نعم'
+                                        
+                                        # سبب عدم الخضوع
+                                        if pd.notna(row.get('سبب عدم الخضوع')):
+                                            product_data['tax_reason_code'] = str(row.get('سبب عدم الخضوع'))
+                                        
+                                        # العنوان الترويجي والفرعي
+                                        if pd.notna(row.get('العنوان الترويجي')):
+                                            product_data['promotion_title'] = str(row.get('العنوان الترويجي'))
+                                        if pd.notna(row.get('العنوان الفرعي')):
+                                            product_data['promotion_subtitle'] = str(row.get('العنوان الفرعي'))
+                                        
                                         response = safe_api_request(
-                                            "PUT",
-                                            f"https://api.salla.dev/admin/v2/products/{product_id}",
+                                            "POST",
+                                            "https://api.salla.dev/admin/v2/products",
                                             headers,
-                                            json=update_payload
+                                            json=product_data
                                         )
                                         if response:
                                             success_count += 1
                                         else:
                                             error_count += 1
-                            except Exception as e:
-                                error_count += 1
-                                st.error(f"❌ خطأ في الصف {idx+1}: {str(e)}")
-                        
-                        st.success(f"✅ تم تحديث {success_count} منتج بنجاح")
-                        if error_count > 0:
-                            st.warning(f"⚠️ فشل تحديث {error_count} منتج")
-                        
-                        if success_count > 0:
-                            st.rerun()
+                                    else:
+                                        # ✅ تحديث منتج موجود
+                                        product_id = int(float(product_id))
+                                        update_payload = {}
+                                        
+                                        if pd.notna(row.get('اسم المنتج')):
+                                            update_payload['name'] = str(row.get('اسم المنتج'))
+                                        
+                                        if pd.notna(row.get('السعر (SAR)')):
+                                            update_payload['price'] = float(row.get('السعر (SAR)'))
+                                        
+                                        if pd.notna(row.get('السعر المخفض (SAR)')) and float(row.get('السعر المخفض (SAR)')) > 0:
+                                            update_payload['sale_price'] = float(row.get('السعر المخفض (SAR)'))
+                                        
+                                        if pd.notna(row.get('بداية التخفيض')):
+                                            update_payload['sale_start'] = str(row.get('بداية التخفيض'))
+                                        if pd.notna(row.get('نهاية التخفيض')):
+                                            update_payload['sale_end'] = str(row.get('نهاية التخفيض'))
+                                        
+                                        if pd.notna(row.get('كمية غير محدودة')):
+                                            update_payload['unlimited_quantity'] = str(row.get('كمية غير محدودة')) == 'نعم'
+                                        
+                                        if pd.notna(row.get('خاضع للضريبة')):
+                                            update_payload['with_tax'] = str(row.get('خاضع للضريبة')) == 'نعم'
+                                        
+                                        if pd.notna(row.get('سبب عدم الخضوع')):
+                                            update_payload['tax_reason_code'] = str(row.get('سبب عدم الخضوع'))
+                                        
+                                        if pd.notna(row.get('العنوان الترويجي')):
+                                            update_payload['promotion_title'] = str(row.get('العنوان الترويجي'))
+                                        if pd.notna(row.get('العنوان الفرعي')):
+                                            update_payload['promotion_subtitle'] = str(row.get('العنوان الفرعي'))
+                                        
+                                        if pd.notna(row.get('SKU')):
+                                            update_payload['sku'] = str(row.get('SKU'))
+                                        
+                                        if pd.notna(row.get('حالة المنتج')):
+                                            status_text = str(row.get('حالة المنتج', 'معروض'))
+                                            update_payload['status'] = 'sale' if status_text == 'معروض' else 'hidden'
+                                        
+                                        if update_payload:
+                                            response = safe_api_request(
+                                                "PUT",
+                                                f"https://api.salla.dev/admin/v2/products/{product_id}",
+                                                headers,
+                                                json=update_payload
+                                            )
+                                            if response:
+                                                success_count += 1
+                                            else:
+                                                error_count += 1
+                                except Exception as e:
+                                    error_count += 1
+                                    st.error(f"❌ خطأ في الصف {idx+1}: {str(e)}")
+                            
+                            st.success(f"✅ تم تحديث {success_count} منتج بنجاح")
+                            if error_count > 0:
+                                st.warning(f"⚠️ فشل تحديث {error_count} منتج")
+                            
+                            if success_count > 0:
+                                st.rerun()
             except Exception as e:
                 st.error(f"❌ خطأ في قراءة الملف: {str(e)}")
+
+    st.divider()
 
     # ==========================================
     # ✅ استيراد وتحديث كميات الفروع
