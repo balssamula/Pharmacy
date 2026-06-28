@@ -295,7 +295,7 @@ def render_products_page():
         
         promo = p.get('promotion', {})
         p_promotion = p.get('promotion_title') or (promo.get('title') if isinstance(promo, dict) else '') or "لا يوجد عنوان ترويجي"
-        p_subtitle = (promo.get('subtitle') if isinstance(promo, dict) else '') or "لا يوجد عنوان فرعي"
+        p_sub_title = (promo.get('sub_title') if isinstance(promo, dict) else '') or "لا يوجد عنوان فرعي"
         
         price_val = get_flat_price(p.get('price', 0))
         regular_val = get_flat_price(p.get('regular_price', 0))
@@ -362,7 +362,7 @@ def render_products_page():
             with c_info:
                 st.markdown(f"🆔 **المعرف:** `{p_id}` | 🔢 **SKU:** `{p_sku}`")
                 st.markdown(f"📢 **عنوان ترويجي:** <span style='color:#e67e22; font-weight:bold;'>{p_promotion}</span>", unsafe_allow_html=True)
-                st.markdown(f"🏷️ **عنوان فرعي:** `{p_subtitle}`")
+                st.markdown(f"🏷️ **عنوان فرعي:** `{p_sub_title}`")
                 st.markdown(f"📦 **المخزون الإجمالي:** `{p.get('quantity', 0)}` | 📈 **المبيعات:** `{p.get('sold_quantity', 0)}`")
                 st.markdown(f"🔗 [🌐 عرض المنتج في المتجر]({p_url})")
             
@@ -391,9 +391,9 @@ def render_products_page():
                             st.rerun()
                             
                 # ✅ نافذة تعديل العناوين (المحمية)
-                with st.popover("✏️ العناوين الترويجية"):
+                with st.popover("✏️ العناوين"):
                     new_promo = st.text_input("العنوان الترويجي:", value=(p_promotion if p_promotion != "لا يوجد عنوان ترويجي" else ""), key=f"promo_in_{p_id}_{idx}")
-                    new_sub = st.text_input("العنوان الفرعي:", value=(p_subtitle if p_subtitle != "لا يوجد عنوان فرعي" else ""), key=f"sub_in_{p_id}_{idx}")
+                    new_sub = st.text_input("العنوان الفرعي:", value=(p_sub_title if p_sub_title != "لا يوجد عنوان فرعي" else ""), key=f"sub_in_{p_id}_{idx}")
                     
                     if st.button("💾 حفظ العناوين", key=f"save_promo_{p_id}_{idx}", type="primary", use_container_width=True):
                         with st.spinner("جاري الحفظ الآمن..."):
