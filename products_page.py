@@ -365,6 +365,19 @@ def render_products_page():
                 st.markdown(f"🏷️ **عنوان فرعي:** `{p_sub_title}`")
                 st.markdown(f"📦 **المخزون الإجمالي:** `{p.get('quantity', 0)}` | 📈 **المبيعات:** `{p.get('sold_quantity', 0)}`")
                 st.markdown(f"🔗 [🌐 عرض المنتج في المتجر]({p_url})")
+
+                # ✅ عرض كميات الفروع الحالية
+                with st.expander("🏪 كميات الفروع الحالية", expanded=False):
+                    with st.spinner("جاري جلب كميات الفروع..."):
+                        branches_quantities = get_product_quantities_by_branch(product_id=p_id, headers=headers)
+                
+                    if branches_quantities:
+                        for bq in branches_quantities:
+                            branch_name = bq.get('branch_name', 'فرع غير معروف')
+                            quantity = bq.get('quantity', 0)
+                            st.markdown(f"**{branch_name}:** `{quantity}` حبة")
+                    else:
+                        st.info("ℹ️ لا توجد كميات مسجلة في الفروع")
             
             with c_pricing:
                 if has_discount:
@@ -394,11 +407,11 @@ def render_products_page():
                 with st.popover("✏️ العناوين"):
                     new_promo = st.text_input("العنوان الترويجي:", value=(p_promotion if p_promotion != "لا يوجد عنوان ترويجي" else ""), key=f"promo_in_{p_id}_{idx}")
                     new_sub = st.text_input("العنوان الفرعي:", value=(p_sub_title if p_sub_title != "لا يوجد عنوان فرعي" else ""), key=f"sub_in_{p_id}_{idx}")
-                    
+                
                     if st.button("💾 حفظ العناوين", key=f"save_promo_sub_{p_id}_{idx}", type="primary", use_container_width=True):
-                        with st.spinner("جاري الحفظ الآمن..."):
+                        with st.spinner("جاري الحفظ..."):
                             if update_product_promotions_secure(p_id, new_promo, new_sub, headers):
-                                st.success("✅ تم التحديث بنجاح!")
+                                st.success("✅ تم التحديث!")
                                 st.rerun()
 
                 # ✅ نافذة تعديل الضريبة وأسبابها
@@ -418,29 +431,50 @@ def render_products_page():
                                 st.success("✅ تم تحديث حالة الضريبة!")
                                 st.rerun()
 
-                # ✅ نافذة تعديل وتوزيع كميات المنتج على الفروع مباشرة
+                # ✅ نافذة تعديل كميات الفروع مع عرض الكميات الحالية
                 with st.popover("🏢 كميات الفروع"):
                     if not branches:
-                        st.warning("لا توجد فروع مسجلة، أو فشل جلب الفروع.")
+                        st.warning("لا توجد فروع مسجلة")
                     else:
-                        st.markdown("تعديل واستبدال كمية هذا المنتج في فروعك المعتمدة:")
+                        st.markdown("**تعديل كميات المنتج في الفروع:**")
+                    
+                        # ✅ جلب الكميات الحالية للفروع
+                        current_branch_quantities = get_product_quantities_by_branch(product_id=p_id, headers=headers)
+                        branch_qty_map = {}
+                        for bq in current_branch_quantities:
+                            branch_qty_map[bq.get('branch_id')] = bq.get('quantity', 0)
+                    
                         branch_updates = []
                         for b in branches:
-                            # نعرض حقل رقمي لكل فرع
-                            new_q = st.number_input(f"الكمية في: {b['name']}", min_value=0, value=0, step=1, key=f"bq_{p_id}_{b['id']}_{idx}")
-                            if new_q > 0:
+                            current_qty = branch_qty_map.get(b['id'], 0)
+                            new_q = st.number_input(
+                                f"الكمية في: {b['name']}",
+                                min_value=0,
+                                value=current_qty,
+                                step=1,
+                                key=f"bq_{p_id}_{b['id']}_{idx}"
+                            )
+                            if new_q != current_qty:
                                 branch_updates.append({
-                                    "sku": p_sku, "branch_id": b['id'], "quantity": new_q, "mode": "overwrite"
+                                    "sku": p_sku,
+                                    "branch_id": b['id'],
+                                    "quantity": new_q,
+                                    "mode": "overwrite"
                                 })
-                        
+                    
                         if st.button("💾 حفظ كميات الفروع", key=f"save_bq_{p_id}_{idx}", type="primary", use_container_width=True):
                             if branch_updates:
                                 with st.spinner("جاري التوزيع..."):
-                                    res = safe_api_request("POST", "https://api.salla.dev/admin/v2/products/quantities/bulk", headers, json={"quantities": branch_updates})
+                                    res = safe_api_request(
+                                        "POST",
+                                        "https://api.salla.dev/admin/v2/products/quantities/bulk",
+                                        headers,
+                                        json={"quantities": branch_updates}
+                                    )
                                     if res:
-                                        st.success("✅ تم تحديث وتوزيع الكميات!")
+                                        st.success("✅ تم تحديث الكميات!")
                                         st.rerun()
                             else:
-                                st.warning("الرجاء إدخال كميات أكبر من صفر للتحديث.")
+                                st.warning("لم يتم تغيير أي كمية")
 
             st.markdown("</div>", unsafe_allow_html=True)
