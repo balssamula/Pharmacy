@@ -450,3 +450,28 @@ def export_customer_groups_to_excel(groups: List[Dict]) -> bytes:
     except Exception as e:
         st.error(f"⚠️ خطأ في تصدير تقرير مجموعات العملاء: {str(e)}")
         return b""
+
+def upload_product_image_api(product_id: int, image_bytes: bytes, filename: str) -> bool:
+    """رفع وإرفاق صورة للمنتج بصيغة multipart/form-data كما تتطلب منصة سلة"""
+    token = st.session_state.get('access_token', '')
+    if not token: return False
+    
+    headers = {"Authorization": f"Bearer {token}"}
+    url = f"https://api.salla.dev/admin/v2/products/{product_id}/images"
+    
+    # يجب إرسال الصورة كـ tuple (filename, bytes, content_type)
+    files = {
+        'photo': (filename, image_bytes, 'image/jpeg')
+    }
+    
+    try:
+        response = requests.post(url, headers=headers, files=files, timeout=30)
+        if response.status_code >= 400:
+            try: error_detail = response.json()
+            except: error_detail = response.text
+            st.error(f"⚠️ خطأ في رفع الصورة: {error_detail}")
+            return False
+        return True
+    except Exception as e:
+        st.error(f"⚠️ خطأ في الاتصال أثناء رفع الصورة: {str(e)}")
+        return False
