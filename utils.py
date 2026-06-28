@@ -475,3 +475,108 @@ def upload_product_image_api(product_id: int, image_bytes: bytes, filename: str)
     except Exception as e:
         st.error(f"⚠️ خطأ في الاتصال أثناء رفع الصورة: {str(e)}")
         return False
+
+# ==========================================
+# 🏢 دوال إدارة الفروع وتحديث الكميات الجماعي
+# ==========================================
+
+def get_branches_list() -> List[Dict]:
+    headers = get_headers()
+    if not headers: return []
+    res = safe_api_request("GET", "https://api.salla.dev/admin/v2/branches", headers)
+    return res.get("data", []) if res else []
+
+def get_product_quantities_by_branch(branch_id: Optional[int] = None) -> List[Dict]:
+    headers = get_headers()
+    if not headers: return []
+    url = "https://api.salla.dev/admin/v2/products/quantities"
+    params = {"branch": branch_id} if branch_id else {}
+    res = safe_api_request("GET", url, headers, params=params)
+    return res.get("data", []) if res else []
+
+def generate_quantities_template() -> bytes:
+    from openpyxl import Workbook
+    from openpyxl.worksheet.datavalidation import DataValidation
+    output = io.BytesIO()
+    wb = Workbook()
+    ws = wb.active
+    ws.title = "تحديث الكميات"
+    
+    ws.append(["💡 إرشادات: ادخل رقم الـ SKU للمنتج، ومعرف الفرع، والكمية، ثم اختر نوع العملية من القائمة المنسدلة (increment للزيادة، decrement للنقصان، overwrite للاستبدال)."])
+    ws.merge_cells('A1:D1')
+    ws.row_dimensions[1].height = 24
+    
+    columns = ["Product_SKU", "Branch_ID", "Quantity", "Mode"]
+    ws.append(columns)
+    ws.append(["SKU-123", "12345", 50, "increment"])
+    
+    style_excel_file(ws, is_template=True, header_color="00EBCF")
+    
+    dv_mode = DataValidation(type="list", formula1='"increment,decrement,overwrite"', allow_blank=False)
+    ws.add_data_validation(dv_mode)
+    dv_mode.add("D3:D1000")
+    
+    wb.save(output)
+    return output.getvalue()
+
+def process_quantities_import(df: pd.DataFrame) -> Dict:
+    results = {"success": [], "errors": []}
+    headers = get_headers()
+    if not headers:
+        results["errors"].append("❌ الرجاء إدخال مفتاح الربط أولاً")
+        return results
+    
+    quantities_payload = []
+    for idx, row in df.iterrows():
+        if row.isna().all() or str(row.iloc[0]).strip().startswith("💡"): continue
+        try:
+            sku = str(row.get('Product_SKU', '')).strip()
+            branch_id = row.get('Branch_ID')
+            quantity = int(safe_float(row.get('Quantity', 0)))
+            mode = str(row.get('Mode', 'increment')).strip()
+            
+            if sku and pd.notna(branch_id):
+                quantities_payload.append({
+                    "sku": sku,
+                    "branch_id": int(float(branch_id)),
+                    "quantity": quantity,
+                    "mode": mode
+                })
+        except Exception as e:
+            results["errors"].append(f"❌ خطأ في قراءة الصف {idx+1}: {str(e)}")
+            
+    if quantities_payload:
+        res = safe_api_request("POST", "https://api.salla.dev/admin/v2/products/quantities/bulk", headers, json={"quantities": quantities_payload})
+        if res:
+            results["success"].append(f"✅ تم تحديث كميات {len(quantities_payload)} منتج بنجاح!")
+        else:
+            results["errors"].append("❌ فشل إرسال طلب تحديث الكميات الجماعي.")
+    else:
+        results["errors"].append("⚠️ لم يتم العثور على بيانات صالحة في الملف.")
+        
+    return results
+
+def update_product_promotions_secure(product_id: int, new_promo: str, new_sub: str, headers: dict) -> bool:
+    """تحديث العناوين الترويجية بشكل آمن مع حماية السعر الأصلي للمنتج من التلاعب"""
+    current_res = safe_api_request("GET", f"https://api.salla.dev/admin/v2/products/{product_id}", headers)
+    if not current_res or not current_res.get('data'): return False
+    
+    p_data = current_res['data']
+    price_val = get_flat_price(p_data.get('price', 0))
+    sale_val = get_flat_price(p_data.get('sale_price', 0))
+    regular_val = get_flat_price(p_data.get('regular_price', 0))
+    
+    # 🔴 حماية السعر الأصلي: منصة سلة تتطلب تمرير السعر الأساسي في حقل price
+    base_price = regular_val if regular_val > 0 else price_val
+    
+    payload = {
+        "name": p_data.get('name'),
+        "price": base_price,  # السعر الأصلي المحمي
+        "promotion_title": new_promo,
+        "promotion_subtitle": new_sub
+    }
+    if sale_val > 0:
+        payload['sale_price'] = sale_val
+        
+    res = safe_api_request("PUT", f"https://api.salla.dev/admin/v2/products/{product_id}", headers, json=payload)
+    return res is not None
