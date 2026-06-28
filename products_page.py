@@ -471,13 +471,13 @@ def render_products_page():
                         st.warning("لا توجد فروع مسجلة")
                     else:
                         st.markdown("**تعديل كميات المنتج في الفروع:**")
-                    
+    
                         # ✅ جلب الكميات الحالية للفروع
                         current_branch_quantities = get_product_quantities_by_branch(product_id=p_id, headers=headers)
                         branch_qty_map = {}
                         for bq in current_branch_quantities:
                             branch_qty_map[bq.get('branch_id')] = bq.get('quantity', 0)
-                    
+    
                         branch_updates = []
                         for b in branches:
                             current_qty = branch_qty_map.get(b['id'], 0)
@@ -490,24 +490,27 @@ def render_products_page():
                             )
                             if new_q != current_qty:
                                 branch_updates.append({
-                                    "sku": p_sku,
+                                    "sku": p_sku,  # ✅ استخدام SKU بدلاً من product_id
                                     "branch_id": b['id'],
                                     "quantity": new_q,
                                     "mode": "overwrite"
                                 })
-                    
+    
                         if st.button("💾 حفظ كميات الفروع", key=f"save_bq_{p_id}_{idx}", type="primary", use_container_width=True):
                             if branch_updates:
                                 with st.spinner("جاري التوزيع..."):
+                                    # ✅ إصلاح: استخدام "products" بدلاً من "quantities"
                                     res = safe_api_request(
                                         "POST",
                                         "https://api.salla.dev/admin/v2/products/quantities/bulk",
                                         headers,
-                                        json={"quantities": branch_updates}
+                                        json={"products": branch_updates}  # ✅ التصحيح هنا
                                     )
                                     if res:
                                         st.success("✅ تم تحديث الكميات!")
                                         st.rerun()
+                                    else:
+                                        st.error("❌ فشل تحديث الكميات")
                             else:
                                 st.warning("لم يتم تغيير أي كمية")
 
