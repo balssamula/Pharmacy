@@ -325,8 +325,8 @@ def render_products_page():
         
         disp_status = "🟢 معروض بالمتجر" if status == "sale" else "🔴 مخفي في المسودات"
         tax_status_badge = "🔥 خاضع للضريبة" if p.get('with_tax', True) else f"⚪ يخضع لنسبة الصفر ({p.get('tax_exemption_cause', 'بدون سبب')})"
-        offer_text = " 🎁 مشمول في عرض خاص" if p_id in offer_product_ids else ""
-    
+        offer_badge = "🎁 مشمول في عرض خاص" if p_id in offer_product_ids else ""
+
         # ✅ بناء شارة العرض بشكل صحيح (بدون علامات HTML فارغة)
         offer_badge_html = ""
         if p_id in offer_product_ids:
