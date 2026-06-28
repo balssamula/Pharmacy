@@ -850,7 +850,7 @@ def update_product_promotions_secure(product_id: int, new_promo: str, new_sub: s
         "name": p_data.get('name'),
         "price": base_price,
         "promotion_title": new_promo,
-        "promotion_subtitle": new_sub
+        "promotion_sub_title": new_sub
     }
     if sale_val > 0:
         payload['sale_price'] = sale_val
