@@ -556,8 +556,105 @@ def process_quantities_import(df: pd.DataFrame) -> Dict:
         
     return results
 
+# ==========================================
+# 📦 دوال المنتجات المتقدمة (الصور، الضرائب، والاستيراد)
+# ==========================================
+
+def create_products_template(products=None) -> bytes:
+    try:
+        from openpyxl import Workbook
+        from openpyxl.styles import PatternFill, Font, Alignment, Border, Side
+        from openpyxl.worksheet.datavalidation import DataValidation
+        from openpyxl.utils import get_column_letter
+        
+        wb = Workbook()
+        ws = wb.active
+        ws.title = "قائمة المنتجات"
+        
+        columns = [
+            "معرف المنتج", "SKU", "اسم المنتج", "حالة المنتج",
+            "السعر (SAR)", "السعر المخفض (SAR)", "خاضع للضريبة", "سبب عدم الخضوع للضريبة",
+            "العنوان الترويجي", "العنوان الفرعي"
+        ]
+        
+        header_fill = PatternFill(start_color="1F497D", end_color="1F497D", fill_type="solid")
+        header_font = Font(name="Segoe UI", size=11, bold=True, color="FFFFFF")
+        center_alignment = Alignment(horizontal="center", vertical="center")
+        thin_border = Border(
+            left=Side(style='thin', color='DDDDDD'), right=Side(style='thin', color='DDDDDD'),
+            top=Side(style='thin', color='DDDDDD'), bottom=Side(style='thin', color='DDDDDD')
+        )
+        
+        ws.append(columns)
+        for col in range(1, len(columns) + 1):
+            cell = ws.cell(row=1, column=col)
+            cell.fill = header_fill
+            cell.font = header_font
+            cell.alignment = center_alignment
+            cell.border = thin_border
+            ws.column_dimensions[get_column_letter(col)].width = 20
+
+        if products:
+            for p in products:
+                price = get_flat_price(p.get('price', 0))
+                sale_price = get_flat_price(p.get('sale_price', 0))
+                promo = p.get('promotion', {})
+                promo_title = p.get('promotion_title') or (promo.get('title') if isinstance(promo, dict) else '') or ""
+                promo_sub = (promo.get('sub_title') if isinstance(promo, dict) else '') or ""
+                
+                ws.append([
+                    p.get('id', ''), p.get('sku', ''), p.get('name', ''), 
+                    'معروض' if p.get('status') == 'sale' else 'مخفي',
+                    price, sale_price if sale_price > 0 else '',
+                    'نعم' if p.get('with_tax', True) else 'لا',
+                    p.get('tax_exemption_cause', ''), promo_title, promo_sub
+                ])
+        else:
+            ws.append(["12345", "SKU-01", "منتج تجريبي", "معروض", 100, 80, "نعم", "", "خصم خاص", "لفترة محدودة"])
+            
+        dv_status = DataValidation(type="list", formula1='"معروض,مخفي"', allow_blank=True)
+        ws.add_data_validation(dv_status); dv_status.add("D2:D1000")
+        
+        dv_yesno = DataValidation(type="list", formula1='"نعم,لا"', allow_blank=True)
+        ws.add_data_validation(dv_yesno); dv_yesno.add("G2:G1000")
+        
+        output = io.BytesIO()
+        wb.save(output)
+        return output.getvalue()
+    except Exception as e:
+        st.error(f"⚠️ خطأ في إنشاء النموذج: {str(e)}")
+        return b""
+
+def attach_product_image_api(product_id: int, image_bytes: bytes=None, filename: str=None, image_url: str=None) -> bool:
+    """رفع وإرفاق صورة للمنتج (إما كملف File أو كرابط URL)"""
+    token = st.session_state.get('access_token', '')
+    if not token: return False
+    
+    headers = {"Authorization": f"Bearer {token}"}
+    url = f"https://api.salla.dev/admin/v2/products/{product_id}/images"
+    
+    try:
+        if image_url:
+            # إذا كان الاختيار رابط URL، يتم إرساله بصيغة JSON
+            headers["Content-Type"] = "application/json"
+            response = requests.post(url, headers=headers, json={"photo": image_url}, timeout=30)
+        else:
+            # إذا كان الاختيار ملف من الجهاز، يتم إرساله كـ multipart/form-data
+            files = {'photo': (filename, image_bytes, 'image/jpeg')}
+            response = requests.post(url, headers=headers, files=files, timeout=30)
+            
+        if response.status_code >= 400:
+            try: err = response.json()
+            except: err = response.text
+            st.error(f"⚠️ خطأ في إرفاق الصورة: {err}")
+            return False
+        return True
+    except Exception as e:
+        st.error(f"⚠️ خطأ اتصال: {str(e)}")
+        return False
+        
 def update_product_promotions_secure(product_id: int, new_promo: str, new_sub: str, headers: dict) -> bool:
-    """تحديث العناوين الترويجية بشكل آمن مع حماية السعر الأصلي للمنتج من التلاعب"""
+    """تحديث العناوين الترويجية بشكل آمن لمنع تخريب السعر الأصلي"""
     current_res = safe_api_request("GET", f"https://api.salla.dev/admin/v2/products/{product_id}", headers)
     if not current_res or not current_res.get('data'): return False
     
@@ -566,17 +663,40 @@ def update_product_promotions_secure(product_id: int, new_promo: str, new_sub: s
     sale_val = get_flat_price(p_data.get('sale_price', 0))
     regular_val = get_flat_price(p_data.get('regular_price', 0))
     
-    # 🔴 حماية السعر الأصلي: منصة سلة تتطلب تمرير السعر الأساسي في حقل price
     base_price = regular_val if regular_val > 0 else price_val
     
     payload = {
         "name": p_data.get('name'),
-        "price": base_price,  # السعر الأصلي المحمي
+        "price": base_price,
         "promotion_title": new_promo,
         "promotion_subtitle": new_sub
     }
     if sale_val > 0:
         payload['sale_price'] = sale_val
+        
+    res = safe_api_request("PUT", f"https://api.salla.dev/admin/v2/products/{product_id}", headers, json=payload)
+    return res is not None
+
+def update_product_tax_secure(product_id: int, with_tax: bool, tax_cause: str, headers: dict) -> bool:
+    """تحديث حالة خضوع المنتج للضريبة وسبب عدم الخضوع"""
+    current_res = safe_api_request("GET", f"https://api.salla.dev/admin/v2/products/{product_id}", headers)
+    if not current_res or not current_res.get('data'): return False
+    
+    p_data = current_res['data']
+    price_val = get_flat_price(p_data.get('price', 0))
+    sale_val = get_flat_price(p_data.get('sale_price', 0))
+    regular_val = get_flat_price(p_data.get('regular_price', 0))
+    
+    base_price = regular_val if regular_val > 0 else price_val
+    
+    payload = {
+        "name": p_data.get('name'),
+        "price": base_price,
+        "with_tax": with_tax
+    }
+    if sale_val > 0: payload['sale_price'] = sale_val
+    if not with_tax and tax_cause:
+        payload["tax_exemption_cause"] = tax_cause
         
     res = safe_api_request("PUT", f"https://api.salla.dev/admin/v2/products/{product_id}", headers, json=payload)
     return res is not None
