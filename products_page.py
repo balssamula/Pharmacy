@@ -135,7 +135,7 @@ def create_products_template(products=None) -> bytes:
             ws.column_dimensions[col].width = width
         
         # ✅ إضافة الفلترة التلقائية
-        ws.auto_filter.ref = f"A1:N{ws.max_row}"
+        ws.auto_filter.ref = f"A2:N{ws.max_row}"
         
         # ✅ إضافة القوائم المنسدلة
         
@@ -149,7 +149,7 @@ def create_products_template(products=None) -> bytes:
             error="الرجاء اختيار: منتج جاهز أو مجموعة منتجات"
         )
         ws.add_data_validation(dv_product_type)
-        dv_product_type.add(f"D2:D{ws.max_row}")
+        dv_product_type.add(f"D3:D{ws.max_row}")
         
         # قائمة حالة المنتج
         dv_status = DataValidation(
@@ -161,7 +161,7 @@ def create_products_template(products=None) -> bytes:
             error="الرجاء اختيار: معروض أو مخفي"
         )
         ws.add_data_validation(dv_status)
-        dv_status.add(f"E2:E{ws.max_row}")
+        dv_status.add(f"E3:E{ws.max_row}")
         
         # ✅ قائمة كمية غير محدودة
         dv_unlimited = DataValidation(
@@ -173,7 +173,7 @@ def create_products_template(products=None) -> bytes:
             error="الرجاء اختيار: نعم أو لا"
         )
         ws.add_data_validation(dv_unlimited)
-        dv_unlimited.add(f"J2:J{ws.max_row}")
+        dv_unlimited.add(f"J3:J{ws.max_row}")
         
         # ✅ قائمة خاضع للضريبة
         dv_tax = DataValidation(
@@ -185,7 +185,7 @@ def create_products_template(products=None) -> bytes:
             error="الرجاء اختيار: نعم أو لا"
         )
         ws.add_data_validation(dv_tax)
-        dv_tax.add(f"K2:K{ws.max_row}")
+        dv_tax.add(f"K3:K{ws.max_row}")
         
         # ✅ قائمة أسباب عدم الخضوع للضريبة
         tax_reasons = [
@@ -208,11 +208,11 @@ def create_products_template(products=None) -> bytes:
             error="الرجاء اختيار سبب مناسب"
         )
         ws.add_data_validation(dv_tax_reason)
-        dv_tax_reason.add(f"L2:L{ws.max_row}")
+        dv_tax_reason.add(f"L3:L{ws.max_row}")
         
         # ✅ تنسيق خانات التاريخ
         date_format = numbers.FORMAT_DATE_DATETIME
-        for row in range(2, ws.max_row + 1):
+        for row in range(3, ws.max_row + 1):
             for col in ['H', 'I']:  # بداية ونهاية التخفيض
                 cell = ws[f"{col}{row}"]
                 cell.number_format = date_format
@@ -626,24 +626,6 @@ def render_products_page():
         
         col_template1, col_template2 = st.columns([1, 3])
         with col_template1:
-            if st.button("📥 تحميل نموذج الفروع", use_container_width=True):
-                template_data = {
-                    'product_id': ['', ''],
-                    'branch_id': ['', ''],
-                    'quantity': [0, 0]
-                }
-                df_template = pd.DataFrame(template_data)
-                buffer = io.BytesIO()
-                with pd.ExcelWriter(buffer, engine='openpyxl') as writer:
-                    df_template.to_excel(writer, index=False, sheet_name='كميات الفروع')
-                buffer.seek(0)
-                st.download_button(
-                    label="📥 تحميل النموذج",
-                    data=buffer.getvalue(),
-                    file_name="branches_quantities_template.xlsx",
-                    mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-                    key="download_branches_template"
-                )
         
         st.info("""
         📋 **الصيغة المطلوبة لملف كميات الفروع:**
