@@ -409,7 +409,8 @@ def render_products_page():
                         for bq in branches_quantities:
                             branch_name = bq.get('branch_name', 'فرع غير معروف')
                             quantity = bq.get('quantity', 0)
-                            st.markdown(f"**{branch_name}:** `{quantity}` حبة")
+                            branch_id = bq.get('branch_id', '')
+                            st.markdown(f"**🏪 {branch_name}** (ID: `{branch_id}`): **`{quantity}`** حبة")
                     else:
                         st.info("ℹ️ لا توجد كميات مسجلة في الفروع")
         
