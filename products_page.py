@@ -324,9 +324,7 @@ def render_products_page():
         sale_end_date = p.get('sale_end') or (p.get('sale_price', {}).get('expired_at') if isinstance(p.get('sale_price'), dict) else None) or "غير محدد"
         
         disp_status = "🟢 معروض بالمتجر" if status == "sale" else "🔴 مخفي في المسودات"
-        tax_status_badge = "🧾 خاضع للضريبة" if p.get('with_tax', True) else f"⚪ معفى ({p.get('tax_exemption_cause', 'بدون سبب')})"
-        
-        # ✅ شارة إضافية لتوضيح إذا كان المنتج مشمولاً في عرض خاص أم لا
+        tax_status_badge = "🔥 خاضع للضريبة" if p.get('with_tax', True) else f"⚪ يخضع لنسبة الصفر ({p.get('tax_exemption_cause', 'بدون سبب')})"
         offer_badge = "🎁 مشمول في عرض خاص" if p_id in offer_product_ids else ""
         
         st.markdown(f"""
