@@ -295,14 +295,20 @@ def render_products_page():
                             st.rerun()
                             
                 # التعديل المحمي للأسعار والعناوين
-                with st.popover("✏️ تعديل العناوين الترويجية"):
+                with st.popover("✏️ تعديل العناوين"):
                     new_promo = st.text_input("العنوان الترويجي:", value=(p_promotion if p_promotion != "لا يوجد عنوان ترويجي" else ""), key=f"promo_in_{p_id}_{idx}")
                     new_sub = st.text_input("العنوان الفرعي:", value=(p_sub_title if p_sub_title != "لا يوجد عنوان فرعي" else ""), key=f"sub_in_{p_id}_{idx}")
                     
-                    if st.button("حفظ التعديلات", key=f"save_promo_{p_id}_{idx}", type="primary", use_container_width=True):
+                    if st.button("💾 حفظ التعديلات", key=f"save_promo_{p_id}_{idx}", type="primary", use_container_width=True):
                         with st.spinner("جاري الحفظ الآمن..."):
+             safe_api_request(
+                                "PUT",
+                                f"https://api.salla.dev/admin/v2/products/{p_id}",
+                                headers,
+                                json={"promotion_title": new_promo, new_sub}
+                              )
                             if update_product_promotions_secure(p_id, new_promo, new_sub, headers):
-                                st.success("✅ تم تحديث العناوين بنجاح وبثبات للسعر الأصلي!")
+                                st.success("✅ تم تحديث العناوين بنجاح!")
                                 st.rerun()
 
             st.markdown("</div>", unsafe_allow_html=True)
