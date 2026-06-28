@@ -9,10 +9,10 @@ from utils import (
 )
 
 # قائمة أسباب عدم الخضوع للضريبة (معتمدة ومبسطة)
-TAX_EXEMPTION_CAUSES = ["التصدير لخارج دول الخليج", "الخدمات الطبية والأدوية", "النقل الدولي", "الخدمات المالية", "أخرى"]
+TAX_EXEMPTION_CAUSES = ["الخدمات المالية" ,"عقد تأمين على الحياة" ,"التوريدات العقارية المعفاة من الضريبة المضافة" ,"صادرات السلع من المملة" ,"صادرات الخدمات من المملكة" ,"النقل الدولي للسلع" ,"النقل الدولي للركاب", "توريد وسائل النقل المؤهلة" ,"الأدوية والمعدات الطبية"]
 
 def render_products_page():
-    st.markdown("<h2 style='color:#0f1c2e;'>📦 مركز إدارة المنتجات الذكي والمتقدم</h2>", unsafe_allow_html=True)
+    st.markdown("<h2 style='color:#0f1c2e;'>📦 مركز إدارة المنتجات المتقدمة</h2>", unsafe_allow_html=True)
     
     headers = get_headers()
     if not headers: return
@@ -22,43 +22,30 @@ def render_products_page():
         branches = get_branches_list()
 
     # =========================================================================
-    # ✅ 1. إعدادات ربط التطبيقات الترويجية والذكية
+    # ✅ 1. إدارة وتحديث الفروع واستيراد المنتجات - إعدادات ربط التطبيقات الترويجية
     # =========================================================================
     col_widget1, col_widget2 = st.columns(2)
 
     with col_widget1:
-        with st.expander("⚙️ إعدادات ربط تطبيق: شاهدتها مؤخراً", expanded=False):
+        with st.expander("⚙️ إعدادات ربط تطبيقات التوصيات وشاهدتها مؤخراً", expanded=False):
             st.markdown("#### 🛠️ إعدادات المنتجات المستعرضة مؤخراً")
             section_title = st.text_input("📝 عنوان القسم الفعال:", value="شاهدتها مؤخراً", key="app_recent_section_title")
             st.markdown("**🎯 تخصيص ظهور القسم في الصفحات:**")
             show_home = st.checkbox("الصفحة الرئيسية بالمتجر", value=False, key="app_show_home_recent")
             show_categories = st.checkbox("صفحة التصنيفات والأقسام", value=False, key="app_show_cat_recent")
             show_details = st.checkbox("صفحة تفاصيل وعرض المنتج", value=True, key="app_show_details_recent")
-            products_limit = st.number_input("🔢 عدد المنتجات المعروضة (بحد أقصى 32):", min_value=1, max_value=32, value=6, step=1, key="app_recent_limit")
+            products_limit = st.number_input("🔢 عدد المنتجات المعروضة:", min_value=1, max_value=32, value=6, key="app_recent_limit")
             
-            if st.button("💾 حفظ إعدادات 'شاهدتها مؤخراً'", type="primary", use_container_width=True):
-                st.success("✅ تم تدوين خيارات 'شاهدتها مؤخراً' بنجاح، وجاري بث المكون بالمتجر!")
-
-    with col_widget2:
-        with st.expander("⚙️ إعدادات ربط تطبيق: نظام التوصيات الذكي والحزم", expanded=False):
-            st.markdown("#### 🛠️ نظام التوصية الذكي وحزم المنتجات")
-            global_enable = st.checkbox("✅ تفعيل التوصيات في المتجر", value=True, key="app_reco_global_enable")
+            st.markdown("#### 🛠️ نظام التوصية الذكي والحزم")
+            global_enable = st.checkbox("✅ تفعيل التوصيات", value=True, key="app_reco_global_enable")
             buy_together = st.checkbox("🤝 تشترى معًا", value=True, key="app_reco_buy_together")
             prod_group = st.checkbox("📦 عرض المنتجات كحزمة", value=True, key="app_reco_prod_group")
             cart_btn_option = st.selectbox("🛒 عرض زر إضافة للسلة:", ["في صفحة السلة فقط", "في جميع الصفحات"], index=0, key="app_reco_cart_btn")
             
-            if st.button("💾 حفظ وتثبيت خيارات نظام التوصية", type="primary", use_container_width=True):
-                st.success("✅ تم حفظ إعدادات 'المنتجات الموصى بها وحزم الأصناف' بنجاح!")
+            if st.button("💾 حفظ وتثبيت إعدادات التطبيقات", type="primary", use_container_width=True):
+                st.success("✅ تم حفظ إعدادات ربط التطبيقات بنجاح!")
 
-    st.divider()
-
-    # =========================================================================
-    # ✅ 2. إدارة وتحديث الفروع والاستيراد الجماعي للمنتجات
-    # =========================================================================
-    st.markdown("### 🏢 إدارة الكميات والفروع، والاستيراد الجماعي للمنتجات")
-    col_up1, col_up2 = st.columns(2)
-    
-    with col_up1:
+    with col_widget2:
         with st.expander("🏢 التحكم في كميات ومخزون الفروع (استيراد)"):
             st.download_button("📥 تنزيل نموذج استيراد كميات الفروع", data=generate_quantities_template(), file_name="Salla_Quantities_Template.xlsx", mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", use_container_width=True)
             uploaded_q_file = st.file_uploader("📂 رفع ملف لتحديث الكميات:", type=['xlsx'], key="upload_quantities_file")
@@ -68,18 +55,159 @@ def render_products_page():
                     res_q = process_quantities_import(df_q)
                     for m in res_q["success"]: st.success(m)
                     for m in res_q["errors"]: st.error(m)
-                    
-    with col_up2:
-        with st.expander("📥 استيراد وتحديث المنتجات جماعياً (بكامل البيانات)"):
-            st.download_button("📥 تحميل نموذج استيراد المنتجات فارغاً", data=create_products_template(), file_name="Salla_Products_Template.xlsx", mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", use_container_width=True)
-            uploaded_p_file = st.file_uploader("📂 رفع ملف Excel لتحديث بيانات المنتجات:", type=['xlsx'], key="upload_products_file")
-            if uploaded_p_file and st.button("🚀 بدء استيراد/تحديث المنتجات", type="primary", use_container_width=True):
-                st.info("🔄 هذه الميزة تتطلب تكاملاً دقيقاً لمعالجة الرفع والتحديث الشامل. سيتم إطلاقها قريباً.")
 
-    st.divider()
+            st.download_button("📥 تحميل نموذج استيراد المنتجات", data=create_products_template(), file_name="Salla_Products_Template.xlsx", mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", use_container_width=True)
+            uploaded_file = st.file_uploader("ارفع ملف المنتجات (XLSX):", type=["xlsx"], key="import_products_file")
+        
+            if uploaded_file:
+                try:
+                    df = pd.read_excel(uploaded_file)
+                    st.dataframe(df, use_container_width=True)
+                    st.info(f"✅ تم تحميل {len(df)} منتج")
+                
+                    # ✅ عرض الأعمدة المتوقعة
+                    expected_cols = ['معرف المنتج', 'SKU', 'اسم المنتج', 'نوع المنتج', 'حالة المنتج']
+                    missing_cols = [col for col in expected_cols if col not in df.columns]
+                    if missing_cols:
+                        st.warning(f"⚠️ الأعمدة المفقودة: {', '.join(missing_cols)}")
+                        st.info("💡 تأكد من استخدام النموذج الصحيح")
+                    else:
+                        st.success("✅ جميع الأعمدة المطلوبة موجودة")
+                    
+                        if st.button("🚀 معالجة وتحديث المنتجات", type="primary"):
+                            with st.spinner("🔄 جاري تحديث المنتجات..."):
+                                success_count = 0
+                                error_count = 0
+                            
+                                for idx, row in df.iterrows():
+                                    try:
+                                        # ✅ التحقق من وجود معرف المنتج
+                                        product_id = row.get('معرف المنتج')
+                                        if pd.isna(product_id) or product_id == '':
+                                            # ✅ إضافة منتج جديد
+                                            product_data = {
+                                                "name": str(row.get('اسم المنتج', 'منتج جديد')),
+                                                "price": float(row.get('السعر (SAR)', 0)) if pd.notna(row.get('السعر (SAR)')) else 0,
+                                                "type": "product",
+                                                "status": "sale",
+                                                "sku": str(row.get('SKU', '')) if pd.notna(row.get('SKU')) else None
+                                            }
+                                        
+                                            # نوع المنتج
+                                            product_type = str(row.get('نوع المنتج', 'منتج جاهز'))
+                                            if product_type == 'مجموعة منتجات':
+                                                product_data['type'] = 'group_products'
+                                        
+                                            # حالة المنتج
+                                            status_text = str(row.get('حالة المنتج', 'معروض'))
+                                            product_data['status'] = 'sale' if status_text == 'معروض' else 'hidden'
+                                        
+                                            # السعر المخفض
+                                            if pd.notna(row.get('السعر المخفض (SAR)')) and float(row.get('السعر المخفض (SAR)')) > 0:
+                                                product_data['sale_price'] = float(row.get('السعر المخفض (SAR)'))
+                                        
+                                            # بداية ونهاية التخفيض
+                                            if pd.notna(row.get('بداية التخفيض')):
+                                                product_data['sale_start'] = str(row.get('بداية التخفيض'))
+                                            if pd.notna(row.get('نهاية التخفيض')):
+                                                product_data['sale_end'] = str(row.get('نهاية التخفيض'))
+                                        
+                                            # كمية غير محدودة
+                                            if pd.notna(row.get('كمية غير محدودة')):
+                                                product_data['unlimited_quantity'] = str(row.get('كمية غير محدودة')) == 'نعم'
+                                        
+                                            # خاضع للضريبة
+                                            if pd.notna(row.get('خاضع للضريبة')):
+                                                product_data['with_tax'] = str(row.get('خاضع للضريبة')) == 'نعم'
+                                        
+                                            # سبب عدم الخضوع
+                                            if pd.notna(row.get('سبب عدم الخضوع')):
+                                                product_data['tax_reason_code'] = str(row.get('سبب عدم الخضوع'))
+                                        
+                                            # العنوان الترويجي والفرعي
+                                            if pd.notna(row.get('العنوان الترويجي')):
+                                                product_data['promotion_title'] = str(row.get('العنوان الترويجي'))
+                                            if pd.notna(row.get('العنوان الفرعي')):
+                                                product_data['promotion_subtitle'] = str(row.get('العنوان الفرعي'))
+                                        
+                                            response = safe_api_request(
+                                                "POST",
+                                                "https://api.salla.dev/admin/v2/products",
+                                                headers,
+                                                json=product_data
+                                            )
+                                            if response:
+                                                success_count += 1
+                                            else:
+                                                error_count += 1
+                                        else:
+                                            # ✅ تحديث منتج موجود
+                                            product_id = int(float(product_id))
+                                            update_payload = {}
+                                        
+                                            if pd.notna(row.get('اسم المنتج')):
+                                                update_payload['name'] = str(row.get('اسم المنتج'))
+                                        
+                                            if pd.notna(row.get('السعر (SAR)')):
+                                                update_payload['price'] = float(row.get('السعر (SAR)'))
+                                        
+                                            if pd.notna(row.get('السعر المخفض (SAR)')) and float(row.get('السعر المخفض (SAR)')) > 0:
+                                                update_payload['sale_price'] = float(row.get('السعر المخفض (SAR)'))
+                                        
+                                            if pd.notna(row.get('بداية التخفيض')):
+                                                update_payload['sale_start'] = str(row.get('بداية التخفيض'))
+                                            if pd.notna(row.get('نهاية التخفيض')):
+                                                update_payload['sale_end'] = str(row.get('نهاية التخفيض'))
+                                        
+                                            if pd.notna(row.get('كمية غير محدودة')):
+                                                update_payload['unlimited_quantity'] = str(row.get('كمية غير محدودة')) == 'نعم'
+                                        
+                                            if pd.notna(row.get('خاضع للضريبة')):
+                                            update_payload['with_tax'] = str(row.get('خاضع للضريبة')) == 'نعم'
+                                        
+                                            if pd.notna(row.get('سبب عدم الخضوع')):
+                                                update_payload['tax_reason_code'] = str(row.get('سبب عدم الخضوع'))
+                                        
+                                            if pd.notna(row.get('العنوان الترويجي')):
+                                                update_payload['promotion_title'] = str(row.get('العنوان الترويجي'))
+                                            if pd.notna(row.get('العنوان الفرعي')):
+                                                update_payload['promotion_subtitle'] = str(row.get('العنوان الفرعي'))
+                                        
+                                            if pd.notna(row.get('SKU')):
+                                                update_payload['sku'] = str(row.get('SKU'))
+                                        
+                                            if pd.notna(row.get('حالة المنتج')):
+                                                status_text = str(row.get('حالة المنتج', 'معروض'))
+                                                update_payload['status'] = 'sale' if status_text == 'معروض' else 'hidden'
+                                        
+                                            if update_payload:
+                                                response = safe_api_request(
+                                                    "PUT",
+                                                    f"https://api.salla.dev/admin/v2/products/{product_id}",
+                                                    headers,
+                                                    json=update_payload
+                                                )
+                                                if response:
+                                                    success_count += 1
+                                                else:
+                                                    error_count += 1
+                                    except Exception as e:
+                                        error_count += 1
+                                        st.error(f"❌ خطأ في الصف {idx+1}: {str(e)}")
+                            
+                                st.success(f"✅ تم تحديث {success_count} منتج بنجاح")
+                                if error_count > 0:
+                                    st.warning(f"⚠️ فشل تحديث {error_count} منتج")
+                            
+                                if success_count > 0:
+                                    st.rerun()
+                except Exception as e:
+                    st.error(f"❌ خطأ في قراءة الملف: {str(e)}")
+
+        st.divider()
 
     # ==========================================
-    # ✅ 3. الفلاتر والبحث والتصدير
+    # ✅ 2. الفلاتر والبحث والتصدير
     # ==========================================
     st.markdown("### 🔍 أدوات التصفية والبحث في المنتجات")
     
@@ -93,11 +221,11 @@ def render_products_page():
     
     st.markdown("#### 🎯 فلاتر سريعة:")
     f_col1, f_col2, f_col3, f_col4, f_col5 = st.columns(5)
-    with f_col1: filter_hidden = st.checkbox("المنتجات المخفية فقط", key="f_hidden")
-    with f_col2: filter_no_img = st.checkbox("بدون صورة رئيسية", key="f_no_img")
-    with f_col3: filter_has_promo = st.checkbox("يحتوي على عنوان ترويجي", key="f_promo")
-    with f_col4: filter_discounted = st.checkbox("يوجد عليه خصم", key="f_discount")
-    with f_col5: filter_out_stock = st.checkbox("نفذت الكمية", key="f_out")
+    with f_col1: filter_hidden = st.checkbox("منتجات مخفية", key="f_hidden")
+    with f_col2: filter_no_img = st.checkbox("منتجات بدون صورة", key="f_no_img")
+    with f_col3: filter_has_promo = st.checkbox("منتجات لها عنوان ترويجي", key="f_has_promo")
+    with f_col4: filter_discounted = st.checkbox("منتجات لها سعر مخفض", key="f_discount")
+    with f_col5: filter_out_stock = st.checkbox("منتجات نفذت كميتها", key="f_out")
 
     available_end_dates = set()
     for p in all_products:
@@ -185,8 +313,8 @@ def render_products_page():
         sale_start_date = p.get('sale_start') or (p.get('sale_price', {}).get('start_at') if isinstance(p.get('sale_price'), dict) else None) or "غير محدد"
         sale_end_date = p.get('sale_end') or (p.get('sale_price', {}).get('expired_at') if isinstance(p.get('sale_price'), dict) else None) or "غير محدد"
         
-        disp_status = "🟢 معروض بالمتجر" if status == "sale" else "🔴 مخفي في المسودات"
-        tax_status_badge = "🧾 خاضع للضريبة" if p.get('with_tax', True) else f"⚪ معفى ({p.get('tax_exemption_cause', 'بدون سبب')})"
+        disp_status = "🟢 معروض بالمتجر" if status == "sale" else "🔴 منتج مخفي"
+        tax_status_badge = "‎🔥 خاضع للضريبة" if p.get('with_tax', True) else f"⚪ نسبة الصفر ({p.get('tax_exemption_cause', 'بدون سبب')})"
         
         st.markdown(f"""
             <div style="background: linear-gradient(135deg, #243b55 0%, #141e30 100%); 
@@ -233,8 +361,8 @@ def render_products_page():
             
             with c_info:
                 st.markdown(f"🆔 **المعرف:** `{p_id}` | 🔢 **SKU:** `{p_sku}`")
-                st.markdown(f"📢 **ترويجي:** <span style='color:#e67e22; font-weight:bold;'>{p_promotion}</span>", unsafe_allow_html=True)
-                st.markdown(f"🏷️ **فرعي:** `{p_sub_title}`")
+                st.markdown(f"📢 **عنوان ترويجي:** <span style='color:#e67e22; font-weight:bold;'>{p_promotion}</span>", unsafe_allow_html=True)
+                st.markdown(f"🏷️ **عنوان فرعي:** `{p_subtitle}`")
                 st.markdown(f"📦 **المخزون الإجمالي:** `{p.get('quantity', 0)}` | 📈 **المبيعات:** `{p.get('sold_quantity', 0)}`")
                 st.markdown(f"🔗 [🌐 عرض المنتج في المتجر]({p_url})")
             
