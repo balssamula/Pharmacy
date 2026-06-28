@@ -260,7 +260,7 @@ def render_products_page():
                 
         if filter_hidden and p.get('status') != 'hidden': continue
         if filter_no_img and p.get('thumbnail') and p.get('main_image'): continue
-        if filter_has_promo and not p.get('promotion_title'): continue
+        if filter_has_promo and not p.get('promotion'): continue
         if filter_out_stock and p.get('quantity', 0) > 0: continue
         
         has_disc = False
@@ -325,26 +325,26 @@ def render_products_page():
         
         disp_status = "🟢 معروض بالمتجر" if status == "sale" else "🔴 مخفي في المسودات"
         tax_status_badge = "🔥 خاضع للضريبة" if p.get('with_tax', True) else f"⚪ يخضع لنسبة الصفر ({p.get('tax_exemption_cause', 'بدون سبب')})"
+        # ✅ تجهيز شارة العرض برمجياً وتفريغها بنظافة تامة إذا لم يوجد عرض
         if p_id in offer_product_ids:
             offer_badge_html = "<span style='background: rgba(255, 193, 7, 0.3); color: #FFC107; padding: 4px 12px; border-radius: 20px; font-size: 11px; font-weight:600;'>🎁 مشمول في عرض خاص</span>"
         else:
-            offer_badge_html = "" # لا يتم حقن أي مسافات أو وسوم إطلاقاً
-        
+            offer_badge_html = ""
+
+        # الترويسة العلوية للبطاقة
         st.markdown(f"""
-            <div style="background: linear-gradient(135deg, #243b55 0%, #141e30 100%); 
-                        padding: 14px 20px; border-radius: 12px 12px 0px 0px; 
-                        margin-top: 25px; display: flex; justify-content: space-between; align-items: center; 
-                        flex-wrap: wrap; gap: 10px; border-bottom: 3px solid #e67e22;">
-                <span style="color: #ffffff; font-weight: bold; font-size: 15px;">📦 {p_name}</span>
-                <div style="display: flex; gap: 8px; flex-wrap: wrap;">
-                    <span style="background: rgba(255,255,255,0.2); color: #fff; padding: 4px 12px; border-radius: 20px; font-size: 11px; font-weight:600;">{disp_status}</span>
-                    <span style="background: rgba(0, 235, 207, 0.2); color: #00EBCF; padding: 4px 12px; border-radius: 20px; font-size: 11px; font-weight:600;">{tax_status_badge}</span>
-                    {offer_badge_html}
-                </div>
-            </div>
-        """, unsafe_allow_html=True)
+<div style="background: linear-gradient(135deg, #243b55 0%, #141e30 100%); padding: 14px 20px; border-radius: 12px 12px 0px 0px; margin-top: 25px; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 10px; border-bottom: 3px solid #e67e22;">
+    <span style="color: #ffffff; font-weight: bold; font-size: 15px;">📦 {p_name}</span>
+    <div style="display: flex; gap: 8px; flex-wrap: wrap;">
+        <span style="background: rgba(255,255,255,0.2); color: #fff; padding: 4px 12px; border-radius: 20px; font-size: 11px; font-weight:600;">{disp_status}</span>
+        <span style="background: rgba(0, 235, 207, 0.2); color: #00EBCF; padding: 4px 12px; border-radius: 20px; font-size: 11px; font-weight:600;">{tax_status_badge}</span>
+        {offer_badge_html}
+    </div>
+</div>
+""", unsafe_allow_html=True)
         
-        with st.container():
+        # ✅ استخدام الحاوية الأصلية من Streamlit لمنع ظهور </div> كـ نص
+        with st.container(border=True):
             st.markdown("""<div style="background-color: #fafbfc; padding: 20px; border-radius: 0px 0px 12px 12px; border: 1px solid #e1e8ed; border-top: none; box-shadow: 0 4px 10px rgba(0,0,0,0.03); margin-bottom: 25px;">""", unsafe_allow_html=True)
             
             c_img, c_info, c_pricing, c_action = st.columns([1.5, 2.5, 2.5, 2])
