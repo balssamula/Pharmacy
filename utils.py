@@ -486,11 +486,20 @@ def get_branches_list() -> List[Dict]:
     res = safe_api_request("GET", "https://api.salla.dev/admin/v2/branches", headers)
     return res.get("data", []) if res else []
 
-def get_product_quantities_by_branch(branch_id: Optional[int] = None) -> List[Dict]:
-    headers = get_headers()
-    if not headers: return []
+def get_product_quantities_by_branch(product_id: int = None, branch_id: int = None, headers: dict = None) -> List[Dict]:
+    """جلب كميات المنتجات في الفروع"""
+    if not headers:
+        headers = get_headers()
+        if not headers:
+            return []
+    
     url = "https://api.salla.dev/admin/v2/products/quantities"
-    params = {"branch": branch_id} if branch_id else {}
+    params = {}
+    if product_id:
+        params["product_id"] = product_id
+    if branch_id:
+        params["branch"] = branch_id
+    
     res = safe_api_request("GET", url, headers, params=params)
     return res.get("data", []) if res else []
 
