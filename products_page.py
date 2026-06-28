@@ -259,7 +259,7 @@ def render_products_page():
             if sq not in p_name and sq not in p_sku and sq != p_id: continue
                 
         if filter_hidden and p.get('status') != 'hidden': continue
-        if filter_no_img and not p.get('thumbnail') and not p.get('main_image'): continue
+        if filter_no_img and p.get('thumbnail') and p.get('main_image'): continue
         if filter_has_promo and not p.get('promotion_title'): continue
         if filter_out_stock and p.get('quantity', 0) > 0: continue
         
