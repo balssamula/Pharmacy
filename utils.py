@@ -499,26 +499,40 @@ def get_product_quantities_by_branch(product_id: int = None, branch_id: int = No
     
     url = "https://api.salla.dev/admin/v2/products/quantities"
     params = {}
+    
+    # ✅ استخدام product_id فقط إذا كان موجوداً
     if product_id:
+        # ✅ API يتوقع معرف المنتج وليس product_id
         params["product_id"] = product_id
+    
     if branch_id:
         params["branch"] = branch_id
     
     res = safe_api_request("GET", url, headers, params=params)
     data = res.get("data", []) if res else []
     
-    # إضافة اسم الفرع
+    # ✅ إضافة اسم الفرع إلى كل عنصر
     for item in data:
         item['branch_name'] = branch_names.get(item.get('branch_id'), 'فرع غير معروف')
     
-    # إزالة التكرارات
+    # ✅ إزالة التكرارات (تجميع حسب branch_id)
     seen = {}
     unique_data = []
     for item in data:
-        key = item.get('branch_id')
-        if key not in seen:
-            seen[key] = True
+        branch_id_key = item.get('branch_id')
+        if branch_id_key not in seen:
+            seen[branch_id_key] = True
             unique_data.append(item)
+    
+    # ✅ إذا كانت القائمة فارغة، إرجاع قائمة بجميع الفروع بكمية 0
+    if not unique_data and branches:
+        for b in branches:
+            unique_data.append({
+                'branch_id': b.get('id'),
+                'branch_name': b.get('name', 'فرع غير معروف'),
+                'quantity': 0,
+                'sku': None
+            })
     
     return unique_data
 
