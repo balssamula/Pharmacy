@@ -9,7 +9,7 @@ from utils import (
 )
 
 # قائمة أسباب عدم الخضوع للضريبة (معتمدة ومبسطة)
-TAX_EXEMPTION_CAUSES = ["الخدمات المالية" ,"عقد تأمين على الحياة" ,"التوريدات العقارية المعفاة من الضريبة المضافة" ,"صادرات السلع من المملة" ,"صادرات الخدمات من المملكة" ,"النقل الدولي للسلع" ,"النقل الدولي للركاب", "توريد وسائل النقل المؤهلة" ,"الأدوية والمعدات الطبية"]
+TAX_EXEMPTION_CAUSES = ["الخدمات المالية" ,"عقد تأمين على الحياة" ,"التوريدات العقارية المعفاة من الضريبة المضافة" ,"صادرات السلع من المملكة" ,"صادرات الخدمات من المملكة" ,"النقل الدولي للسلع" ,"النقل الدولي للركاب", "توريد وسائل النقل المؤهلة" ,"الأدوية والمعدات الطبية"]
 
 def render_products_page():
     st.markdown("<h2 style='color:#0f1c2e;'>📦 مركز إدارة المنتجات المتقدمة</h2>", unsafe_allow_html=True)
@@ -163,7 +163,7 @@ def render_products_page():
                                                 update_payload['unlimited_quantity'] = str(row.get('كمية غير محدودة')) == 'نعم'
                                         
                                             if pd.notna(row.get('خاضع للضريبة')):
-                                            update_payload['with_tax'] = str(row.get('خاضع للضريبة')) == 'نعم'
+                                                update_payload['with_tax'] = str(row.get('خاضع للضريبة')) == 'نعم'
                                         
                                             if pd.notna(row.get('سبب عدم الخضوع')):
                                                 update_payload['tax_reason_code'] = str(row.get('سبب عدم الخضوع'))
@@ -295,7 +295,7 @@ def render_products_page():
         
         promo = p.get('promotion', {})
         p_promotion = p.get('promotion_title') or (promo.get('title') if isinstance(promo, dict) else '') or "لا يوجد عنوان ترويجي"
-        p_sub_title = (promo.get('sub_title') if isinstance(promo, dict) else '') or "لا يوجد عنوان فرعي"
+        p_subtitle = (promo.get('subtitle') if isinstance(promo, dict) else '') or "لا يوجد عنوان فرعي"
         
         price_val = get_flat_price(p.get('price', 0))
         regular_val = get_flat_price(p.get('regular_price', 0))
@@ -393,7 +393,7 @@ def render_products_page():
                 # ✅ نافذة تعديل العناوين (المحمية)
                 with st.popover("✏️ العناوين الترويجية"):
                     new_promo = st.text_input("العنوان الترويجي:", value=(p_promotion if p_promotion != "لا يوجد عنوان ترويجي" else ""), key=f"promo_in_{p_id}_{idx}")
-                    new_sub = st.text_input("العنوان الفرعي:", value=(p_sub_title if p_sub_title != "لا يوجد عنوان فرعي" else ""), key=f"sub_in_{p_id}_{idx}")
+                    new_sub = st.text_input("العنوان الفرعي:", value=(p_subtitle if p_subtitle != "لا يوجد عنوان فرعي" else ""), key=f"sub_in_{p_id}_{idx}")
                     
                     if st.button("💾 حفظ العناوين", key=f"save_promo_{p_id}_{idx}", type="primary", use_container_width=True):
                         with st.spinner("جاري الحفظ الآمن..."):
