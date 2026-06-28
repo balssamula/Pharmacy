@@ -395,14 +395,14 @@ def render_products_page():
                     new_promo = st.text_input("العنوان الترويجي:", value=(p_promotion if p_promotion != "لا يوجد عنوان ترويجي" else ""), key=f"promo_in_{p_id}_{idx}")
                     new_sub = st.text_input("العنوان الفرعي:", value=(p_sub_title if p_sub_title != "لا يوجد عنوان فرعي" else ""), key=f"sub_in_{p_id}_{idx}")
                     
-                    if st.button("💾 حفظ العناوين", key=f"save_promo_{p_id}_{idx}", type="primary", use_container_width=True):
+                    if st.button("💾 حفظ العناوين", key=f"save_promo_sub_{p_id}_{idx}", type="primary", use_container_width=True):
                         with st.spinner("جاري الحفظ الآمن..."):
                             if update_product_promotions_secure(p_id, new_promo, new_sub, headers):
                                 st.success("✅ تم التحديث بنجاح!")
                                 st.rerun()
 
                 # ✅ نافذة تعديل الضريبة وأسبابها
-                with st.popover("🧾 تعديل الضريبة"):
+                with st.popover("🔥 تعديل الضريبة"):
                     is_taxed = st.checkbox("خاضع للضريبة", value=p.get('with_tax', True), key=f"tax_chk_{p_id}_{idx}")
                     ex_cause = p.get('tax_exemption_cause', '')
                     
