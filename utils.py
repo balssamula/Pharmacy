@@ -487,11 +487,15 @@ def get_branches_list() -> List[Dict]:
     return res.get("data", []) if res else []
 
 def get_product_quantities_by_branch(product_id: int = None, branch_id: int = None, headers: dict = None) -> List[Dict]:
-    """جلب كميات المنتجات في الفروع"""
+    """جلب كميات المنتجات في الفروع مع أسماء الفروع"""
     if not headers:
         headers = get_headers()
         if not headers:
             return []
+    
+    # جلب قائمة الفروع
+    branches = get_branches_list()
+    branch_names = {b.get('id'): b.get('name', 'فرع غير معروف') for b in branches}
     
     url = "https://api.salla.dev/admin/v2/products/quantities"
     params = {}
@@ -501,7 +505,22 @@ def get_product_quantities_by_branch(product_id: int = None, branch_id: int = No
         params["branch"] = branch_id
     
     res = safe_api_request("GET", url, headers, params=params)
-    return res.get("data", []) if res else []
+    data = res.get("data", []) if res else []
+    
+    # إضافة اسم الفرع
+    for item in data:
+        item['branch_name'] = branch_names.get(item.get('branch_id'), 'فرع غير معروف')
+    
+    # إزالة التكرارات
+    seen = {}
+    unique_data = []
+    for item in data:
+        key = item.get('branch_id')
+        if key not in seen:
+            seen[key] = True
+            unique_data.append(item)
+    
+    return unique_data
 
 def generate_quantities_template() -> bytes:
     from openpyxl import Workbook
@@ -844,7 +863,7 @@ def attach_product_image_api(product_id: int, image_bytes: bytes=None, filename:
         return False
         
 def update_product_promotions_secure(product_id: int, new_promo: str, new_sub: str, headers: dict) -> bool:
-    """تحديث العناوين الترويجية والفرعية بشكل آمن"""
+    """تحديث العناوين الترويجية والفرعية بشكل آمن - مع الحفاظ على الأسعار"""
     # جلب المنتج الحالي
     current_res = safe_api_request("GET", f"https://api.salla.dev/admin/v2/products/{product_id}", headers)
     if not current_res or not current_res.get('data'):
@@ -853,13 +872,18 @@ def update_product_promotions_secure(product_id: int, new_promo: str, new_sub: s
     
     p_data = current_res['data']
     
-    # ✅ بناء الـ Payload مع جميع البيانات المطلوبة
+    # ✅ الحصول على الأسعار الحالية
+    current_price = get_flat_price(p_data.get('price', 0))
+    current_sale_price = get_flat_price(p_data.get('sale_price', 0))
+    current_regular_price = get_flat_price(p_data.get('regular_price', 0))
+    
+    # ✅ بناء الـ Payload مع الحفاظ على الأسعار
     payload = {
         "name": p_data.get('name', ''),
-        "price": get_flat_price(p_data.get('price', 0)),
+        "price": current_price,
         "status": p_data.get('status', 'sale'),
         "promotion_title": new_promo if new_promo else p_data.get('promotion_title', ''),
-        "promotion_subtitle": new_sub if new_sub else p_data.get('promotion_subtitle', ''),  # ✅ إصلاح: إرسال العنوان الفرعي
+        "promotion_subtitle": new_sub if new_sub else p_data.get('promotion_subtitle', ''),
         "sku": p_data.get('sku', ''),
         "type": p_data.get('type', 'product'),
         "quantity": p_data.get('quantity', 0),
@@ -867,10 +891,13 @@ def update_product_promotions_secure(product_id: int, new_promo: str, new_sub: s
         "with_tax": p_data.get('with_tax', True)
     }
     
-    # ✅ إضافة السعر المخفض
-    sale_val = get_flat_price(p_data.get('sale_price', 0))
-    if sale_val > 0:
-        payload['sale_price'] = sale_val
+    # ✅ الحفاظ على السعر المخفض إذا كان موجوداً
+    if current_sale_price > 0:
+        payload['sale_price'] = current_sale_price
+    
+    # ✅ الحفاظ على السعر العادي إذا كان موجوداً
+    if current_regular_price > 0:
+        payload['regular_price'] = current_regular_price
     
     # ✅ إضافة التواريخ
     if p_data.get('sale_start'):
