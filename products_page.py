@@ -623,10 +623,7 @@ def render_products_page():
     # ==========================================
     with st.expander("🏪 استيراد وتحديث كميات الفروع (XLSX)", expanded=False):
         st.markdown("#### 🏪 تحديث كميات المنتجات في الفروع")
-        
-        col_template1, col_template2 = st.columns([1, 3])
-        with col_template1:
-        
+
         st.info("""
         📋 **الصيغة المطلوبة لملف كميات الفروع:**
         
