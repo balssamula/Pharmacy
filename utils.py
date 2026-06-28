@@ -835,7 +835,7 @@ def attach_product_image_api(product_id: int, image_bytes: bytes=None, filename:
         return False
         
 def update_product_promotions_secure(product_id: int, new_promo: str, new_sub: str, headers: dict) -> bool:
-    """تحديث العناوين الترويجية بشكل آمن"""
+    """تحديث العناوين الترويجية والفرعية بشكل آمن"""
     # جلب المنتج الحالي
     current_res = safe_api_request("GET", f"https://api.salla.dev/admin/v2/products/{product_id}", headers)
     if not current_res or not current_res.get('data'):
@@ -844,42 +844,36 @@ def update_product_promotions_secure(product_id: int, new_promo: str, new_sub: s
     
     p_data = current_res['data']
     
-    # ✅ بناء الـ Payload بشكل صحيح مع الحفاظ على جميع البيانات
-    payload = {}
+    # ✅ بناء الـ Payload مع جميع البيانات المطلوبة
+    payload = {
+        "name": p_data.get('name', ''),
+        "price": get_flat_price(p_data.get('price', 0)),
+        "status": p_data.get('status', 'sale'),
+        "promotion_title": new_promo if new_promo else p_data.get('promotion_title', ''),
+        "promotion_subtitle": new_sub if new_sub else p_data.get('promotion_subtitle', ''),  # ✅ إصلاح: إرسال العنوان الفرعي
+        "sku": p_data.get('sku', ''),
+        "type": p_data.get('type', 'product'),
+        "quantity": p_data.get('quantity', 0),
+        "unlimited_quantity": p_data.get('unlimited_quantity', False),
+        "with_tax": p_data.get('with_tax', True)
+    }
     
-    # إضافة الحقول الأساسية مع الحفاظ على القيم الحالية
-    if 'name' in p_data:
-        payload['name'] = p_data['name']
-    
-    # ✅ إضافة السعر بشكل صحيح
-    price_val = get_flat_price(p_data.get('price', 0))
-    payload['price'] = price_val
-    
-    # ✅ إضافة السعر المخفض إذا كان موجوداً
+    # ✅ إضافة السعر المخفض
     sale_val = get_flat_price(p_data.get('sale_price', 0))
     if sale_val > 0:
         payload['sale_price'] = sale_val
     
-    # ✅ إضافة حالة المنتج
-    if 'status' in p_data:
-        payload['status'] = p_data['status']
+    # ✅ إضافة التواريخ
+    if p_data.get('sale_start'):
+        payload['sale_start'] = p_data['sale_start']
+    if p_data.get('sale_end'):
+        payload['sale_end'] = p_data['sale_end']
     
-    # ✅ تحديث العناوين الترويجية
-    payload['promotion_title'] = new_promo
-    payload['promotion_subtitle'] = new_sub
-    
-    # ✅ إضافة الحقول الأخرى المهمة
-    if 'sku' in p_data and p_data['sku']:
-        payload['sku'] = p_data['sku']
-    
-    if 'type' in p_data:
-        payload['type'] = p_data['type']
-    
-    if 'quantity' in p_data:
-        payload['quantity'] = p_data['quantity']
-    
-    if 'unlimited_quantity' in p_data:
-        payload['unlimited_quantity'] = p_data['unlimited_quantity']
+    # ✅ إضافة سبب عدم الخضوع للضريبة
+    if p_data.get('tax_reason_code'):
+        payload['tax_reason_code'] = p_data['tax_reason_code']
+    if p_data.get('tax_exemption_cause'):
+        payload['tax_exemption_cause'] = p_data['tax_exemption_cause']
     
     # ✅ إرسال التحديث
     response = safe_api_request(
@@ -889,11 +883,7 @@ def update_product_promotions_secure(product_id: int, new_promo: str, new_sub: s
         json=payload
     )
     
-    if response:
-        return True
-    else:
-        st.error("❌ فشل تحديث العناوين")
-        return False
+    return response is not None
 
 def update_product_tax_secure(product_id: int, with_tax: bool, tax_cause: str, headers: dict) -> bool:
     """تحديث حالة خضوع المنتج للضريبة وسبب عدم الخضوع"""
