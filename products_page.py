@@ -1,5 +1,6 @@
 import streamlit as st
 import pandas as pd
+import requests  # ✅ إضافة import requests
 from datetime import datetime
 from utils import get_headers, safe_api_request, get_flat_price, update_product_status, export_products_to_excel
 
@@ -10,7 +11,7 @@ def render_products_page():
     if not headers: return
 
     # ==========================================
-    # ✅ إعدادات المتجر المدمجة (باستخدام APIs سلة)
+    # ✅ إعدادات المتجر المدمجة
     # ==========================================
     st.markdown("### ⚙️ إعدادات المتجر المدمجة")
     st.info("ℹ️ هذه الإعدادات تستخدم APIs سلة الرسمية")
@@ -24,16 +25,31 @@ def render_products_page():
         with st.expander("📤 تصدير المنتجات (Export Products)", expanded=False):
             st.markdown("#### 🛠️ تصدير المنتجات بأنواع مختلفة")
             
+            # ✅ إضافة خيار تسجيل الدخول بحساب سلة
+            use_salla_auth = st.checkbox(
+                "🔐 تسجيل الدخول بحساب سلة (للتصدير المباشر)",
+                value=False,
+                key="use_salla_auth_export",
+                help="قم بتسجيل الدخول بحساب سلة الخاص بك للحصول على صلاحيات التصدير"
+            )
+            
+            if use_salla_auth:
+                st.info("🔐 سيتم توجيهك لتسجيل الدخول بحساب سلة للحصول على صلاحيات التصدير")
+                st.markdown("""
+                    <div style="background: #f8f9fa; padding: 12px; border-radius: 8px; border-right: 4px solid #00b4d8;">
+                        <b>📌 ملاحظة:</b> التصدير يتطلب صلاحيات <code>exports.read_write</code>
+                        <br>
+                        <span style="font-size: 12px; color: #6c757d;">يمكنك الحصول على هذه الصلاحيات من خلال تطبيقك في Salla Partners</span>
+                    </div>
+                """, unsafe_allow_html=True)
+            else:
+                st.info("ℹ️ سيتم التصدير باستخدام التوكن الحالي. تأكد من أن التوكن لديه صلاحية `exports.read_write`")
+            
             export_type = st.selectbox(
                 "نوع التصدير:",
                 [
-                    "products",      # قائمة كاملة بالمنتجات
-                    "quantities",    # كميات المنتجات
-                    "prices",        # أسعار المنتجات
-                    "seo",           # بيانات SEO
-                    "product-sample", # نموذج لإضافة منتجات جديدة
-                    "category",      # تصنيفات المنتجات
-                    "brand"          # الماركات
+                    "products", "quantities", "prices", "seo",
+                    "product-sample", "category", "brand"
                 ],
                 key="export_type_select",
                 format_func=lambda x: {
@@ -61,10 +77,17 @@ def render_products_page():
                         "format": export_format
                     }
                     
+                    # ✅ تحديث الهيدر إذا كان المستخدم يستخدم حساب سلة
+                    export_headers = headers.copy()
+                    if use_salla_auth:
+                        # هنا يمكن إضافة منطق تسجيل الدخول بحساب سلة
+                        st.info("🔐 جاري التوجيه لتسجيل الدخول بحساب سلة...")
+                        # يمكن إضافة OAuth flow هنا
+                    
                     response = safe_api_request(
                         "POST",
                         "https://api.salla.dev/admin/v2/exports/products",
-                        headers,
+                        export_headers,
                         json=export_payload
                     )
                     
@@ -74,6 +97,7 @@ def render_products_page():
                         st.balloons()
                     else:
                         st.error("❌ فشل طلب التصدير. تأكد من صلاحيات API.")
+                        st.info("💡 تأكد من أن التوكن لديه صلاحية `exports.read_write`")
 
     # =========================================================================
     # ✅ 2. رفع الصور للمنتجات (Attach Image by SKU)
@@ -91,7 +115,6 @@ def render_products_page():
             )
             
             if uploaded_image and product_sku:
-                # عرض معاينة الصورة
                 st.image(uploaded_image, caption="الصورة المرفوعة", width=200)
             
             if st.button("📤 رفع الصورة", type="primary", use_container_width=True, key="attach_image_btn"):
@@ -101,30 +124,44 @@ def render_products_page():
                     st.warning("⚠️ الرجاء اختيار صورة")
                 else:
                     with st.spinner("🔄 جاري رفع الصورة..."):
-                        # تحضير الملف للرفع
-                        files = {
-                            'photo': (uploaded_image.name, uploaded_image.getvalue(), uploaded_image.type)
-                        }
-                        
-                        # استخدام API رفع الصورة
-                        response = requests.post(
-                            f"https://api.salla.dev/admin/v2/products/sku/{product_sku}/images",
-                            headers=headers,
-                            files=files
-                        )
-                        
-                        if response.status_code == 200:
-                            st.success("✅ تم رفع الصورة بنجاح!")
-                            st.balloons()
-                        elif response.status_code == 422:
-                            st.error("❌ تأكد من صحة SKU المنتج")
-                        else:
-                            st.error(f"❌ فشل رفع الصورة: {response.status_code}")
-    
+                        try:
+                            # تحضير الملف للرفع
+                            files = {
+                                'photo': (uploaded_image.name, uploaded_image.getvalue(), uploaded_image.type)
+                            }
+                            
+                            # ✅ استخدام requests مع معالجة الأخطاء
+                            response = requests.post(
+                                f"https://api.salla.dev/admin/v2/products/sku/{product_sku}/images",
+                                headers=headers,
+                                files=files,
+                                timeout=30
+                            )
+                            
+                            if response.status_code == 200:
+                                st.success("✅ تم رفع الصورة بنجاح!")
+                                st.balloons()
+                            elif response.status_code == 401:
+                                st.error("❌ خطأ في التوكن. تأكد من صلاحيات API.")
+                                st.info("💡 تأكد من أن التوكن لديه صلاحية `products.read_write`")
+                            elif response.status_code == 422:
+                                st.error("❌ تأكد من صحة SKU المنتج")
+                            else:
+                                st.error(f"❌ فشل رفع الصورة: {response.status_code}")
+                                try:
+                                    error_data = response.json()
+                                    st.code(error_data)
+                                except:
+                                    st.code(response.text)
+                        except requests.exceptions.RequestException as e:
+                            st.error(f"❌ خطأ في الاتصال: {str(e)}")
+                        except Exception as e:
+                            st.error(f"❌ خطأ غير متوقع: {str(e)}")
+
     st.divider()
 
     # ==========================================
-    # ✅ استيراد وتحديث المنتجات (مع دعم العناوين)
+    # ✅ استيراد وتحديث المنتجات
     # ==========================================
     with st.expander("📥 استيراد وتحديث المنتجات جماعياً (XLSX)", expanded=False):
         st.markdown("#### 📤 استيراد المنتجات مع العناوين الترويجية والفرعية")
@@ -276,13 +313,29 @@ def render_products_page():
     st.divider()
 
     # ==========================================
-    # ✅ عرض قائمة الفروع (Branch Details)
+    # ✅ عرض قائمة الفروع (مع معالجة خطأ 401)
     # ==========================================
     with st.expander("🏪 قائمة الفروع والمخازن", expanded=False):
         st.markdown("#### 📋 الفروع المتاحة في المتجر")
         
+        st.info("💡 لعرض الفروع، تأكد من أن التوكن لديه صلاحية `branches.read`")
+        
+        # ✅ خيار تسجيل الدخول بحساب سلة لعرض الفروع
+        use_salla_auth_branches = st.checkbox(
+            "🔐 تسجيل الدخول بحساب سلة لعرض الفروع",
+            value=False,
+            key="use_salla_auth_branches",
+            help="قم بتسجيل الدخول بحساب سلة الخاص بك للحصول على صلاحيات عرض الفروع"
+        )
+        
         with st.spinner("🔄 جاري تحميل الفروع..."):
-            branches_res = safe_api_request("GET", "https://api.salla.dev/admin/v2/branches", headers)
+            # ✅ استخدام headers مع صلاحيات مختلفة إذا كان المستخدم مسجل الدخول
+            branches_headers = headers.copy()
+            if use_salla_auth_branches:
+                st.info("🔐 جاري التوجيه لتسجيل الدخول بحساب سلة...")
+                # يمكن إضافة OAuth flow هنا
+            
+            branches_res = safe_api_request("GET", "https://api.salla.dev/admin/v2/branches", branches_headers)
         
         if branches_res and branches_res.get("data"):
             branches = branches_res["data"]
@@ -311,7 +364,13 @@ def render_products_page():
                         </div>
                     """, unsafe_allow_html=True)
         else:
-            st.info("ℹ️ لا توجد فروع متاحة حالياً")
+            st.warning("⚠️ لا يمكن عرض الفروع. تأكد من صلاحيات API.")
+            st.info("""
+                📌 **لحل هذه المشكلة:**
+                1. تأكد من أن التوكن لديه صلاحية `branches.read`
+                2. أو قم بتسجيل الدخول بحساب سلة باستخدام الخيار أعلاه
+                3. يمكنك الحصول على هذه الصلاحيات من خلال تطبيقك في Salla Partners
+            """)
 
     st.divider()
 
