@@ -260,7 +260,10 @@ def render_products_page():
                 
         if filter_hidden and p.get('status') != 'hidden': continue
         if filter_no_img and p.get('thumbnail') and p.get('main_image'): continue
-        if filter_has_promo and not p.get('promotion'): continue
+        # ✅ الإصلاح الجذري لفلتر العناوين الترويجية
+        promo_obj = p.get('promotion', {})
+        actual_promo_title = p.get('promotion_title') or (promo_obj.get('title') if isinstance(promo_obj, dict) else '')
+        if filter_has_promo and not actual_promo_title: continue
         if filter_out_stock and p.get('quantity', 0) > 0: continue
         
         has_disc = False
