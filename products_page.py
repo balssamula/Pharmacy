@@ -282,233 +282,233 @@ def render_products_page():
             use_container_width=True
         )
 
-# ==========================================
-# ✅ عرض المنتجات مع الصور المتعددة وكميات الفروع
-# ==========================================
-for idx, p in enumerate(filtered_products):
-    p_id = p.get('id', 'N/A')
-    p_name = p.get('name', 'منتج بدون اسم')
-    p_sku = p.get('sku', 'لا يوجد')
-    status = p.get('status', 'sale')
-    p_url = p.get('url', 'https://salla.sa')
-    p_image = p.get('thumbnail')
+    # ==========================================
+    # ✅ عرض المنتجات مع الصور المتعددة وكميات الفروع
+    # ==========================================
+    for idx, p in enumerate(filtered_products):
+        p_id = p.get('id', 'N/A')
+        p_name = p.get('name', 'منتج بدون اسم')
+        p_sku = p.get('sku', 'لا يوجد')
+        status = p.get('status', 'sale')
+        p_url = p.get('url', 'https://salla.sa')
+        p_image = p.get('thumbnail')
     
-    # ✅ جلب جميع الصور
-    images = p.get('images', [])
+        # ✅ جلب جميع الصور
+        images = p.get('images', [])
     
-    promo = p.get('promotion', {})
-    p_promotion = p.get('promotion_title') or (promo.get('title') if isinstance(promo, dict) else '') or "لا يوجد عنوان ترويجي"
-    p_sub_title = p.get('promotion_subtitle') or (promo.get('sub_title') if isinstance(promo, dict) else '') or "لا يوجد عنوان فرعي"
+        promo = p.get('promotion', {})
+        p_promotion = p.get('promotion_title') or (promo.get('title') if isinstance(promo, dict) else '') or "لا يوجد عنوان ترويجي"
+        p_sub_title = p.get('promotion_subtitle') or (promo.get('sub_title') if isinstance(promo, dict) else '') or "لا يوجد عنوان فرعي"
     
-    price_val = get_flat_price(p.get('price', 0))
-    regular_val = get_flat_price(p.get('regular_price', 0))
-    sale_val = get_flat_price(p.get('sale_price', 0))
+        price_val = get_flat_price(p.get('price', 0))
+        regular_val = get_flat_price(p.get('regular_price', 0))
+        sale_val = get_flat_price(p.get('sale_price', 0))
 
-    base_price = regular_val if regular_val > 0 else price_val
-    if sale_val > 0 and sale_val < base_price:
-        display_sale_price = sale_val
-        has_discount = True
-    elif price_val < regular_val and price_val > 0:
-        display_sale_price = price_val
-        has_discount = True
-    else:
-        display_sale_price = base_price
-        has_discount = False
+        base_price = regular_val if regular_val > 0 else price_val
+        if sale_val > 0 and sale_val < base_price:
+            display_sale_price = sale_val
+            has_discount = True
+        elif price_val < regular_val and price_val > 0:
+            display_sale_price = price_val
+            has_discount = True
+        else:
+            display_sale_price = base_price
+            has_discount = False
 
-    discount_percent = int(((base_price - display_sale_price) / base_price) * 100) if has_discount and base_price > 0 else 0
-    sale_start_date = p.get('sale_start') or (p.get('sale_price', {}).get('start_at') if isinstance(p.get('sale_price'), dict) else None) or "غير محدد"
-    sale_end_date = p.get('sale_end') or (p.get('sale_price', {}).get('expired_at') if isinstance(p.get('sale_price'), dict) else None) or "غير محدد"
+        discount_percent = int(((base_price - display_sale_price) / base_price) * 100) if has_discount and base_price > 0 else 0
+        sale_start_date = p.get('sale_start') or (p.get('sale_price', {}).get('start_at') if isinstance(p.get('sale_price'), dict) else None) or "غير محدد"
+        sale_end_date = p.get('sale_end') or (p.get('sale_price', {}).get('expired_at') if isinstance(p.get('sale_price'), dict) else None) or "غير محدد"
     
-    disp_status = "🟢 معروض بالمتجر" if status == "sale" else "🔴 منتج مخفي"
-    tax_status_badge = "🔥 خاضع للضريبة" if p.get('with_tax', True) else f"⚪ نسبة الصفر ({p.get('tax_exemption_cause', 'بدون سبب')})"
+        disp_status = "🟢 معروض بالمتجر" if status == "sale" else "🔴 منتج مخفي"
+        tax_status_badge = "🔥 خاضع للضريبة" if p.get('with_tax', True) else f"⚪ نسبة الصفر ({p.get('tax_exemption_cause', 'بدون سبب')})"
     
-    st.markdown(f"""
-        <div style="background: linear-gradient(135deg, #243b55 0%, #141e30 100%); 
-                    padding: 14px 20px; border-radius: 12px 12px 0px 0px; 
-                    margin-top: 25px; display: flex; justify-content: space-between; align-items: center; 
-                    border-bottom: 3px solid #e67e22;">
-            <span style="color: #ffffff; font-weight: bold; font-size: 15px;">📦 {p_name}</span>
-            <div style="display: flex; gap: 8px; flex-wrap: wrap;">
-                <span style="background: rgba(255,255,255,0.2); color: #fff; padding: 4px 12px; border-radius: 20px; font-size: 11px; font-weight:600;">{disp_status}</span>
-                <span style="background: rgba(0, 235, 207, 0.2); color: #00EBCF; padding: 4px 12px; border-radius: 20px; font-size: 11px; font-weight:600;">{tax_status_badge}</span>
-            </div>
-        </div>
-    """, unsafe_allow_html=True)
-    
-    with st.container():
-        st.markdown("""<div style="background-color: #fafbfc; padding: 20px; border-radius: 0px 0px 12px 12px; border: 1px solid #e1e8ed; border-top: none; box-shadow: 0 4px 10px rgba(0,0,0,0.03); margin-bottom: 25px;">""", unsafe_allow_html=True)
-        
-        # ✅ إعادة ترتيب الأعمدة لعرض أفضل
-        c_img, c_info, c_pricing, c_action = st.columns([1.5, 2.5, 2.5, 2])
-        
-        with c_img:
-            # ✅ عرض الصورة الرئيسية
-            if p_image:
-                st.image(p_image, use_container_width=True)
-            else:
-                st.markdown("<div style='text-align:center; padding:30px; background:#eee; border-radius:8px;'>🚫 بدون صورة</div>", unsafe_allow_html=True)
-            
-            # ✅ عرض الصور الإضافية كمعرض مصغر
-            if len(images) > 1:
-                st.markdown("**📷 صور إضافية:**")
-                cols = st.columns(min(len(images), 4))
-                for img_idx, img in enumerate(images):
-                    if img_idx < 4:
-                        with cols[img_idx % 4]:
-                            img_url = img.get('url', '')
-                            img_id = img.get('id', '')
-                            if img_url:
-                                st.image(img_url, width=80, use_container_width=False)
-                                
-                                # ✅ زر حذف الصورة
-                                if st.button(f"🗑️ حذف", key=f"del_img_{img_id}_{p_id}_{idx}_{img_idx}", use_container_width=True):
-                                    with st.spinner("جاري حذف الصورة..."):
-                                        del_res = safe_api_request(
-                                            "DELETE",
-                                            f"https://api.salla.dev/admin/v2/products/images/{img_id}",
-                                            headers
-                                        )
-                                        if del_res:
-                                            st.success("✅ تم حذف الصورة!")
-                                            st.rerun()
-                                        else:
-                                            st.error("❌ فشل حذف الصورة")
-            
-            # ✅ نافذة رفع وإرفاق الصور
-            with st.popover("🖼️ إرفاق صورة"):
-                upload_type = st.radio("طريقة الإرفاق:", ["رفع ملف", "رابط URL"], key=f"img_mode_{p_id}_{idx}")
-                
-                if upload_type == "رفع ملف":
-                    uploaded_img = st.file_uploader("اختر صورة:", type=['png', 'jpg', 'jpeg'], key=f"img_up_{p_id}_{idx}")
-                    if uploaded_img and st.button("🚀 رفع", key=f"btn_up_{p_id}_{idx}", type="primary"):
-                        with st.spinner("جاري الرفع..."):
-                            if attach_product_image_api(p_id, image_bytes=uploaded_img.getvalue(), filename=uploaded_img.name):
-                                st.success("✅ تم رفع الصورة!")
-                                st.rerun()
-                else:
-                    img_url_input = st.text_input("رابط الصورة:", placeholder="https://example.com/image.jpg", key=f"img_url_{p_id}_{idx}")
-                    if img_url_input and st.button("🚀 ربط", key=f"btn_link_{p_id}_{idx}", type="primary"):
-                        with st.spinner("جاري الربط..."):
-                            if attach_product_image_api(p_id, image_url=img_url_input):
-                                st.success("✅ تم ربط الصورة!")
-                                st.rerun()
-        
-        with c_info:
-            st.markdown(f"🆔 **المعرف:** `{p_id}` | 🔢 **SKU:** `{p_sku}`")
-            st.markdown(f"📢 **عنوان ترويجي:** <span style='color:#e67e22; font-weight:bold;'>{p_promotion}</span>", unsafe_allow_html=True)
-            st.markdown(f"🏷️ **عنوان فرعي:** <span style='color:#2a9d8f; font-weight:bold;'>{p_sub_title}</span>", unsafe_allow_html=True)
-            st.markdown(f"📦 **المخزون الإجمالي:** `{p.get('quantity', 0)}` | 📈 **المبيعات:** `{p.get('sold_quantity', 0)}`")
-            st.markdown(f"🔗 [🌐 عرض المنتج]({p_url})")
-            
-            # ✅ عرض كميات الفروع الحالية
-            with st.expander("🏪 كميات الفروع الحالية", expanded=False):
-                with st.spinner("جاري جلب كميات الفروع..."):
-                    branches_quantities = get_product_quantities_by_branch(product_id=p_id, headers=headers)
-                
-                if branches_quantities:
-                    for bq in branches_quantities:
-                        branch_name = bq.get('branch_name', 'فرع غير معروف')
-                        quantity = bq.get('quantity', 0)
-                        st.markdown(f"**{branch_name}:** `{quantity}` حبة")
-                else:
-                    st.info("ℹ️ لا توجد كميات مسجلة في الفروع")
-        
-        with c_pricing:
-            if has_discount:
-                st.markdown(f"""
-                <div style="background:#fff3cd; padding:10px; border-radius:8px; border-right:5px solid #ffc107;">
-                    <span style="text-decoration: line-through; color: #7f8c8d; font-size:12px;">أصلي: {base_price:,.2f} SAR</span><br>
-                    <b style="color: #c0392b; font-size:15px;">مخفض: {display_sale_price:,.2f} SAR</b>
-                    <span style="background:#c0392b; color:#fff; padding:2px 5px; border-radius:4px; font-size:10px; margin-right:5px;">وفرت: {discount_percent}%</span>
+        st.markdown(f"""
+            <div style="background: linear-gradient(135deg, #243b55 0%, #141e30 100%); 
+                        padding: 14px 20px; border-radius: 12px 12px 0px 0px; 
+                        margin-top: 25px; display: flex; justify-content: space-between; align-items: center; 
+                        border-bottom: 3px solid #e67e22;">
+                <span style="color: #ffffff; font-weight: bold; font-size: 15px;">📦 {p_name}</span>
+                <div style="display: flex; gap: 8px; flex-wrap: wrap;">
+                    <span style="background: rgba(255,255,255,0.2); color: #fff; padding: 4px 12px; border-radius: 20px; font-size: 11px; font-weight:600;">{disp_status}</span>
+                    <span style="background: rgba(0, 235, 207, 0.2); color: #00EBCF; padding: 4px 12px; border-radius: 20px; font-size: 11px; font-weight:600;">{tax_status_badge}</span>
                 </div>
-                """, unsafe_allow_html=True)
-                st.markdown(f"📅 بداية التخفيض: `{sale_start_date}`")
-                st.markdown(f"📅 نهاية التخفيض: `{sale_end_date}`")
-            else:
-                st.markdown(f"""<div style="background:#e2e8f0; padding:10px; border-radius:8px; border-right:5px solid #4a5568;"><b style="color:#2d3748; font-size:14px;">سعر ثابت: {base_price:,.2f} SAR</b></div>""", unsafe_allow_html=True)
-                
-        with c_action:
-            st.markdown("<br>", unsafe_allow_html=True)
-            target_st = "hidden" if status == "sale" else "sale"
-            btn_lbl = "👁️ إخفاء" if status == "sale" else "👁️ إظهار"
-            if st.button(btn_lbl, key=f"sh_{p_id}_{idx}", type="secondary" if status == "sale" else "primary", use_container_width=True):
-                with st.spinner("مزامنة..."):
-                    if update_product_status(p_id, target_st):
-                        st.success("تم التحديث!")
-                        st.rerun()
-                    
-            # ✅ نافذة تعديل العناوين
-            with st.popover("✏️ العناوين"):
-                new_promo = st.text_input("العنوان الترويجي:", value=(p_promotion if p_promotion != "لا يوجد عنوان ترويجي" else ""), key=f"promo_in_{p_id}_{idx}")
-                new_sub = st.text_input("العنوان الفرعي:", value=(p_sub_title if p_sub_title != "لا يوجد عنوان فرعي" else ""), key=f"sub_in_{p_id}_{idx}")
-                
-                if st.button("💾 حفظ العناوين", key=f"save_promo_sub_{p_id}_{idx}", type="primary", use_container_width=True):
-                    with st.spinner("جاري الحفظ..."):
-                        if update_product_promotions_secure(p_id, new_promo, new_sub, headers):
-                            st.success("✅ تم التحديث!")
-                            st.rerun()
-
-            # ✅ نافذة تعديل الضريبة
-            with st.popover("🧾 الضريبة"):
-                is_taxed = st.checkbox("خاضع للضريبة", value=p.get('with_tax', True), key=f"tax_chk_{p_id}_{idx}")
-                ex_cause = p.get('tax_exemption_cause', '')
-                
-                if not is_taxed:
-                    cause_idx = TAX_EXEMPTION_CAUSES.index(ex_cause) if ex_cause in TAX_EXEMPTION_CAUSES else 4
-                    selected_cause = st.selectbox("سبب عدم الخضوع:", TAX_EXEMPTION_CAUSES, index=cause_idx, key=f"tax_cause_{p_id}_{idx}")
+            </div>
+        """, unsafe_allow_html=True)
+    
+        with st.container():
+            st.markdown("""<div style="background-color: #fafbfc; padding: 20px; border-radius: 0px 0px 12px 12px; border: 1px solid #e1e8ed; border-top: none; box-shadow: 0 4px 10px rgba(0,0,0,0.03); margin-bottom: 25px;">""", unsafe_allow_html=True)
+        
+            # ✅ إعادة ترتيب الأعمدة لعرض أفضل
+            c_img, c_info, c_pricing, c_action = st.columns([1.5, 2.5, 2.5, 2])
+        
+            with c_img:
+                # ✅ عرض الصورة الرئيسية
+                if p_image:
+                    st.image(p_image, use_container_width=True)
                 else:
-                    selected_cause = ""
-                    
-                if st.button("💾 حفظ الضريبة", key=f"save_tax_{p_id}_{idx}", type="primary", use_container_width=True):
-                    with st.spinner("جاري التحديث..."):
-                        if update_product_tax_secure(p_id, is_taxed, selected_cause, headers):
-                            st.success("✅ تم تحديث الضريبة!")
-                            st.rerun()
-
-            # ✅ نافذة تعديل كميات الفروع مع عرض الكميات الحالية
-            with st.popover("🏢 كميات الفروع"):
-                if not branches:
-                    st.warning("لا توجد فروع مسجلة")
-                else:
-                    st.markdown("**تعديل كميات المنتج في الفروع:**")
-                    
-                    # ✅ جلب الكميات الحالية للفروع
-                    current_branch_quantities = get_product_quantities_by_branch(product_id=p_id, headers=headers)
-                    branch_qty_map = {}
-                    for bq in current_branch_quantities:
-                        branch_qty_map[bq.get('branch_id')] = bq.get('quantity', 0)
-                    
-                    branch_updates = []
-                    for b in branches:
-                        current_qty = branch_qty_map.get(b['id'], 0)
-                        new_q = st.number_input(
-                            f"الكمية في: {b['name']}",
-                            min_value=0,
-                            value=current_qty,
-                            step=1,
-                            key=f"bq_{p_id}_{b['id']}_{idx}"
-                        )
-                        if new_q != current_qty:
-                            branch_updates.append({
-                                "sku": p_sku,
-                                "branch_id": b['id'],
-                                "quantity": new_q,
-                                "mode": "overwrite"
-                            })
-                    
-                    if st.button("💾 حفظ كميات الفروع", key=f"save_bq_{p_id}_{idx}", type="primary", use_container_width=True):
-                        if branch_updates:
-                            with st.spinner("جاري التوزيع..."):
-                                res = safe_api_request(
-                                    "POST",
-                                    "https://api.salla.dev/admin/v2/products/quantities/bulk",
-                                    headers,
-                                    json={"quantities": branch_updates}
-                                )
-                                if res:
-                                    st.success("✅ تم تحديث الكميات!")
+                    st.markdown("<div style='text-align:center; padding:30px; background:#eee; border-radius:8px;'>🚫 بدون صورة</div>", unsafe_allow_html=True)
+            
+                # ✅ عرض الصور الإضافية كمعرض مصغر
+                if len(images) > 1:
+                    st.markdown("**📷 صور إضافية:**")
+                    cols = st.columns(min(len(images), 4))
+                    for img_idx, img in enumerate(images):
+                        if img_idx < 4:
+                            with cols[img_idx % 4]:
+                                img_url = img.get('url', '')
+                                img_id = img.get('id', '')
+                                if img_url:
+                                    st.image(img_url, width=80, use_container_width=False)
+                                
+                                    # ✅ زر حذف الصورة
+                                    if st.button(f"🗑️ حذف", key=f"del_img_{img_id}_{p_id}_{idx}_{img_idx}", use_container_width=True):
+                                        with st.spinner("جاري حذف الصورة..."):
+                                            del_res = safe_api_request(
+                                                "DELETE",
+                                                f"https://api.salla.dev/admin/v2/products/images/{img_id}",
+                                                headers
+                                            )
+                                            if del_res:
+                                                st.success("✅ تم حذف الصورة!")
+                                                st.rerun()
+                                            else:
+                                                st.error("❌ فشل حذف الصورة")
+            
+                # ✅ نافذة رفع وإرفاق الصور
+                with st.popover("🖼️ إرفاق صورة"):
+                    upload_type = st.radio("طريقة الإرفاق:", ["رفع ملف", "رابط URL"], key=f"img_mode_{p_id}_{idx}")
+                
+                    if upload_type == "رفع ملف":
+                        uploaded_img = st.file_uploader("اختر صورة:", type=['png', 'jpg', 'jpeg'], key=f"img_up_{p_id}_{idx}")
+                        if uploaded_img and st.button("🚀 رفع", key=f"btn_up_{p_id}_{idx}", type="primary"):
+                            with st.spinner("جاري الرفع..."):
+                                if attach_product_image_api(p_id, image_bytes=uploaded_img.getvalue(), filename=uploaded_img.name):
+                                    st.success("✅ تم رفع الصورة!")
                                     st.rerun()
-                        else:
-                            st.warning("لم يتم تغيير أي كمية")
+                    else:
+                        img_url_input = st.text_input("رابط الصورة:", placeholder="https://example.com/image.jpg", key=f"img_url_{p_id}_{idx}")
+                        if img_url_input and st.button("🚀 ربط", key=f"btn_link_{p_id}_{idx}", type="primary"):
+                            with st.spinner("جاري الربط..."):
+                                if attach_product_image_api(p_id, image_url=img_url_input):
+                                    st.success("✅ تم ربط الصورة!")
+                                    st.rerun()
+        
+            with c_info:
+                st.markdown(f"🆔 **المعرف:** `{p_id}` | 🔢 **SKU:** `{p_sku}`")
+                st.markdown(f"📢 **عنوان ترويجي:** <span style='color:#e67e22; font-weight:bold;'>{p_promotion}</span>", unsafe_allow_html=True)
+                st.markdown(f"🏷️ **عنوان فرعي:** <span style='color:#2a9d8f; font-weight:bold;'>{p_sub_title}</span>", unsafe_allow_html=True)
+                st.markdown(f"📦 **المخزون الإجمالي:** `{p.get('quantity', 0)}` | 📈 **المبيعات:** `{p.get('sold_quantity', 0)}`")
+                st.markdown(f"🔗 [🌐 عرض المنتج]({p_url})")
+                
+                # ✅ عرض كميات الفروع الحالية
+                with st.expander("🏪 كميات الفروع الحالية", expanded=False):
+                    with st.spinner("جاري جلب كميات الفروع..."):
+                        branches_quantities = get_product_quantities_by_branch(product_id=p_id, headers=headers)
+                
+                    if branches_quantities:
+                        for bq in branches_quantities:
+                            branch_name = bq.get('branch_name', 'فرع غير معروف')
+                            quantity = bq.get('quantity', 0)
+                            st.markdown(f"**{branch_name}:** `{quantity}` حبة")
+                    else:
+                        st.info("ℹ️ لا توجد كميات مسجلة في الفروع")
+        
+            with c_pricing:
+                if has_discount:
+                    st.markdown(f"""
+                    <div style="background:#fff3cd; padding:10px; border-radius:8px; border-right:5px solid #ffc107;">
+                        <span style="text-decoration: line-through; color: #7f8c8d; font-size:12px;">أصلي: {base_price:,.2f} SAR</span><br>
+                        <b style="color: #c0392b; font-size:15px;">مخفض: {display_sale_price:,.2f} SAR</b>
+                        <span style="background:#c0392b; color:#fff; padding:2px 5px; border-radius:4px; font-size:10px; margin-right:5px;">وفرت: {discount_percent}%</span>
+                    </div>
+                    """, unsafe_allow_html=True)
+                    st.markdown(f"📅 بداية التخفيض: `{sale_start_date}`")
+                    st.markdown(f"📅 نهاية التخفيض: `{sale_end_date}`")
+                else:
+                    st.markdown(f"""<div style="background:#e2e8f0; padding:10px; border-radius:8px; border-right:5px solid #4a5568;"><b style="color:#2d3748; font-size:14px;">سعر ثابت: {base_price:,.2f} SAR</b></div>""", unsafe_allow_html=True)
+                
+            with c_action:
+                st.markdown("<br>", unsafe_allow_html=True)
+                target_st = "hidden" if status == "sale" else "sale"
+                btn_lbl = "👁️ إخفاء" if status == "sale" else "👁️ إظهار"
+                if st.button(btn_lbl, key=f"sh_{p_id}_{idx}", type="secondary" if status == "sale" else "primary", use_container_width=True):
+                    with st.spinner("مزامنة..."):
+                        if update_product_status(p_id, target_st):
+                            st.success("تم التحديث!")
+                            st.rerun()
+                    
+                # ✅ نافذة تعديل العناوين
+                with st.popover("✏️ العناوين"):
+                    new_promo = st.text_input("العنوان الترويجي:", value=(p_promotion if p_promotion != "لا يوجد عنوان ترويجي" else ""), key=f"promo_in_{p_id}_{idx}")
+                    new_sub = st.text_input("العنوان الفرعي:", value=(p_sub_title if p_sub_title != "لا يوجد عنوان فرعي" else ""), key=f"sub_in_{p_id}_{idx}")
+                
+                    if st.button("💾 حفظ العناوين", key=f"save_promo_sub_{p_id}_{idx}", type="primary", use_container_width=True):
+                        with st.spinner("جاري الحفظ..."):
+                            if update_product_promotions_secure(p_id, new_promo, new_sub, headers):
+                                st.success("✅ تم التحديث!")
+                                st.rerun()
 
-        st.markdown("</div>", unsafe_allow_html=True)
+                # ✅ نافذة تعديل الضريبة
+                with st.popover("🧾 الضريبة"):
+                    is_taxed = st.checkbox("خاضع للضريبة", value=p.get('with_tax', True), key=f"tax_chk_{p_id}_{idx}")
+                    ex_cause = p.get('tax_exemption_cause', '')
+                
+                    if not is_taxed:
+                        cause_idx = TAX_EXEMPTION_CAUSES.index(ex_cause) if ex_cause in TAX_EXEMPTION_CAUSES else 4
+                        selected_cause = st.selectbox("سبب عدم الخضوع:", TAX_EXEMPTION_CAUSES, index=cause_idx, key=f"tax_cause_{p_id}_{idx}")
+                    else:
+                        selected_cause = ""
+                    
+                    if st.button("💾 حفظ الضريبة", key=f"save_tax_{p_id}_{idx}", type="primary", use_container_width=True):
+                        with st.spinner("جاري التحديث..."):
+                            if update_product_tax_secure(p_id, is_taxed, selected_cause, headers):
+                                st.success("✅ تم تحديث الضريبة!")
+                                st.rerun()
+
+                # ✅ نافذة تعديل كميات الفروع مع عرض الكميات الحالية
+                with st.popover("🏢 كميات الفروع"):
+                    if not branches:
+                        st.warning("لا توجد فروع مسجلة")
+                    else:
+                        st.markdown("**تعديل كميات المنتج في الفروع:**")
+                    
+                        # ✅ جلب الكميات الحالية للفروع
+                        current_branch_quantities = get_product_quantities_by_branch(product_id=p_id, headers=headers)
+                        branch_qty_map = {}
+                        for bq in current_branch_quantities:
+                            branch_qty_map[bq.get('branch_id')] = bq.get('quantity', 0)
+                    
+                        branch_updates = []
+                        for b in branches:
+                            current_qty = branch_qty_map.get(b['id'], 0)
+                            new_q = st.number_input(
+                                f"الكمية في: {b['name']}",
+                                min_value=0,
+                                value=current_qty,
+                                step=1,
+                                key=f"bq_{p_id}_{b['id']}_{idx}"
+                            )
+                            if new_q != current_qty:
+                                branch_updates.append({
+                                    "sku": p_sku,
+                                    "branch_id": b['id'],
+                                    "quantity": new_q,
+                                    "mode": "overwrite"
+                                })
+                    
+                        if st.button("💾 حفظ كميات الفروع", key=f"save_bq_{p_id}_{idx}", type="primary", use_container_width=True):
+                            if branch_updates:
+                                with st.spinner("جاري التوزيع..."):
+                                    res = safe_api_request(
+                                        "POST",
+                                        "https://api.salla.dev/admin/v2/products/quantities/bulk",
+                                        headers,
+                                        json={"quantities": branch_updates}
+                                    )
+                                    if res:
+                                        st.success("✅ تم تحديث الكميات!")
+                                        st.rerun()
+                            else:
+                                st.warning("لم يتم تغيير أي كمية")
+
+            st.markdown("</div>", unsafe_allow_html=True)
