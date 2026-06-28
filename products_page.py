@@ -10,186 +10,117 @@ def render_products_page():
     if not headers: return
 
     # ==========================================
-    # ✅ إعدادات المتجر المدمجة
+    # ✅ إعدادات المتجر المدمجة (باستخدام APIs سلة)
     # ==========================================
     st.markdown("### ⚙️ إعدادات المتجر المدمجة")
-    st.info("ℹ️ هذه الإعدادات تُطبق مباشرة على المتجر دون الحاجة لتثبيت تطبيقات خارجية.")
+    st.info("ℹ️ هذه الإعدادات تستخدم APIs سلة الرسمية")
     
     col_widget1, col_widget2 = st.columns(2)
 
     # =========================================================================
-    # ✅ 1. إعدادات المنتجات المقترحة
+    # ✅ 1. تصدير المنتجات (باستخدام Export Products API)
     # =========================================================================
     with col_widget1:
-        with st.expander("🔄 إعدادات المنتجات المقترحة (شاهدتها مؤخراً)", expanded=False):
-            st.markdown("#### 🛠️ إعدادات عرض المنتجات المقترحة")
+        with st.expander("📤 تصدير المنتجات (Export Products)", expanded=False):
+            st.markdown("#### 🛠️ تصدير المنتجات بأنواع مختلفة")
             
-            enable_recent = st.toggle("✅ تفعيل عرض المنتجات المقترحة", value=True, key="enable_recent_products")
+            export_type = st.selectbox(
+                "نوع التصدير:",
+                [
+                    "products",      # قائمة كاملة بالمنتجات
+                    "quantities",    # كميات المنتجات
+                    "prices",        # أسعار المنتجات
+                    "seo",           # بيانات SEO
+                    "product-sample", # نموذج لإضافة منتجات جديدة
+                    "category",      # تصنيفات المنتجات
+                    "brand"          # الماركات
+                ],
+                key="export_type_select",
+                format_func=lambda x: {
+                    "products": "📦 جميع المنتجات",
+                    "quantities": "📊 كميات المنتجات",
+                    "prices": "💰 أسعار المنتجات",
+                    "seo": "🔍 بيانات SEO",
+                    "product-sample": "📝 نموذج إضافة منتج",
+                    "category": "📂 التصنيفات",
+                    "brand": "🏷️ الماركات"
+                }.get(x, x)
+            )
             
-            section_title = st.text_input("📝 عنوان القسم:", value="منتجات قد تعجبك", key="recent_section_title")
+            export_format = st.radio(
+                "صيغة الملف:",
+                ["xlsx", "csv"],
+                index=0,
+                key="export_format_select"
+            )
             
-            st.markdown("**🎯 أماكن ظهور القسم:**")
-            col_pos1, col_pos2 = st.columns(2)
-            with col_pos1:
-                show_home = st.checkbox("🏠 الصفحة الرئيسية", value=True, key="recent_show_home")
-                show_categories = st.checkbox("📂 صفحة التصنيفات", value=True, key="recent_show_categories")
-            with col_pos2:
-                show_details = st.checkbox("📄 صفحة تفاصيل المنتج", value=True, key="recent_show_details")
-                show_cart = st.checkbox("🛒 صفحة السلة", value=False, key="recent_show_cart")
-            
-            products_limit = st.slider("🔢 عدد المنتجات المعروضة:", min_value=2, max_value=20, value=6, step=1, key="recent_products_limit")
-            
-            if st.button("💾 تطبيق الإعدادات على المتجر", type="primary", use_container_width=True, key="apply_recent_settings"):
-                with st.spinner("🔄 جاري تطبيق الإعدادات..."):
-                    try:
-                        settings_payload = {
-                            "recent_products": {
-                                "enabled": enable_recent,
-                                "title": section_title,
-                                "show_on": {
-                                    "home": show_home,
-                                    "categories": show_categories,
-                                    "product_details": show_details,
-                                    "cart": show_cart
-                                },
-                                "limit": products_limit
-                            }
-                        }
-                        
-                        response = safe_api_request(
-                            "POST",
-                            "https://api.salla.dev/admin/v2/settings/products",
-                            headers,
-                            json=settings_payload
-                        )
-                        
-                        if response:
-                            st.success("✅ تم تطبيق الإعدادات بنجاح على المتجر!")
-                            st.balloons()
-                        else:
-                            st.error("❌ فشل تطبيق الإعدادات. تأكد من صلاحيات API.")
-                    except Exception as e:
-                        st.error(f"❌ خطأ: {str(e)}")
+            if st.button("📥 طلب تصدير المنتجات", type="primary", use_container_width=True, key="export_products_btn"):
+                with st.spinner("🔄 جاري طلب التصدير..."):
+                    export_payload = {
+                        "type": export_type,
+                        "format": export_format
+                    }
+                    
+                    response = safe_api_request(
+                        "POST",
+                        "https://api.salla.dev/admin/v2/exports/products",
+                        headers,
+                        json=export_payload
+                    )
+                    
+                    if response:
+                        st.success("✅ تم طلب التصدير بنجاح! سيتم إرسال الملف إلى بريدك الإلكتروني.")
+                        st.info("📧 تحقق من بريدك الإلكتروني المسجل في المتجر")
+                        st.balloons()
+                    else:
+                        st.error("❌ فشل طلب التصدير. تأكد من صلاحيات API.")
 
     # =========================================================================
-    # ✅ 2. إعدادات التوصيات الذكية
+    # ✅ 2. رفع الصور للمنتجات (Attach Image by SKU)
     # =========================================================================
     with col_widget2:
-        with st.expander("🧠 إعدادات نظام التوصيات الذكي", expanded=False):
-            st.markdown("#### 🛠️ إعدادات توصيات المنتجات الذكية")
+        with st.expander("🖼️ رفع صورة للمنتج (Attach Image)", expanded=False):
+            st.markdown("#### 🛠️ رفع صورة لمنتج باستخدام SKU")
             
-            enable_recommendations = st.toggle("✅ تفعيل نظام التوصيات", value=True, key="enable_recommendations")
+            product_sku = st.text_input("🔢 SKU المنتج:", key="attach_image_sku")
             
-            st.markdown("**🎯 أنواع التوصيات:**")
-            
-            col_rec1, col_rec2 = st.columns(2)
-            with col_rec1:
-                buy_together = st.checkbox("🤝 تشترى معًا", value=True, key="rec_buy_together")
-                also_bought = st.checkbox("🛍️ الزبائن اشتروا أيضًا", value=True, key="rec_also_bought")
-                best_sellers = st.checkbox("🏆 الأكثر مبيعاً", value=True, key="rec_best_sellers")
-            with col_rec2:
-                related_products = st.checkbox("🔗 منتجات ذات صلة", value=True, key="rec_related")
-                recently_viewed = st.checkbox("👁️ شوهدت مؤخراً", value=True, key="rec_recently_viewed")
-                top_rated = st.checkbox("⭐ الأعلى تقييماً", value=True, key="rec_top_rated")
-            
-            st.markdown("**🎯 أماكن ظهور التوصيات:**")
-            col_pos3, col_pos4 = st.columns(2)
-            with col_pos3:
-                rec_show_home = st.checkbox("🏠 الصفحة الرئيسية", value=True, key="rec_show_home")
-                rec_show_details = st.checkbox("📄 صفحة تفاصيل المنتج", value=True, key="rec_show_details")
-            with col_pos4:
-                rec_show_cart = st.checkbox("🛒 صفحة السلة", value=True, key="rec_show_cart")
-                rec_show_checkout = st.checkbox("💳 صفحة الدفع", value=False, key="rec_show_checkout")
-            
-            recommendation_limit = st.slider("🔢 عدد التوصيات:", min_value=2, max_value=20, value=8, step=1, key="rec_limit")
-            
-            show_add_to_cart = st.radio(
-                "🛒 عرض زر إضافة للسلة:",
-                ["في جميع الصفحات", "في صفحة المنتج فقط", "عدم العرض"],
-                index=0,
-                key="rec_show_cart_btn"
+            uploaded_image = st.file_uploader(
+                "📷 اختر صورة المنتج:",
+                type=["jpg", "jpeg", "png", "gif", "webp"],
+                key="attach_image_file"
             )
             
-            if st.button("💾 تطبيق إعدادات التوصيات", type="primary", use_container_width=True, key="apply_rec_settings"):
-                with st.spinner("🔄 جاري تطبيق إعدادات التوصيات..."):
-                    try:
-                        rec_payload = {
-                            "recommendations": {
-                                "enabled": enable_recommendations,
-                                "types": {
-                                    "buy_together": buy_together,
-                                    "also_bought": also_bought,
-                                    "best_sellers": best_sellers,
-                                    "related": related_products,
-                                    "recently_viewed": recently_viewed,
-                                    "top_rated": top_rated
-                                },
-                                "show_on": {
-                                    "home": rec_show_home,
-                                    "product_details": rec_show_details,
-                                    "cart": rec_show_cart,
-                                    "checkout": rec_show_checkout
-                                },
-                                "limit": recommendation_limit,
-                                "show_add_to_cart": show_add_to_cart
-                            }
+            if uploaded_image and product_sku:
+                # عرض معاينة الصورة
+                st.image(uploaded_image, caption="الصورة المرفوعة", width=200)
+            
+            if st.button("📤 رفع الصورة", type="primary", use_container_width=True, key="attach_image_btn"):
+                if not product_sku:
+                    st.warning("⚠️ الرجاء إدخال SKU المنتج")
+                elif not uploaded_image:
+                    st.warning("⚠️ الرجاء اختيار صورة")
+                else:
+                    with st.spinner("🔄 جاري رفع الصورة..."):
+                        # تحضير الملف للرفع
+                        files = {
+                            'photo': (uploaded_image.name, uploaded_image.getvalue(), uploaded_image.type)
                         }
                         
-                        response = safe_api_request(
-                            "POST",
-                            "https://api.salla.dev/admin/v2/settings/recommendations",
-                            headers,
-                            json=rec_payload
+                        # استخدام API رفع الصورة
+                        response = requests.post(
+                            f"https://api.salla.dev/admin/v2/products/sku/{product_sku}/images",
+                            headers=headers,
+                            files=files
                         )
                         
-                        if response:
-                            st.success("✅ تم تطبيق إعدادات التوصيات بنجاح!")
+                        if response.status_code == 200:
+                            st.success("✅ تم رفع الصورة بنجاح!")
                             st.balloons()
+                        elif response.status_code == 422:
+                            st.error("❌ تأكد من صحة SKU المنتج")
                         else:
-                            st.error("❌ فشل تطبيق الإعدادات. تأكد من صلاحيات API.")
-                    except Exception as e:
-                        st.error(f"❌ خطأ: {str(e)}")
-
-    st.divider()
-
-    # ==========================================
-    # ✅ معاينة المنتجات المقترحة
-    # ==========================================
-    with st.expander("👁️ معاينة المنتجات المقترحة (عرض حي)", expanded=False):
-        st.markdown("#### 📊 المنتجات المقترحة حالياً")
-        
-        with st.spinner("🔄 جاري تحميل المنتجات المقترحة..."):
-            rec_products_res = safe_api_request(
-                "GET",
-                "https://api.salla.dev/admin/v2/products/recommended",
-                headers
-            )
-        
-        if rec_products_res and rec_products_res.get("data"):
-            rec_products = rec_products_res["data"]
-            st.success(f"✅ عدد المنتجات المقترحة: {len(rec_products)}")
-            
-            cols = st.columns(min(len(rec_products), 4))
-            for idx, product in enumerate(rec_products[:8]):
-                with cols[idx % 4]:
-                    st.markdown(f"""
-                        <div style="background: #f8f9fa; border-radius: 10px; padding: 10px; 
-                                    border: 1px solid #e8edf2; text-align: center; margin: 5px;">
-                            <div style="font-size: 14px; font-weight: 600; color: #0f1c2e; 
-                                        white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">
-                                {product.get('name', 'منتج')}
-                            </div>
-                            <div style="color: #00b4d8; font-weight: 700;">
-                                {get_flat_price(product.get('price', 0)):,.2f} SAR
-                            </div>
-                            <div style="font-size: 11px; color: #6c757d;">
-                                🛒 {product.get('sold_quantity', 0)} مبيعات
-                            </div>
-                        </div>
-                    """, unsafe_allow_html=True)
-        else:
-            st.info("ℹ️ لا توجد منتجات مقترحة حالياً. قم بتطبيق الإعدادات أعلاه.")
-
+                            st.error(f"❌ فشل رفع الصورة: {response.status_code}")
+    
     st.divider()
 
     # ==========================================
@@ -198,7 +129,6 @@ def render_products_page():
     with st.expander("📥 استيراد وتحديث المنتجات جماعياً (XLSX)", expanded=False):
         st.markdown("#### 📤 استيراد المنتجات مع العناوين الترويجية والفرعية")
         
-        # عرض الصيغة المطلوبة
         st.info("""
         📋 **الصيغة المطلوبة لملف المنتجات:**
         
@@ -215,12 +145,10 @@ def render_products_page():
                 st.dataframe(df, use_container_width=True)
                 st.info(f"✅ تم تحميل {len(df)} منتج")
                 
-                # ✅ عرض الأعمدة المتوقعة
                 expected_cols = ['id', 'price', 'promotion_title', 'promotion_subtitle', 'quantity']
                 missing_cols = [col for col in expected_cols if col not in df.columns]
                 if missing_cols:
                     st.warning(f"⚠️ الأعمدة المفقودة: {', '.join(missing_cols)}")
-                    st.info("💡 يمكنك استخدام الأعمدة الموجودة في ملفك: " + ", ".join(df.columns.tolist()))
                 else:
                     st.success("✅ جميع الأعمدة المطلوبة موجودة")
                 
@@ -235,7 +163,6 @@ def render_products_page():
                                 if product_id == 0:
                                     continue
                                 
-                                # بناء بيانات التحديث
                                 update_payload = {}
                                 
                                 if pd.notna(row.get('promotion_title')):
@@ -253,7 +180,6 @@ def render_products_page():
                                 if pd.notna(row.get('status')):
                                     update_payload['status'] = str(row.get('status'))
                                 
-                                # إرسال التحديث
                                 if update_payload:
                                     response = safe_api_request(
                                         "PUT",
@@ -265,7 +191,6 @@ def render_products_page():
                                         success_count += 1
                                     else:
                                         error_count += 1
-                                        st.error(f"❌ فشل تحديث المنتج ID: {product_id}")
                             except Exception as e:
                                 error_count += 1
                                 st.error(f"❌ خطأ في الصف {idx+1}: {str(e)}")
@@ -306,7 +231,6 @@ def render_products_page():
                 missing_cols = [col for col in expected_cols if col not in df_branches.columns]
                 if missing_cols:
                     st.warning(f"⚠️ الأعمدة المفقودة: {', '.join(missing_cols)}")
-                    st.info("💡 يمكنك استخدام الأعمدة الموجودة في ملفك: " + ", ".join(df_branches.columns.tolist()))
                 else:
                     st.success("✅ جميع الأعمدة المطلوبة موجودة")
                 
@@ -324,10 +248,7 @@ def render_products_page():
                                 if product_id == 0 or branch_id == 0:
                                     continue
                                 
-                                # تحديث كمية المنتج في الفرع
-                                branch_payload = {
-                                    "quantity": quantity
-                                }
+                                branch_payload = {"quantity": quantity}
                                 
                                 response = safe_api_request(
                                     "PUT",
@@ -339,7 +260,6 @@ def render_products_page():
                                     success_count += 1
                                 else:
                                     error_count += 1
-                                    st.error(f"❌ فشل تحديث المنتج {product_id} في الفرع {branch_id}")
                             except Exception as e:
                                 error_count += 1
                                 st.error(f"❌ خطأ في الصف {idx+1}: {str(e)}")
@@ -352,6 +272,46 @@ def render_products_page():
                             st.rerun()
             except Exception as e:
                 st.error(f"❌ خطأ في قراءة الملف: {str(e)}")
+
+    st.divider()
+
+    # ==========================================
+    # ✅ عرض قائمة الفروع (Branch Details)
+    # ==========================================
+    with st.expander("🏪 قائمة الفروع والمخازن", expanded=False):
+        st.markdown("#### 📋 الفروع المتاحة في المتجر")
+        
+        with st.spinner("🔄 جاري تحميل الفروع..."):
+            branches_res = safe_api_request("GET", "https://api.salla.dev/admin/v2/branches", headers)
+        
+        if branches_res and branches_res.get("data"):
+            branches = branches_res["data"]
+            st.success(f"✅ عدد الفروع: {len(branches)}")
+            
+            for branch in branches:
+                with st.container():
+                    st.markdown(f"""
+                        <div style="background: #f8f9fa; padding: 12px 16px; border-radius: 8px; 
+                                    border-right: 4px solid #00b4d8; margin-bottom: 10px;">
+                            <div style="display: flex; justify-content: space-between; flex-wrap: wrap;">
+                                <span style="font-weight: bold; font-size: 15px;">🏪 {branch.get('name', 'فرع غير مسمى')}</span>
+                                <span style="color: {'#28a745' if branch.get('status') == 'active' else '#dc3545'};">
+                                    {branch.get('status', 'غير معروف')}
+                                </span>
+                            </div>
+                            <div style="font-size: 13px; color: #6c757d;">
+                                📍 {branch.get('city', {}).get('name', '')} - {branch.get('address_description', 'لا يوجد عنوان')}
+                            </div>
+                            <div style="font-size: 12px; color: #6c757d;">
+                                📞 {branch.get('contacts', {}).get('phone', 'لا يوجد رقم')}
+                            </div>
+                            <div style="font-size: 12px; color: #6c757d;">
+                                🆔 معرف الفرع: {branch.get('id', 'N/A')}
+                            </div>
+                        </div>
+                    """, unsafe_allow_html=True)
+        else:
+            st.info("ℹ️ لا توجد فروع متاحة حالياً")
 
     st.divider()
 
@@ -369,7 +329,7 @@ def render_products_page():
         # ==========================================
         col_export1, col_export2, col_export3 = st.columns([1, 1, 4])
         with col_export1:
-            if st.button("📥 تصدير كشف المنتجات الكامل", key="export_all_prod_excel_green"):
+            if st.button("📥 تصدير الكشف الكامل", key="export_all_prod_excel_green"):
                 ex_data = export_products_to_excel(products)
                 if ex_data:
                     st.download_button(
@@ -382,7 +342,7 @@ def render_products_page():
                     )
         
         with col_export2:
-            if st.button("📥 تصدير المنتجات المفلترة", key="export_filtered_products"):
+            if st.button("📥 تصدير المفلترة", key="export_filtered_products"):
                 st.session_state["export_filtered_products"] = True
                 st.rerun()
             
@@ -487,15 +447,12 @@ def render_products_page():
             status = p.get('status', 'sale')
             p_url = p.get('url', 'https://salla.sa')
             
-            # ✅ استخراج العناوين بشكل صحيح
             promo = p.get('promotion', {})
             p_promotion = p.get('promotion_title') or (promo.get('title') if isinstance(promo, dict) else '') or "لا يوجد"
             p_sub_title = p.get('promotion_subtitle') or (promo.get('sub_title') if isinstance(promo, dict) else '')
             
-            # ✅ التحقق من وجود صورة
             has_image = bool(p.get('thumbnail') or p.get('main_image'))
             
-            # ✅ حساب الأسعار
             price_val = get_flat_price(p.get('price', 0))
             regular_val = get_flat_price(p.get('regular_price', 0))
             sale_val = get_flat_price(p.get('sale_price', 0))
@@ -517,12 +474,10 @@ def render_products_page():
             sale_start_date = p.get('sale_start') or (p.get('sale_price', {}).get('start_at') if isinstance(p.get('sale_price'), dict) else None) or "غير محدد"
             sale_end_date = p.get('sale_end') or (p.get('sale_price', {}).get('expired_at') if isinstance(p.get('sale_price'), dict) else None) or "غير محدد"
             
-            # ✅ حالات المنتج
             disp_status = "🟢 معروض" if status == "sale" else "🔴 مخفي"
             img_status = "✅ له صورة" if has_image else "❌ بدون صورة"
             tax_status = "🟢 خاضع للضريبة" if p.get('with_tax', True) else "⚪ معفى من الضريبة"
 
-            # ✅ عرض المنتج مع جميع الحالات
             st.markdown(f"""
                 <div style="background: linear-gradient(135deg, #243b55 0%, #141e30 100%); 
                             padding: 12px 18px; border-radius: 12px 12px 0px 0px; 
@@ -550,7 +505,6 @@ def render_products_page():
                     st.markdown(f"🔢 **SKU:** `{p_sku}`")
                     st.markdown(f"📢 **العنوان الترويجي:** <span style='color:#e67e22; font-weight:bold;'>{p_promotion}</span>", unsafe_allow_html=True)
                     
-                    # ✅ عرض العنوان الفرعي بشكل واضح
                     if p_sub_title:
                         st.markdown(f"📝 **العنوان الفرعي:** <span style='color:#2a9d8f; font-weight:bold;'>{p_sub_title}</span>", unsafe_allow_html=True)
                     else:
@@ -560,7 +514,6 @@ def render_products_page():
                     st.markdown(f"📦 **المخزون:** {p.get('quantity', 0)} حبة | 📈 **المبيعات:** {p.get('sold_quantity', 0)}")
                     st.markdown(f"📊 **خاضع للضريبة:** {tax_status}")
                     
-                    # ✅ زر عرض ارصدة الفروع
                     if st.button("🏪 عرض ارصدة الفروع", key=f"branches_stock_{p_id}_{idx}"):
                         st.session_state[f"show_branches_{p_id}"] = True
                     
@@ -629,8 +582,7 @@ def render_products_page():
                                 st.success("✅ تم التحديث!")
                                 st.rerun()
                     
-                    # ✅ زر تعديل الترويج
-                    if st.button("✏️ تعديل العنوان الترويجي", key=f"edit_promo_btn_{p_id}_{idx}", use_container_width=True):
+                    if st.button("✏️ تعديل الترويج", key=f"edit_promo_btn_{p_id}_{idx}", use_container_width=True):
                         st.session_state[f"show_promo_edit_{p_id}"] = True
                     
                     if st.session_state.get(f"show_promo_edit_{p_id}", False):
@@ -658,7 +610,6 @@ def render_products_page():
                                     st.session_state[f"show_promo_edit_{p_id}"] = False
                                     st.rerun()
                     
-                    # ✅ زر تعديل العنوان الفرعي
                     if st.button("✏️ تعديل العنوان الفرعي", key=f"edit_sub_btn_{p_id}_{idx}", use_container_width=True):
                         st.session_state[f"show_sub_edit_{p_id}"] = True
                     
