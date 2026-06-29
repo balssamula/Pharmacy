@@ -117,7 +117,6 @@ def import_products_to_salla(df: pd.DataFrame, import_type: str = "products") ->
             return results
         
         # ✅ تحويل DataFrame إلى Excel
-        output = io.BytesIO()
         
         # ✅ استخدام تنسيق Excel متوافق مع سلة
         with pd.ExcelWriter(output, engine='openpyxl') as writer:
@@ -152,7 +151,11 @@ def import_products_to_salla(df: pd.DataFrame, import_type: str = "products") ->
         
         # ✅ إعداد الملف للرفع
         files = {
-            'file': ('products.xlsx', output.getvalue(), 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
+            "file": (
+                uploaded_file.name,
+                uploaded_file.read(),
+                "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+            )
         }
         
         data = {
@@ -275,9 +278,7 @@ def render_products_page():
             if uploaded_file:
                 try:
                     # ✅ قراءة الملف
-                    df = pd.read_excel(uploaded_file)
-                    st.dataframe(df, use_container_width=True)
-                    st.info(f"✅ تم تحميل {len(df)} منتج")
+                    uploaded_file.seek(0)
                 
                     # ✅ عرض الأعمدة المتوقعة
                     expected_cols = ['معرف المنتج', 'SKU', 'اسم المنتج', 'النوع', 'نوع المنتج', 'حالة المنتج']
