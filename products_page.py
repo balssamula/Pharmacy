@@ -467,7 +467,7 @@ def render_products_page():
                         if st.button("💾 حفظ كميات الفروع (للقيم المضافة)", key=f"save_bq_{p_id}_{idx}", type="primary", use_container_width=True):
                             if branch_updates:
                                 with st.spinner("جاري التوزيع في سلة..."):
-                                    res = safe_api_request("POST", "https://api.salla.dev/admin/v2/products/quantities/bulk", headers, json={"quantities": branch_updates})
+                                    res = safe_api_request("POST", "https://api.salla.dev/admin/v2/products/quantities/bulk", headers, json={"products": branch_updates})
                                     if res:
                                         st.success("✅ تم تحديث وتوزيع الكميات!")
                                         st.rerun()
