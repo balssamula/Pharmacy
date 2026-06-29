@@ -386,277 +386,43 @@ def export_products_to_excel(products: List[Dict]) -> bytes:
     except Exception as e:
         return b""
 
-def create_products_template(products=None) -> bytes:
-    """إنشاء نموذج استيراد المنتجات مع قوائم منسدلة - متوافق مع سلة"""
+def fill_salla_template(products: List[Dict], template_path: str = "Salla_Products_Template.xlsx") -> bytes:
+    """
+    يقوم بفتح القالب الأصلي لسلة وملء البيانات فيه مباشرة
+    ملاحظة: يجب أن تضع ملف القالب الأصلي في مجلد المشروع باسم Salla_Products_Template.xlsx
+    """
     try:
-        from openpyxl import Workbook
-        from openpyxl.styles import PatternFill, Font, Alignment, Border, Side
-        from openpyxl.worksheet.datavalidation import DataValidation
-        from openpyxl.utils import get_column_letter
-        from openpyxl.styles import numbers
+        # 1. فتح القالب الأصلي
+        if not os.path.exists(template_path):
+            st.error(f"❌ لم يتم العثور على ملف القالب: {template_path}")
+            return b""
+            
+        wb = openpyxl.load_workbook(template_path)
+        ws = wb["Salla Products Template Sheet"] # الاسم الدقيق للورقة في قالب سلة
         
-        wb = Workbook()
-        ws = wb.active
-        ws.title = "قائمة المنتجات"
+        # 2. البيانات تبدأ من الصف 4 (تأكد من قالبك، قد يكون الصف 3 أو 4)
+        start_row = 4 
         
-        # ✅ تعريف الأعمدة باللغة العربية (واضحة للمستخدم)
-        columns = [
-            "معرف المنتج", "SKU", "اسم المنتج", "النوع", "نوع المنتج", "حالة المنتج",
-            "السعر (SAR)", "السعر المخفض (SAR)", "بداية التخفيض", "نهاية التخفيض",
-            "كمية غير محدودة", "خاضع للضريبة", "سبب عدم الخضوع",
-            "العنوان الترويجي", "العنوان الفرعي"
-        ]
-        
-        # ✅ تنسيق الرأس
-        header_fill = PatternFill(start_color="1F497D", end_color="1F497D", fill_type="solid")
-        header_font = Font(name="Segoe UI", size=12, bold=True, color="FFFFFF")
-        header_alignment = Alignment(horizontal="center", vertical="center", wrap_text=True)
-        thin_border = Border(
-            left=Side(style='thin', color='CCCCCC'),
-            right=Side(style='thin', color='CCCCCC'),
-            top=Side(style='thin', color='CCCCCC'),
-            bottom=Side(style='thin', color='CCCCCC')
-        )
-        
-        # إضافة الرأس
-        for col_idx, col_name in enumerate(columns, 1):
-            cell = ws.cell(row=1, column=col_idx, value=col_name)
-            cell.fill = header_fill
-            cell.font = header_font
-            cell.alignment = header_alignment
-            cell.border = thin_border
-        
-        # ✅ إضافة بيانات المنتجات الحالية إذا وجدت
-        if products:
-            for row_idx, product in enumerate(products, 2):
-                # العمود A: معرف المنتج
-                ws.cell(row=row_idx, column=1, value=product.get('id', ''))
-                # العمود B: SKU
-                ws.cell(row=row_idx, column=2, value=product.get('sku', ''))
-                # العمود C: اسم المنتج
-                ws.cell(row=row_idx, column=3, value=product.get('name', ''))
-                
-                # ✅ العمود D: النوع (Type) - منتج / خيار
-                product_type = product.get('type', 'product')
-                type_text = "منتج" if product_type == "product" else "خيار"
-                ws.cell(row=row_idx, column=4, value=type_text)
-                
-                # ✅ العمود E: نوع المنتج (Product Type) - القيمة المعربة
-                product_type_raw = product.get('type', 'product')
-                product_type_mapping_reverse = {
-                    'product': 'منتج جاهز',
-                    'group_products': 'مجموعة منتجات',
-                    'codes': 'بطاقة رقمية',
-                    'digital': 'منتج رقمي',
-                    'food': 'أكل',
-                    'service': 'خدمة حسب الطلب',
-                    'booking': 'منتج حجز'
-                }
-                product_type_text = product_type_mapping_reverse.get(product_type_raw, 'منتج جاهز')
-                ws.cell(row=row_idx, column=5, value=product_type_text)
-                
-                # ✅ العمود F: حالة المنتج
-                status = product.get('status', 'sale')
-                status_text = "معروض" if status == "sale" else "مخفي"
-                ws.cell(row=row_idx, column=6, value=status_text)
-                
-                # ✅ العمود G: السعر
-                price = get_flat_price(product.get('price', 0))
-                ws.cell(row=row_idx, column=7, value=price)
-                
-                # ✅ العمود H: السعر المخفض
-                sale_price = get_flat_price(product.get('sale_price', 0))
-                ws.cell(row=row_idx, column=8, value=sale_price if sale_price > 0 else '')
-                
-                # ✅ العمود I: بداية التخفيض
-                ws.cell(row=row_idx, column=9, value=product.get('sale_start', ''))
-                
-                # ✅ العمود J: نهاية التخفيض
-                ws.cell(row=row_idx, column=10, value=product.get('sale_end', ''))
-                
-                # ✅ العمود K: كمية غير محدودة
-                unlimited = "نعم" if product.get('unlimited_quantity', False) else "لا"
-                ws.cell(row=row_idx, column=11, value=unlimited)
-                
-                # ✅ العمود L: خاضع للضريبة
-                with_tax = "نعم" if product.get('with_tax', True) else "لا"
-                ws.cell(row=row_idx, column=12, value=with_tax)
-                
-                # ✅ العمود M: سبب عدم الخضوع
-                ws.cell(row=row_idx, column=13, value=product.get('tax_reason_code', ''))
-                
-                # ✅ العمود N: العنوان الترويجي
-                ws.cell(row=row_idx, column=14, value=product.get('promotion_title', ''))
-                
-                # ✅ العمود O: العنوان الفرعي
-                ws.cell(row=row_idx, column=15, value=product.get('promotion_subtitle', ''))
-        else:
-            # ✅ بيانات نموذجية للتعليمات
-            sample_data = [
-                ["", "SKU-001", "منتج جديد", "منتج", "منتج جاهز", "معروض", 
-                 100, 80, "2026-07-01", "2026-07-31", 
-                 "لا", "نعم", "", "عرض خاص", "خصم 20%"],
-                ["", "SKU-002", "منتج آخر", "منتج", "مجموعة منتجات", "مخفي", 
-                 200, "", "", "", 
-                 "نعم", "لا", "الأدوية والمعدات الطبية", "", ""]
-            ]
-            for row_idx, row_data in enumerate(sample_data, 2):
-                for col_idx, value in enumerate(row_data, 1):
-                    ws.cell(row=row_idx, column=col_idx, value=value)
-        
-        # ✅ تنسيق البيانات
-        data_font = Font(name="Segoe UI", size=11)
-        data_alignment = Alignment(horizontal="right", vertical="center", wrap_text=True)
-        
-        for row in ws.iter_rows(min_row=2):
-            for cell in row:
-                cell.font = data_font
-                cell.alignment = data_alignment
-                cell.border = thin_border
-        
-        # ✅ ضبط عرض الأعمدة
-        column_widths = {
-            'A': 18,  # معرف المنتج
-            'B': 18,  # SKU
-            'C': 25,  # اسم المنتج
-            'D': 18,  # نوع المنتج
-            'E': 18,  # النوع
-            'F': 18,  # حالة المنتج
-            'G': 16,  # السعر
-            'H': 18,  # السعر المخفض
-            'I': 20,  # بداية التخفيض
-            'J': 20,  # نهاية التخفيض
-            'K': 18,  # كمية غير محدودة
-            'L': 18,  # خاضع للضريبة
-            'M': 25,  # سبب عدم الخضوع
-            'N': 22,  # العنوان الترويجي
-            'O': 22   # العنوان الفرعي
-        }
-        
-        for col, width in column_widths.items():
-            ws.column_dimensions[col].width = width
-        
-        # ✅ إضافة الفلترة التلقائية
-        ws.auto_filter.ref = f"A2:O{ws.max_row}"
-        
-        # ✅ قائمة النوع (Type) - العمود D
-        dv_type = DataValidation(
-            type="list",
-            formula1='"منتج,خيار"',
-            allow_blank=True,
-            showErrorMessage=True,
-            errorTitle="نوع غير صحيح",
-            error="الرجاء اختيار: منتج أو خيار"
-        )
-        ws.add_data_validation(dv_type)
-        dv_type.add(f"D3:D{ws.max_row}")
-
-        # ✅ قائمة نوع المنتج (Product Type) - العمود E
-        dv_product_type = DataValidation(
-            type="list",
-            formula1='"منتج جاهز,مجموعة منتجات,بطاقة رقمية,منتج رقمي,أكل,خدمة حسب الطلب,منتج حجز"',
-            allow_blank=True,
-            showErrorMessage=True,
-            errorTitle="نوع منتج غير صحيح",
-            error="الرجاء اختيار نوع المنتج المناسب"
-        )
-        ws.add_data_validation(dv_product_type)
-        dv_product_type.add(f"E3:E{ws.max_row}")
-
-        
-        # قائمة حالة المنتج
-        dv_status = DataValidation(
-            type="list",
-            formula1='"معروض,مخفي"',
-            allow_blank=True,
-            showErrorMessage=True,
-            errorTitle="حالة غير صحيحة",
-            error="الرجاء اختيار: معروض أو مخفي"
-        )
-        ws.add_data_validation(dv_status)
-        dv_status.add(f"F3:F{ws.max_row}")
-        
-        # ✅ قائمة كمية غير محدودة
-        dv_unlimited = DataValidation(
-            type="list",
-            formula1='"نعم,لا"',
-            allow_blank=True,
-            showErrorMessage=True,
-            errorTitle="قيمة غير صحيحة",
-            error="الرجاء اختيار: نعم أو لا"
-        )
-        ws.add_data_validation(dv_unlimited)
-        dv_unlimited.add(f"K3:K{ws.max_row}")
-        
-        # ✅ قائمة خاضع للضريبة
-        dv_tax = DataValidation(
-            type="list",
-            formula1='"نعم,لا"',
-            allow_blank=True,
-            showErrorMessage=True,
-            errorTitle="قيمة غير صحيحة",
-            error="الرجاء اختيار: نعم أو لا"
-        )
-        ws.add_data_validation(dv_tax)
-        dv_tax.add(f"L3:L{ws.max_row}")
-        
-        # ✅ قائمة أسباب عدم الخضوع للضريبة
-        tax_reasons = [
-            "الخدمات المالية",
-            "عقد تأمين على الحياة",
-            "التوريدات العقارية المعفاة من الضريبة المضافة",
-            "صادرات السلع من المملكة",
-            "صادرات الخدمات من المملكة",
-            "النقل الدولي للسلع",
-            "النقل الدولي للركاب",
-            "توريد وسائل النقل المؤهلة",
-            "الأدوية والمعدات الطبية"
-        ]
-        dv_tax_reason = DataValidation(
-            type="list",
-            formula1=f'"{",".join(tax_reasons)}"',
-            allow_blank=True,
-            showErrorMessage=True,
-            errorTitle="سبب غير صحيح",
-            error="الرجاء اختيار سبب مناسب"
-        )
-        ws.add_data_validation(dv_tax_reason)
-        dv_tax_reason.add(f"M3:M{ws.max_row}")
-        
-        # ✅ تنسيق خانات التاريخ
-        date_format = numbers.FORMAT_DATE_DATETIME
-        for row in range(3, ws.max_row + 1):
-            for col in ['I', 'J']:  # بداية ونهاية التخفيض
-                cell = ws[f"{col}{row}"]
-                cell.number_format = date_format
-        
-        # ✅ إضافة تعليمات
-        ws.insert_rows(1)
-        ws.merge_cells('A1:N1')
-        instructions_cell = ws.cell(row=1, column=1)
-        instructions_cell.value = """
-📋 تعليمات التعبئة:
-- معرف المنتج: اتركه فارغاً لإضافة منتج جديد، أو أدخل المعرف لتحديث منتج موجود
-- SKU: رمز المنتج الفريد (اختياري)
-- نوع المنتج: اختر من القائمة المنسدلة
-- حالة المنتج: اختر من القائمة المنسدلة
-- كمية غير محدودة: اختر "نعم" إذا كان المنتج غير محدود الكمية
-- خاضع للضريبة: اختر من القائمة المنسدلة
-- سبب عدم الخضوع: اختر من القائمة المنسدلة (يظهر فقط عند اختيار "لا" في خاضع للضريبة)
-- التواريخ: استخدم الصيغة YYYY-MM-DD
-"""
-        instructions_cell.font = Font(name="Segoe UI", size=11, bold=True, color="1F497D")
-        instructions_cell.alignment = Alignment(horizontal="center", vertical="center", wrap_text=True)
-        ws.row_dimensions[1].height = 100
-        
-        # حفظ الملف
+        for i, p in enumerate(products):
+            current_row = start_row + i
+            price = get_flat_price(p.get('price', 0))
+            sale_price = get_flat_price(p.get('sale_price', 0))
+            
+            # Mapping دقيق لأعمدة سلة الرسمية
+            ws.cell(row=current_row, column=1).value = p.get('id', '')
+            ws.cell(row=current_row, column=3).value = p.get('name', '') # أسم المنتج
+            ws.cell(row=current_row, column=7).value = p.get('type', 'منتج') # نوع المنتج
+            ws.cell(row=current_row, column=8).value = price # سعر المنتج
+            ws.cell(row=current_row, column=11).value = p.get('sku', '') # رمز المنتج
+            ws.cell(row=current_row, column=13).value = sale_price if sale_price > 0 else '' # السعر المخفض
+            ws.cell(row=current_row, column=21).value = p.get('promotion_title', '') # العنوان الترويجي
+            ws.cell(row=current_row, column=22).value = p.get('promotion_subtitle', '') # العنوان الفرعي
+            
         output = io.BytesIO()
         wb.save(output)
-        output.seek(0)
         return output.getvalue()
-        
     except Exception as e:
-        st.error(f"⚠️ خطأ في إنشاء النموذج: {str(e)}")
+        st.error(f"⚠️ خطأ في ملء القالب: {str(e)}")
         return b""
 
 def upload_product_image_api(product_id: int, image_bytes: bytes, filename: str) -> bool:
