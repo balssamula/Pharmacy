@@ -588,7 +588,7 @@ def render_products_page():
         sale_end_date = p.get('sale_end') or "غير محدد"
         
         disp_status = "🟢 معروض بالمتجر" if status == "sale" else "🔴 مخفي في المسودات"
-        tax_status_badge = "🔥 خاضع للضريبة" if p.get('with_tax', True) else f"⚪ يخضع لنسبة الصفر ({p.get('tax_exemption_cause', 'بدون سبب')})"
+        tax_status_badge = "📗 خاضع للضريبة" if p.get('with_tax', True) else f"⚪ يخضع لنسبة الصفر ({p.get('tax_exemption_cause', 'بدون سبب')})"
 
         if p_id in offer_product_ids:
             offer_badge_html = "<span style='background: rgba(255, 193, 7, 0.3); color: #FFC107; padding: 4px 12px; border-radius: 20px; font-size: 11px; font-weight:600;'>🎁 مشمول في عرض خاص</span>"
@@ -670,7 +670,7 @@ def render_products_page():
                                 st.success("✅ تم تحديث العناوين بنجاح وبثبات للسعر الأصلي!")
                                 st.rerun()
 
-                with st.popover("🧾 إعدادات الضريبة"):
+                with st.popover("📗 إعدادات الضريبة"):
                     is_taxed = st.checkbox("خاضع للضريبة", value=p.get('with_tax', True), key=f"tax_chk_{p_id}_{idx}")
                     ex_cause = p.get('tax_exemption_cause', '')
                     if not is_taxed:
