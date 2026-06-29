@@ -13,7 +13,9 @@ from utils import (
 
 TAX_EXEMPTION_CAUSES = ["الخدمات المالية", "عقد تأمين على الحياة", "التوريدات العقارية المعفاة", "صادرات السلع من المملكة", "صادرات الخدمات من المملكة", "النقل الدولي للسلع", "النقل الدولي للركاب", "توريد وسائل النقل", "الأدوية والمعدات الطبية"]
 
-def import_products_to_salla(df: pd.DataFrame) -> Dict:
+# ✅ في products_page.py - دالة import_products_to_salla
+
+def import_products_to_salla(df: pd.DataFrame, import_type: str = "products-update") -> Dict:
     """استيراد المنتجات إلى سلة باستخدام /products/import"""
     results = {"success": [], "errors": []}
     headers = get_headers()
@@ -22,10 +24,30 @@ def import_products_to_salla(df: pd.DataFrame) -> Dict:
         return results
     
     try:
-        # ✅ تحويل DataFrame إلى Excel مؤقت
+        # ✅ تحويل DataFrame إلى Excel مؤقت مع تنسيق صحيح
         output = io.BytesIO()
+        
+        # ✅ استخدام ExcelWriter مع engine='openpyxl' وتنسيق صحيح
         with pd.ExcelWriter(output, engine='openpyxl') as writer:
             df.to_excel(writer, index=False, sheet_name='Sheet1')
+            
+            # ✅ ضبط تنسيق الأعمدة
+            workbook = writer.book
+            worksheet = writer.sheets['Sheet1']
+            
+            # ✅ ضبط عرض الأعمدة تلقائياً
+            for column in worksheet.columns:
+                max_length = 0
+                column_letter = column[0].column_letter
+                for cell in column:
+                    try:
+                        if len(str(cell.value)) > max_length:
+                            max_length = len(str(cell.value))
+                    except:
+                        pass
+                adjusted_width = min(max_length + 2, 30)
+                worksheet.column_dimensions[column_letter].width = adjusted_width
+        
         output.seek(0)
         
         # ✅ رفع الملف إلى API سلة
@@ -33,7 +55,7 @@ def import_products_to_salla(df: pd.DataFrame) -> Dict:
             'file': ('products.xlsx', output.getvalue(), 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
         }
         data = {
-            'type': 'products'  # ✅ استيراد منتجات جديدة
+            'type': import_type  # ✅ products, prices, quantities, seo, products-update, etc.
         }
         
         response = requests.post(
@@ -153,8 +175,16 @@ def render_products_page():
                         # ✅ زر استيراد المنتجات باستخدام /products/import
                         if st.button("🚀 استيراد المنتجات إلى سلة", type="primary"):
                             with st.spinner("🔄 جاري استيراد المنتجات..."):
-                                # ✅ تحضير DataFrame للاستيراد
-                                import_df = df.copy()
+                                # ✅ استخدام 'products-update' لتحديث المنتجات الموجودة أو إضافة جديدة
+                                results = import_products_to_salla(import_df, import_type="products-update")
+        
+                                for msg in results["success"]:
+                                    st.success(msg)
+                                for msg in results["errors"]:
+                                    st.error(msg)
+        
+                                if results["success"]:
+                                    st.rerun()
                     
                                 # ✅ تحويل الأعمدة إلى الصيغة المطلوبة لسلة
                                 # ملاحظة: يجب أن تتطابق أسماء الأعمدة مع النموذج القياسي لسلة
