@@ -177,14 +177,6 @@ def render_products_page():
                                                 headers,
                                                 json=product_data
                                             )
-                                            if response:
-                                                success_count += 1
-                                            else:
-                                                error_count += 1
-                                        else:
-                                            # ✅ تحديث منتج موجود
-                                            product_id = int(float(product_id))
-                                            update_payload = {}
                                         
                                             if pd.notna(row.get('اسم المنتج')):
                                                 update_payload['name'] = str(row.get('اسم المنتج'))
