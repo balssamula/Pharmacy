@@ -101,7 +101,8 @@ def prepare_import_dataframe(df: pd.DataFrame) -> pd.DataFrame:
 # ==========================================
 # ✅ دالة استيراد المنتجات إلى سلة
 # ==========================================
-def import_products_to_salla(uploaded_file, import_type="products"):
+
+def import_products_to_salla(df: pd.DataFrame, import_type: str = "products") -> Dict:
     """استيراد المنتجات إلى سلة باستخدام /products/import"""
     results = {"success": [], "errors": []}
     headers = get_headers()
@@ -116,9 +117,11 @@ def import_products_to_salla(uploaded_file, import_type="products"):
             return results
         
         # ✅ تحويل DataFrame إلى Excel
+        output = io.BytesIO()
         
         # ✅ استخدام تنسيق Excel متوافق مع سلة
-
+        with pd.ExcelWriter(output, engine='openpyxl') as writer:
+            df.to_excel(writer, index=False, sheet_name='Sheet1')
             
             # ✅ ضبط تنسيق الأعمدة
             workbook = writer.book
@@ -149,26 +152,12 @@ def import_products_to_salla(uploaded_file, import_type="products"):
         
         # ✅ إعداد الملف للرفع
         files = {
-            "file": (
-                uploaded_file.name,
-                uploaded_file.read(),
-                "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-            )
+            'file': ('products.xlsx', output.getvalue(), 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
         }
         
         data = {
             'type': import_type
         }
-        
-        st.write("حجم الملف:", file_size)
-
-        excel_bytes = output.getvalue()
-
-        st.write("عدد البايتات:", len(excel_bytes))
-        st.write("أول 20 بايت:", excel_bytes[:20])
-        st.write(files.keys())
-        st.write(files["file"][0])
-        st.write(len(files["file"][1]))
         
         # ✅ إرسال الطلب
         response = requests.post(
@@ -276,7 +265,9 @@ def render_products_page():
             if uploaded_file:
                 try:
                     # ✅ قراءة الملف
-                    uploaded_file.seek(0)
+                    df = pd.read_excel(uploaded_file)
+                    st.dataframe(df, use_container_width=True)
+                    st.info(f"✅ تم تحميل {len(df)} منتج")
                 
                     # ✅ عرض الأعمدة المتوقعة
                     expected_cols = ['معرف المنتج', 'SKU', 'اسم المنتج', 'النوع', 'نوع المنتج', 'حالة المنتج']
@@ -297,6 +288,7 @@ def render_products_page():
                                     st.dataframe(df)
                                     
                                     # ✅ تحضير DataFrame للاستيراد
+                                    import_df = prepare_import_dataframe(df)
                                     
                                     # ✅ التحقق من وجود بيانات بعد التحضير
                                     if import_df.empty:
@@ -307,7 +299,7 @@ def render_products_page():
                                         st.dataframe(import_df)
                                         
                                         # ✅ استيراد المنتجات
-                                        results = import_products_to_salla(uploaded_file, import_type="products")
+                                        results = import_products_to_salla(import_df, import_type="products")
                                         
                                         for msg in results["success"]:
                                             st.success(msg)
