@@ -436,7 +436,40 @@ def create_products_template(products=None) -> bytes:
                 for col_idx, value in enumerate(row_data, 1):
                     ws.cell(row=row_idx, column=col_idx, value=value)
         
-        # ... (باقي الكود كما هو مع القوائم المنسدلة)
+        # ✅ تنسيق البيانات
+        data_font = Font(name="Segoe UI", size=11)
+        data_alignment = Alignment(horizontal="right", vertical="center", wrap_text=True)
+        
+        for row in ws.iter_rows(min_row=2):
+            for cell in row:
+                cell.font = data_font
+                cell.alignment = data_alignment
+                cell.border = thin_border
+        
+        # ✅ ضبط عرض الأعمدة
+        column_widths = {
+            'A': 18,  # معرف المنتج
+            'B': 18,  # SKU
+            'C': 25,  # اسم المنتج
+            'D': 18,  # نوع المنتج
+            'E': 18,  # النوع
+            'F': 18,  # حالة المنتج
+            'G': 16,  # السعر
+            'H': 18,  # السعر المخفض
+            'I': 20,  # بداية التخفيض
+            'J': 20,  # نهاية التخفيض
+            'K': 18,  # كمية غير محدودة
+            'L': 18,  # خاضع للضريبة
+            'M': 25,  # سبب عدم الخضوع
+            'N': 22,  # العنوان الترويجي
+            'O': 22   # العنوان الفرعي
+        }
+        
+        for col, width in column_widths.items():
+            ws.column_dimensions[col].width = width
+        
+        # ✅ إضافة الفلترة التلقائية
+        ws.auto_filter.ref = f"A2:O{ws.max_row}"
         
         # ✅ قائمة النوع (Type) - العمود D
         dv_type = DataValidation(
