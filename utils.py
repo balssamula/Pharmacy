@@ -197,6 +197,38 @@ def prepare_import_dataframe(df: pd.DataFrame) -> pd.DataFrame:
     
     return import_df
 
+def create_products_template(products=None) -> bytes:
+    """إنشاء قالب استيراد منتجات مطابق تماماً لهيكل سلة الأصلي"""
+    try:
+        from openpyxl import Workbook
+        # هذا هو الهيكل الفعلي لأعمدة سلة التي تتوقعها المنصة
+        headers = [
+            "No.", "النوع", "أسم المنتج", "تصنيف المنتج", "صورة المنتج", 
+            "وصف صورة المنتج", "نوع المنتج", "سعر المنتج", "الوصف", 
+            "هل يتطلب شحن؟", "رمز المنتج sku", "سعر التكلفة", 
+            "السعر المخفض", "تاريخ بداية التخفيض", "تاريخ نهاية التخفيض"
+        ]
+        wb = Workbook()
+        ws = wb.active
+        ws.title = "Salla Products Template Sheet"
+        ws.append(headers)
+        
+        # إذا كان هناك بيانات موجودة يتم ملؤها
+        if products:
+            for p in products:
+                ws.append([
+                    p.get('id', ''), 'منتج', p.get('name', ''), '', '', '', 
+                    'منتج جاهز', p.get('price', 0), '', 'نعم', p.get('sku', ''), 
+                    '', p.get('sale_price', ''), p.get('sale_start', ''), p.get('sale_end', '')
+                ])
+        
+        output = io.BytesIO()
+        wb.save(output)
+        return output.getvalue()
+    except Exception as e:
+        st.error(f"❌ خطأ في إنشاء القالب: {str(e)}")
+        return b""
+        
 # ==========================================
 # 🎁 دوال العروض الخاصة
 # ==========================================
