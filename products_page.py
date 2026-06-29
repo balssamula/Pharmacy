@@ -565,8 +565,8 @@ def render_products_page():
         p_image = p.get('thumbnail') or p.get('main_image')
         
         promo = p.get('promotion', {})
-        p_promotion = p.get('promotion_title') or (promo.get('title') if isinstance(promo, dict) else '') or "لا يوجد عنوان ترويجي"
-        p_sub_title = (promo.get('sub_title') if isinstance(promo, dict) else '') or "لا يوجد عنوان فرعي"
+        p_promotion = p.get('promotion_title') or (promo.get('title') if isinstance(promo, dict) else '') or "-"
+        p_sub_title = (promo.get('sub_title') if isinstance(promo, dict) else '') or "-"
         
         price_val = get_flat_price(p.get('price', 0))
         regular_val = get_flat_price(p.get('regular_price', 0))
