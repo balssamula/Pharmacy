@@ -14,97 +14,7 @@ from utils import (
 TAX_EXEMPTION_CAUSES = ["الخدمات المالية", "عقد تأمين على الحياة", "التوريدات العقارية المعفاة", "صادرات السلع من المملكة", "صادرات الخدمات من المملكة", "النقل الدولي للسلع", "النقل الدولي للركاب", "توريد وسائل النقل", "الأدوية والمعدات الطبية"]
 
 # ==========================================
-# ✅ دالة استيراد المنتجات إلى سلة
-# ==========================================
-
-def import_products_to_salla(df: pd.DataFrame, import_type: str = "products-update") -> Dict:
-    """استيراد المنتجات إلى سلة باستخدام /products/import"""
-    results = {"success": [], "errors": []}
-    headers = get_headers()
-    if not headers:
-        results["errors"].append("❌ الرجاء إدخال مفتاح الربط أولاً")
-        return results
-    
-    try:
-        # ✅ التحقق من أن DataFrame ليس فارغاً
-        if df.empty:
-            results["errors"].append("❌ لا توجد بيانات للاستيراد")
-            return results
-        
-        # ✅ تحويل DataFrame إلى Excel
-        output = io.BytesIO()
-        
-        # ✅ استخدام تنسيق Excel متوافق مع سلة
-        with pd.ExcelWriter(output, engine='openpyxl') as writer:
-            df.to_excel(writer, index=False, sheet_name='Sheet1')
-            
-            # ✅ ضبط تنسيق الأعمدة
-            workbook = writer.book
-            worksheet = writer.sheets['Sheet1']
-            
-            # ✅ ضبط عرض الأعمدة
-            for column in worksheet.columns:
-                max_length = 0
-                column_letter = column[0].column_letter
-                for cell in column:
-                    try:
-                        cell_value = str(cell.value) if cell.value is not None else ''
-                        if len(cell_value) > max_length:
-                            max_length = len(cell_value)
-                    except:
-                        pass
-                adjusted_width = min(max_length + 2, 30)
-                worksheet.column_dimensions[column_letter].width = adjusted_width
-        
-        output.seek(0)
-        
-        # ✅ التحقق من حجم الملف
-        file_size = output.getbuffer().nbytes
-        st.info(f"📦 حجم الملف: {file_size} بايت")
-        
-        if file_size < 100:
-            results["errors"].append(f"❌ الملف صغير جداً ({file_size} بايت) - تأكد من وجود بيانات")
-            return results
-        
-        # ✅ إعداد الملف للرفع
-        files = {
-            'file': ('products.xlsx', output.getvalue(), 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
-        }
-        
-        data = {
-            'type': import_type
-        }
-        
-        # ✅ إرسال الطلب
-        response = requests.post(
-            "https://api.salla.dev/admin/v2/products/import",
-            headers=headers,
-            files=files,
-            data=data,
-            timeout=60
-        )
-        
-        # ✅ عرض تفاصيل الاستجابة
-        st.write(f"📊 حالة الاستجابة: {response.status_code}")
-        
-        if response.status_code == 201:
-            results["success"].append("✅ تم استيراد المنتجات بنجاح! سيتم معالجتها في الخلفية.")
-        else:
-            try:
-                error_data = response.json()
-                results["errors"].append(f"❌ خطأ {response.status_code}: {error_data}")
-            except:
-                results["errors"].append(f"❌ خطأ {response.status_code}: {response.text}")
-                
-    except Exception as e:
-        results["errors"].append(f"❌ خطأ في الاستيراد: {str(e)}")
-        import traceback
-        results["errors"].append(f"📋 تفاصيل: {traceback.format_exc()}")
-    
-    return results
-
-# ==========================================
-# ✅ دالة تحضير DataFrame للاستيراد
+# ✅ دالة تحضير DataFrame للاستيراد بالتنسيق الصحيح لسلة
 # ==========================================
 
 def prepare_import_dataframe(df: pd.DataFrame) -> pd.DataFrame:
@@ -185,11 +95,94 @@ def prepare_import_dataframe(df: pd.DataFrame) -> pd.DataFrame:
         st.error("❌ العمود 'price' (السعر) مطلوب")
         return pd.DataFrame()
     
-    # ✅ عرض الأعمدة النهائية
-    st.write("📊 الأعمدة النهائية:", list(import_df.columns))
-    st.write("📊 عدد الصفوف:", len(import_df))
-    
     return import_df
+
+
+# ==========================================
+# ✅ دالة استيراد المنتجات إلى سلة
+# ==========================================
+
+def import_products_to_salla(df: pd.DataFrame, import_type: str = "products") -> Dict:
+    """استيراد المنتجات إلى سلة باستخدام /products/import"""
+    results = {"success": [], "errors": []}
+    headers = get_headers()
+    if not headers:
+        results["errors"].append("❌ الرجاء إدخال مفتاح الربط أولاً")
+        return results
+    
+    try:
+        # ✅ التحقق من أن DataFrame ليس فارغاً
+        if df.empty:
+            results["errors"].append("❌ لا توجد بيانات للاستيراد")
+            return results
+        
+        # ✅ تحويل DataFrame إلى Excel
+        output = io.BytesIO()
+        
+        # ✅ استخدام تنسيق Excel متوافق مع سلة
+        with pd.ExcelWriter(output, engine='openpyxl') as writer:
+            df.to_excel(writer, index=False, sheet_name='Sheet1')
+            
+            # ✅ ضبط تنسيق الأعمدة
+            workbook = writer.book
+            worksheet = writer.sheets['Sheet1']
+            
+            # ✅ ضبط عرض الأعمدة
+            for column in worksheet.columns:
+                max_length = 0
+                column_letter = column[0].column_letter
+                for cell in column:
+                    try:
+                        cell_value = str(cell.value) if cell.value is not None else ''
+                        if len(cell_value) > max_length:
+                            max_length = len(cell_value)
+                    except:
+                        pass
+                adjusted_width = min(max_length + 2, 30)
+                worksheet.column_dimensions[column_letter].width = adjusted_width
+        
+        output.seek(0)
+        
+        # ✅ التحقق من حجم الملف
+        file_size = output.getbuffer().nbytes
+        
+        if file_size < 100:
+            results["errors"].append(f"❌ الملف صغير جداً ({file_size} بايت) - تأكد من وجود بيانات")
+            return results
+        
+        # ✅ إعداد الملف للرفع
+        files = {
+            'file': ('products.xlsx', output.getvalue(), 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
+        }
+        
+        data = {
+            'type': import_type
+        }
+        
+        # ✅ إرسال الطلب
+        response = requests.post(
+            "https://api.salla.dev/admin/v2/products/import",
+            headers=headers,
+            files=files,
+            data=data,
+            timeout=60
+        )
+        
+        if response.status_code == 201:
+            results["success"].append("✅ تم استيراد المنتجات بنجاح! سيتم معالجتها في الخلفية.")
+        else:
+            try:
+                error_data = response.json()
+                results["errors"].append(f"❌ خطأ {response.status_code}: {error_data}")
+            except:
+                results["errors"].append(f"❌ خطأ {response.status_code}: {response.text}")
+                
+    except Exception as e:
+        results["errors"].append(f"❌ خطأ في الاستيراد: {str(e)}")
+        import traceback
+        results["errors"].append(f"📋 تفاصيل: {traceback.format_exc()}")
+    
+    return results
 
 
 def render_products_page():
@@ -290,13 +283,13 @@ def render_products_page():
                         if st.button("🚀 استيراد المنتجات إلى سلة", type="primary"):
                             with st.spinner("🔄 جاري استيراد المنتجات..."):
                                 try:
-                                    # ✅ عرض البيانات الأصلية
+                                    # ✅ عرض البيانات الأصلية للتحقق
                                     st.write("📊 البيانات الأصلية:")
                                     st.dataframe(df)
-            
+                                    
                                     # ✅ تحضير DataFrame للاستيراد
                                     import_df = prepare_import_dataframe(df)
-            
+                                    
                                     # ✅ التحقق من وجود بيانات بعد التحضير
                                     if import_df.empty:
                                         st.error("❌ لا توجد بيانات للاستيراد بعد التحضير")
@@ -304,15 +297,15 @@ def render_products_page():
                                         # ✅ عرض البيانات المحضرة
                                         st.write("📊 البيانات المحضرة للاستيراد:")
                                         st.dataframe(import_df)
-                
+                                        
                                         # ✅ استيراد المنتجات
                                         results = import_products_to_salla(import_df, import_type="products")
-                
+                                        
                                         for msg in results["success"]:
                                             st.success(msg)
                                         for msg in results["errors"]:
                                             st.error(msg)
-                
+                                        
                                         if results["success"]:
                                             st.balloons()
                                             st.rerun()
@@ -320,6 +313,8 @@ def render_products_page():
                                     st.error(f"❌ خطأ في المعالجة: {str(e)}")
                                     import traceback
                                     st.code(traceback.format_exc())
+                except Exception as e:
+                    st.error(f"❌ خطأ في قراءة الملف: {str(e)}")
 
     st.divider()
 
