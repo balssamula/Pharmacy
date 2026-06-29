@@ -17,69 +17,94 @@ TAX_EXEMPTION_CAUSES = ["الخدمات المالية", "عقد تأمين عل
 # ✅ دالة استيراد المنتجات إلى سلة
 # ==========================================
 
-def import_products_to_salla(df: pd.DataFrame, import_type: str = "products-update") -> Dict:
-    """استيراد المنتجات إلى سلة باستخدام /products/import"""
+def import_products_to_salla(df: pd.DataFrame, import_type: str = "products-update") -> dict:
+    """استيراد وتحديث المنتجات برمجياً (صفاً بصف) لدعم العناوين الترويجية والفرعية بدقة"""
     results = {"success": [], "errors": []}
     headers = get_headers()
     if not headers:
         results["errors"].append("❌ الرجاء إدخال مفتاح الربط أولاً")
         return results
     
-    try:
-        # ✅ تحويل DataFrame إلى Excel مؤقت
-        output = io.BytesIO()
-        
-        with pd.ExcelWriter(output, engine='openpyxl') as writer:
-            df.to_excel(writer, index=False, sheet_name='Sheet1')
-            
-            # ✅ ضبط تنسيق الأعمدة
-            workbook = writer.book
-            worksheet = writer.sheets['Sheet1']
-            
-            for column in worksheet.columns:
-                max_length = 0
-                column_letter = column[0].column_letter
-                for cell in column:
-                    try:
-                        if len(str(cell.value)) > max_length:
-                            max_length = len(str(cell.value))
-                    except:
-                        pass
-                adjusted_width = min(max_length + 2, 30)
-                worksheet.column_dimensions[column_letter].width = adjusted_width
-        
-        output.seek(0)
-        
-        # ✅ إعداد الملف للرفع
-        files = {
-            'file': ('products.xlsx', output.getvalue(), 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
-        }
-        
-        data = {
-            'type': import_type
-        }
-        
-        # ✅ إرسال الطلب
-        response = requests.post(
-            "https://api.salla.dev/admin/v2/products/import",
-            headers=headers,
-            files=files,
-            data=data,
-            timeout=60
-        )
-        
-        if response.status_code == 201:
-            results["success"].append("✅ تم استيراد المنتجات بنجاح! سيتم معالجتها في الخلفية.")
-        else:
-            try:
-                error_data = response.json()
-                results["errors"].append(f"❌ خطأ {response.status_code}: {error_data}")
-            except:
-                results["errors"].append(f"❌ خطأ {response.status_code}: {response.text}")
-                
-    except Exception as e:
-        results["errors"].append(f"❌ خطأ في الاستيراد: {str(e)}")
+    success_count = 0
+    error_count = 0
     
+    for idx, row in df.iterrows():
+        # تجاهل الصفوف الفارغة أو صف الإرشادات
+        if row.isna().all() or str(row.iloc[0]).strip().startswith("💡"): continue
+        try:
+            p_id_raw = row.get("معرف المنتج")
+            p_id = int(float(p_id_raw)) if pd.notna(p_id_raw) and str(p_id_raw).strip() and str(p_id_raw).strip() != "nan" else None
+            
+            p_name = str(row.get("اسم المنتج", "")).strip()
+            if not p_name or p_name == "nan": continue # تخطي الصفوف التي لا تحتوي على اسم منتج
+            
+            p_sku = str(row.get("SKU", "")).strip()
+            p_type = str(row.get("نوع المنتج", "product")).strip()
+            p_status = "sale" if str(row.get("حالة المنتج", "معروض")).strip() == "معروض" else "hidden"
+            
+            p_price = safe_float(row.get("السعر (SAR)", 0))
+            p_sale_price = safe_float(row.get("السعر المخفض (SAR)", 0))
+            
+            p_tax = True if str(row.get("خاضع للضريبة", "نعم")).strip() == "نعم" else False
+            p_tax_cause = str(row.get("سبب عدم الخضوع للضريبة", "")).strip()
+            if p_tax_cause == "nan": p_tax_cause = ""
+            
+            p_promo = str(row.get("العنوان الترويجي", "")).strip()
+            if p_promo == "nan": p_promo = ""
+            p_sub = str(row.get("العنوان الفرعي", "")).strip()
+            if p_sub == "nan": p_sub = ""
+            
+            # بناء كائن البيانات الذي ستستقبله سلة
+            payload = {
+                "name": p_name,
+                "price": p_price,
+                "status": p_status,
+                "product_type": p_type if p_type and p_type != "nan" else "product",
+                "with_tax": p_tax,
+            }
+            if p_sku and p_sku != "nan": payload["sku"] = p_sku
+            if p_sale_price > 0: payload["sale_price"] = p_sale_price
+            if not p_tax and p_tax_cause: payload["tax_exemption_cause"] = p_tax_cause
+            
+            # تحديث العناوين الترويجية 
+            if p_promo: payload["promotion_title"] = p_promo
+            else: payload["promotion_title"] = "" # لمسحها إذا كانت فارغة في الإكسيل
+            
+            if p_sub: payload["promotion_subtitle"] = p_sub
+            else: payload["promotion_subtitle"] = ""
+            
+            import requests # استدعاء المكتبة المباشر
+            
+            if p_id:
+                # تحديث منتج موجود
+                url = f"https://api.salla.dev/admin/v2/products/{p_id}"
+                res = requests.put(url, headers=headers, json=payload)
+                if res.status_code < 400:
+                    success_count += 1
+                else:
+                    error_count += 1
+                    err_msg = res.json() if "application/json" in res.headers.get("content-type", "") else res.text
+                    results["errors"].append(f"❌ فشل تحديث '{p_name}': {err_msg}")
+            else:
+                # إنشاء منتج جديد
+                url = "https://api.salla.dev/admin/v2/products"
+                res = requests.post(url, headers=headers, json=payload)
+                if res.status_code < 400:
+                    success_count += 1
+                else:
+                    error_count += 1
+                    err_msg = res.json() if "application/json" in res.headers.get("content-type", "") else res.text
+                    results["errors"].append(f"❌ فشل إنشاء '{p_name}': {err_msg}")
+                    
+        except Exception as e:
+            error_count += 1
+            results["errors"].append(f"❌ خطأ برمجي في الصف {idx+1}: {str(e)}")
+            
+    if success_count > 0:
+        results["success"].append(f"✅ تم معالجة وتحديث {success_count} منتج بنجاح وبكافة العناوين الترويجية!")
+    if error_count > 0:
+        results["errors"].append(f"⚠️ فشلت معالجة {error_count} منتج.")
+        
     return results
 
 # ==========================================
