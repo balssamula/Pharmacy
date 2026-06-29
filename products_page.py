@@ -4,6 +4,7 @@ import requests
 import io
 from datetime import datetime
 from typing import Dict, List, Optional
+from openpyxl import load_workbook
 from utils import (
     get_headers, safe_api_request, get_flat_price, update_product_status, 
     export_products_to_excel, attach_product_image_api, update_product_promotions_secure,
@@ -14,95 +15,145 @@ from utils import (
 TAX_EXEMPTION_CAUSES = ["الخدمات المالية", "عقد تأمين على الحياة", "التوريدات العقارية المعفاة", "صادرات السلع من المملكة", "صادرات الخدمات من المملكة", "النقل الدولي للسلع", "النقل الدولي للركاب", "توريد وسائل النقل", "الأدوية والمعدات الطبية"]
 
 # ==========================================
-# ✅ دالة تحضير DataFrame للاستيراد بالتنسيق الصحيح لسلة
+# ✅ دالة تحضير ملف الاستيراد باستخدام قالب سلة الأصلي
 # ==========================================
 
-def prepare_import_dataframe(df: pd.DataFrame) -> pd.DataFrame:
-    """تحضير DataFrame للاستيراد إلى سلة بالتنسيق الصحيح"""
-    import_df = df.copy()
-    
-    # ✅ الأعمدة المطلوبة من سلة مع الأسماء الصحيحة
-    column_mapping = {
-        'معرف المنتج': 'id',
-        'SKU': 'sku',
-        'اسم المنتج': 'name',
-        'النوع': 'type',
-        'نوع المنتج': 'product_type',
-        'حالة المنتج': 'status',
-        'السعر (SAR)': 'price',
-        'السعر المخفض (SAR)': 'sale_price',
-        'بداية التخفيض': 'sale_start',
-        'نهاية التخفيض': 'sale_end',
-        'كمية غير محدودة': 'unlimited_quantity',
-        'خاضع للضريبة': 'with_tax',
-        'سبب عدم الخضوع': 'tax_reason_code',
-        'العنوان الترويجي': 'promotion_title',
-        'العنوان الفرعي': 'promotion_subtitle'
-    }
-    
-    # ✅ إعادة تسمية الأعمدة الموجودة فقط
-    existing_columns = {k: v for k, v in column_mapping.items() if k in import_df.columns}
-    import_df = import_df.rename(columns=existing_columns)
-    
-    # ✅ تحويل القيم إلى الصيغة المطلوبة
-    # نوع المنتج (product_type)
-    if 'product_type' in import_df.columns:
-        product_type_mapping = {
-            'منتج جاهز': 'product',
-            'مجموعة منتجات': 'group_products',
-            'بطاقة رقمية': 'codes',
-            'منتج رقمي': 'digital',
-            'أكل': 'food',
-            'خدمة حسب الطلب': 'service',
-            'منتج حجز': 'booking'
+def prepare_import_file(df: pd.DataFrame) -> bytes:
+    """
+    تحضير ملف استيراد باستخدام قالب سلة الأصلي
+    """
+    try:
+        # ✅ تحميل القالب الأصلي لسلة (يجب أن يكون موجوداً في المشروع)
+        template_path = "Salla_Products_Template.xlsx"
+        
+        # ✅ محاولة تحميل القالب
+        try:
+            wb = load_workbook(template_path)
+        except FileNotFoundError:
+            # ✅ إذا لم يوجد القالب، قم بإنشاء نسخة مبسطة
+            st.warning("⚠️ القالب الأصلي غير موجود، سيتم إنشاء قالب مبسط")
+            return create_simple_template(df)
+        
+        # ✅ استخدام الورقة الصحيحة
+        sheet_name = "Salla Products Template Sheet"
+        if sheet_name not in wb.sheetnames:
+            # ✅ إذا لم توجد الورقة، استخدم أول ورقة
+            sheet_name = wb.sheetnames[0]
+        
+        ws = wb[sheet_name]
+        
+        # ✅ تحديد الصف الذي نبدأ منه (الصف الرابع في القالب الأصلي)
+        start_row = 4
+        
+        # ✅ تعيين الأعمدة حسب القالب الأصلي
+        column_mapping = {
+            'معرف المنتج': 'A',
+            'SKU': 'B',
+            'اسم المنتج': 'C',
+            'النوع': 'D',
+            'نوع المنتج': 'E',
+            'حالة المنتج': 'F',
+            'السعر (SAR)': 'G',
+            'السعر المخفض (SAR)': 'H',
+            'بداية التخفيض': 'I',
+            'نهاية التخفيض': 'J',
+            'كمية غير محدودة': 'K',
+            'خاضع للضريبة': 'L',
+            'سبب عدم الخضوع': 'M',
+            'العنوان الترويجي': 'N',
+            'العنوان الفرعي': 'O'
         }
-        import_df['product_type'] = import_df['product_type'].map(product_type_mapping).fillna('product')
-    
-    # ✅ حالة المنتج (status)
-    if 'status' in import_df.columns:
-        status_mapping = {
-            'معروض': 'sale',
-            'مخفي': 'hidden'
+        
+        # ✅ تعيين قيم الأعمدة الثابتة
+        static_values = {
+            'النوع': 'منتج',  # القيمة الافتراضية للنوع
         }
-        import_df['status'] = import_df['status'].map(status_mapping).fillna('sale')
-    
-    # ✅ خاضع للضريبة (with_tax)
-    if 'with_tax' in import_df.columns:
-        tax_mapping = {
-            'نعم': 'true',
-            'لا': 'false'
-        }
-        import_df['with_tax'] = import_df['with_tax'].map(tax_mapping).fillna('true')
-    
-    # ✅ كمية غير محدودة (unlimited_quantity)
-    if 'unlimited_quantity' in import_df.columns:
-        unlimited_mapping = {
-            'نعم': 'true',
-            'لا': 'false'
-        }
-        import_df['unlimited_quantity'] = import_df['unlimited_quantity'].map(unlimited_mapping).fillna('false')
-    
-    # ✅ تنظيف البيانات الفارغة
-    import_df = import_df.fillna('')
-    
-    # ✅ التأكد من وجود عمود name (مطلوب)
-    if 'name' not in import_df.columns:
-        st.error("❌ العمود 'name' (اسم المنتج) مطلوب")
-        return pd.DataFrame()
-    
-    # ✅ التأكد من وجود عمود price (مطلوب)
-    if 'price' not in import_df.columns:
-        st.error("❌ العمود 'price' (السعر) مطلوب")
-        return pd.DataFrame()
-    
-    return import_df
+        
+        # ✅ ملء البيانات
+        for row_idx, (_, row) in enumerate(df.iterrows(), start=start_row):
+            # ✅ تعيين قيمة النوع (ثابتة)
+            ws[f'D{row_idx}'] = static_values['النوع']
+            
+            # ✅ تعيين باقي القيم من DataFrame
+            for col_name, col_letter in column_mapping.items():
+                if col_name in df.columns:
+                    value = row.get(col_name, '')
+                    if pd.notna(value) and value != '':
+                        ws[f'{col_letter}{row_idx}'] = value
+        
+        # ✅ حفظ الملف
+        output = io.BytesIO()
+        wb.save(output)
+        output.seek(0)
+        
+        return output.getvalue()
+        
+    except Exception as e:
+        st.error(f"❌ خطأ في تحضير الملف: {str(e)}")
+        return b""
+
+
+def create_simple_template(df: pd.DataFrame) -> bytes:
+    """
+    إنشاء قالب مبسط إذا لم يوجد القالب الأصلي
+    """
+    try:
+        from openpyxl import Workbook
+        from openpyxl.styles import PatternFill, Font, Alignment
+        
+        wb = Workbook()
+        ws = wb.active
+        ws.title = "Salla Products Template Sheet"
+        
+        # ✅ تعريف الرؤوس (مطابقة لسلة)
+        headers = [
+            "معرف المنتج", "SKU", "اسم المنتج", "النوع", "نوع المنتج",
+            "حالة المنتج", "السعر (SAR)", "السعر المخفض (SAR)",
+            "بداية التخفيض", "نهاية التخفيض", "كمية غير محدودة",
+            "خاضع للضريبة", "سبب عدم الخضوع", "العنوان الترويجي", "العنوان الفرعي"
+        ]
+        
+        # ✅ إضافة الرؤوس في الصف الثاني (كما في قالب سلة)
+        for col_idx, header in enumerate(headers, 1):
+            cell = ws.cell(row=2, column=col_idx, value=header)
+            cell.fill = PatternFill(start_color="1F497D", end_color="1F497D", fill_type="solid")
+            cell.font = Font(color="FFFFFF", bold=True)
+            cell.alignment = Alignment(horizontal="center", vertical="center")
+        
+        # ✅ ملء البيانات من الصف الرابع
+        start_row = 4
+        for row_idx, (_, row) in enumerate(df.iterrows(), start=start_row):
+            ws.cell(row=row_idx, column=1, value=row.get('معرف المنتج', ''))
+            ws.cell(row=row_idx, column=2, value=row.get('SKU', ''))
+            ws.cell(row=row_idx, column=3, value=row.get('اسم المنتج', ''))
+            ws.cell(row=row_idx, column=4, value='منتج')  # النوع ثابت
+            ws.cell(row=row_idx, column=5, value=row.get('نوع المنتج', 'منتج جاهز'))
+            ws.cell(row=row_idx, column=6, value=row.get('حالة المنتج', 'معروض'))
+            ws.cell(row=row_idx, column=7, value=row.get('السعر (SAR)', 0))
+            ws.cell(row=row_idx, column=8, value=row.get('السعر المخفض (SAR)', ''))
+            ws.cell(row=row_idx, column=9, value=row.get('بداية التخفيض', ''))
+            ws.cell(row=row_idx, column=10, value=row.get('نهاية التخفيض', ''))
+            ws.cell(row=row_idx, column=11, value=row.get('كمية غير محدودة', 'لا'))
+            ws.cell(row=row_idx, column=12, value=row.get('خاضع للضريبة', 'نعم'))
+            ws.cell(row=row_idx, column=13, value=row.get('سبب عدم الخضوع', ''))
+            ws.cell(row=row_idx, column=14, value=row.get('العنوان الترويجي', ''))
+            ws.cell(row=row_idx, column=15, value=row.get('العنوان الفرعي', ''))
+        
+        output = io.BytesIO()
+        wb.save(output)
+        output.seek(0)
+        return output.getvalue()
+        
+    except Exception as e:
+        st.error(f"❌ خطأ في إنشاء القالب المبسط: {str(e)}")
+        return b""
 
 
 # ==========================================
-# ✅ دالة استيراد المنتجات إلى سلة
+# ✅ دالة استيراد المنتجات إلى سلة (محسنة)
 # ==========================================
 
-def import_products_to_salla(df: pd.DataFrame, import_type: str = "products") -> Dict:
+def import_products_to_salla(file_data: bytes, import_type: str = "products") -> Dict:
     """استيراد المنتجات إلى سلة باستخدام /products/import"""
     results = {"success": [], "errors": []}
     headers = get_headers()
@@ -111,48 +162,14 @@ def import_products_to_salla(df: pd.DataFrame, import_type: str = "products") ->
         return results
     
     try:
-        # ✅ التحقق من أن DataFrame ليس فارغاً
-        if df.empty:
-            results["errors"].append("❌ لا توجد بيانات للاستيراد")
-            return results
-        
-        # ✅ تحويل DataFrame إلى Excel
-        output = io.BytesIO()
-        
-        # ✅ استخدام تنسيق Excel متوافق مع سلة
-        with pd.ExcelWriter(output, engine='openpyxl') as writer:
-            df.to_excel(writer, index=False, sheet_name='Sheet1')
-            
-            # ✅ ضبط تنسيق الأعمدة
-            workbook = writer.book
-            worksheet = writer.sheets['Sheet1']
-            
-            # ✅ ضبط عرض الأعمدة
-            for column in worksheet.columns:
-                max_length = 0
-                column_letter = column[0].column_letter
-                for cell in column:
-                    try:
-                        cell_value = str(cell.value) if cell.value is not None else ''
-                        if len(cell_value) > max_length:
-                            max_length = len(cell_value)
-                    except:
-                        pass
-                adjusted_width = min(max_length + 2, 30)
-                worksheet.column_dimensions[column_letter].width = adjusted_width
-        
-        output.seek(0)
-        
-        # ✅ التحقق من حجم الملف
-        file_size = output.getbuffer().nbytes
-        
-        if file_size < 100:
-            results["errors"].append(f"❌ الملف صغير جداً ({file_size} بايت) - تأكد من وجود بيانات")
+        # ✅ التحقق من أن الملف ليس فارغاً
+        if not file_data or len(file_data) < 100:
+            results["errors"].append("❌ الملف فارغ أو صغير جداً")
             return results
         
         # ✅ إعداد الملف للرفع
         files = {
-            'file': ('products.xlsx', output.getvalue(), 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
+            'file': ('products.xlsx', file_data, 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
         }
         
         data = {
@@ -179,8 +196,6 @@ def import_products_to_salla(df: pd.DataFrame, import_type: str = "products") ->
                 
     except Exception as e:
         results["errors"].append(f"❌ خطأ في الاستيراد: {str(e)}")
-        import traceback
-        results["errors"].append(f"📋 تفاصيل: {traceback.format_exc()}")
     
     return results
 
@@ -279,33 +294,30 @@ def render_products_page():
                     else:
                         st.success("✅ جميع الأعمدة المطلوبة موجودة")
                     
-                        # ✅ زر استيراد المنتجات
+                        # ✅ زر استيراد المنتجات (باستخدام القالب الأصلي)
                         if st.button("🚀 استيراد المنتجات إلى سلة", type="primary"):
                             with st.spinner("🔄 جاري استيراد المنتجات..."):
                                 try:
-                                    # ✅ عرض البيانات الأصلية للتحقق
+                                    # ✅ عرض البيانات الأصلية
                                     st.write("📊 البيانات الأصلية:")
                                     st.dataframe(df)
-                                    
-                                    # ✅ تحضير DataFrame للاستيراد
-                                    import_df = prepare_import_dataframe(df)
-                                    
-                                    # ✅ التحقق من وجود بيانات بعد التحضير
-                                    if import_df.empty:
-                                        st.error("❌ لا توجد بيانات للاستيراد بعد التحضير")
+            
+                                    # ✅ تحضير ملف الاستيراد باستخدام القالب الأصلي
+                                    file_data = prepare_import_file(df)
+            
+                                    if not file_data or len(file_data) < 100:
+                                        st.error("❌ فشل تحضير الملف للاستيراد")
                                     else:
-                                        # ✅ عرض البيانات المحضرة
-                                        st.write("📊 البيانات المحضرة للاستيراد:")
-                                        st.dataframe(import_df)
-                                        
+                                        st.info(f"📦 حجم الملف المحضر: {len(file_data)} بايت")
+                
                                         # ✅ استيراد المنتجات
-                                        results = import_products_to_salla(import_df, import_type="products")
-                                        
+                                        results = import_products_to_salla(file_data, import_type="products")
+                
                                         for msg in results["success"]:
                                             st.success(msg)
                                         for msg in results["errors"]:
                                             st.error(msg)
-                                        
+                
                                         if results["success"]:
                                             st.balloons()
                                             st.rerun()
@@ -313,8 +325,6 @@ def render_products_page():
                                     st.error(f"❌ خطأ في المعالجة: {str(e)}")
                                     import traceback
                                     st.code(traceback.format_exc())
-                except Exception as e:
-                    st.error(f"❌ خطأ في قراءة الملف: {str(e)}")
 
     st.divider()
 
