@@ -722,7 +722,7 @@ def process_quantities_import(df: pd.DataFrame) -> Dict:
             results["errors"].append(f"❌ خطأ في قراءة الصف {idx+1}: {str(e)}")
             
     if quantities_payload:
-        res = safe_api_request("POST", "https://api.salla.dev/admin/v2/products/quantities/bulk", headers, json={"quantities": quantities_payload})
+        res = safe_api_request("POST", "https://api.salla.dev/admin/v2/products/quantities/bulk", headers, json={"products": quantities_payload})
         if res: results["success"].append(f"✅ تم تحديث كميات {len(quantities_payload)} سجل بنجاح!")
         else: results["errors"].append("❌ فشل إرسال طلب تحديث الكميات الجماعي.")
     return results
