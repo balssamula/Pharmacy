@@ -307,7 +307,7 @@ def render_products_page():
                                         st.dataframe(import_df)
                                         
                                         # ✅ استيراد المنتجات
-                                        results = import_products_to_salla(df, import_type="products")
+                                        results = import_products_to_salla(uploaded_file, import_type="products")
                                         
                                         for msg in results["success"]:
                                             st.success(msg)
