@@ -1,9 +1,9 @@
 import streamlit as st
 import pandas as pd
-import io
-import tempfile
 import requests
+import io
 from datetime import datetime
+from typing import Dict, List, Optional
 from utils import (
     get_headers, safe_api_request, get_flat_price, update_product_status, 
     export_products_to_excel, attach_product_image_api, update_product_promotions_secure,
@@ -31,14 +31,9 @@ def import_products_to_salla(df: pd.DataFrame, import_type: str = "products-upda
             results["errors"].append("❌ لا توجد بيانات للاستيراد")
             return results
         
-        # ✅ عرض البيانات للتحقق
-        st.write("📊 البيانات المرسلة للاستيراد:")
-        st.dataframe(df.head())
-        
         # ✅ تحويل DataFrame إلى Excel مؤقت
         output = io.BytesIO()
         
-        # ✅ استخدام تنسيق Excel متوافق مع سلة
         with pd.ExcelWriter(output, engine='openpyxl') as writer:
             df.to_excel(writer, index=False, sheet_name='Sheet1')
             
@@ -46,7 +41,6 @@ def import_products_to_salla(df: pd.DataFrame, import_type: str = "products-upda
             workbook = writer.book
             worksheet = writer.sheets['Sheet1']
             
-            # ✅ ضبط عرض الأعمدة
             for column in worksheet.columns:
                 max_length = 0
                 column_letter = column[0].column_letter
@@ -61,14 +55,6 @@ def import_products_to_salla(df: pd.DataFrame, import_type: str = "products-upda
         
         output.seek(0)
         
-        # ✅ التحقق من حجم الملف
-        file_size = output.getbuffer().nbytes
-        st.info(f"📦 حجم الملف: {file_size} بايت")
-        
-        if file_size < 100:
-            results["errors"].append("❌ الملف صغير جداً (أقل من 100 بايت)")
-            return results
-        
         # ✅ إعداد الملف للرفع
         files = {
             'file': ('products.xlsx', output.getvalue(), 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
@@ -78,18 +64,14 @@ def import_products_to_salla(df: pd.DataFrame, import_type: str = "products-upda
             'type': import_type
         }
         
-        # ✅ إرسال الطلب مع عرض تفاصيل أكثر
-        with st.spinner("🔄 جاري رفع الملف إلى سلة..."):
-            response = requests.post(
-                "https://api.salla.dev/admin/v2/products/import",
-                headers=headers,
-                files=files,
-                data=data,
-                timeout=60
-            )
-        
-        # ✅ عرض تفاصيل الاستجابة
-        st.write(f"📊 حالة الاستجابة: {response.status_code}")
+        # ✅ إرسال الطلب
+        response = requests.post(
+            "https://api.salla.dev/admin/v2/products/import",
+            headers=headers,
+            files=files,
+            data=data,
+            timeout=60
+        )
         
         if response.status_code == 201:
             results["success"].append("✅ تم استيراد المنتجات بنجاح! سيتم معالجتها في الخلفية.")
@@ -102,8 +84,6 @@ def import_products_to_salla(df: pd.DataFrame, import_type: str = "products-upda
                 
     except Exception as e:
         results["errors"].append(f"❌ خطأ في الاستيراد: {str(e)}")
-        import traceback
-        results["errors"].append(f"📋 تفاصيل: {traceback.format_exc()}")
     
     return results
 
@@ -112,12 +92,8 @@ def import_products_to_salla(df: pd.DataFrame, import_type: str = "products-upda
 # ==========================================
 
 def prepare_import_dataframe(df: pd.DataFrame) -> pd.DataFrame:
-    """تحضير DataFrame للاستيراد إلى سلة مع الحفاظ على التنسيق الصحيح"""
+    """تحضير DataFrame للاستيراد إلى سلة"""
     import_df = df.copy()
-    
-    # ✅ التأكد من وجود البيانات
-    if import_df.empty:
-        return import_df
     
     # ✅ إعادة تسمية الأعمدة
     column_mapping = {
@@ -183,12 +159,8 @@ def prepare_import_dataframe(df: pd.DataFrame) -> pd.DataFrame:
     # ✅ تنظيف البيانات الفارغة
     import_df = import_df.fillna('')
     
-    # ✅ عرض عدد الصفوف والأعمدة
-    st.write(f"📊 عدد الصفوف: {len(import_df)}")
-    st.write(f"📊 عدد الأعمدة: {len(import_df.columns)}")
-    st.write("📊 الأعمدة:", list(import_df.columns))
-    
     return import_df
+
 
 def render_products_page():
     st.markdown("<h2 style='color:#0f1c2e;'>📦 مركز إدارة المنتجات المتقدمة</h2>", unsafe_allow_html=True)
@@ -288,32 +260,24 @@ def render_products_page():
                         if st.button("🚀 استيراد المنتجات إلى سلة", type="primary"):
                             with st.spinner("🔄 جاري استيراد المنتجات..."):
                                 try:
-                                   # ✅ تحضير DataFrame للاستيراد
+                                    # ✅ تحضير DataFrame للاستيراد
                                     import_df = prepare_import_dataframe(df)
-            
-                                    # ✅ عرض البيانات قبل الاستيراد
-                                    st.write("📊 البيانات المحضرة للاستيراد:")
-                                    st.dataframe(import_df)
-            
-                                    # ✅ التحقق من وجود بيانات
-                                    if import_df.empty:
-                                        st.error("❌ لا توجد بيانات للاستيراد بعد التحضير")
-                                    else:
-                                        # ✅ استيراد المنتجات
-                                        results = import_products_to_salla(import_df, import_type="products-update")
-                
-                                        for msg in results["success"]:
-                                            st.success(msg)
-                                        for msg in results["errors"]:
-                                            st.error(msg)
-                
-                                        if results["success"]:
-                                            st.balloons()
-                                            st.rerun()
+                                    
+                                    # ✅ استيراد المنتجات
+                                    results = import_products_to_salla(import_df, import_type="products-update")
+                                    
+                                    for msg in results["success"]:
+                                        st.success(msg)
+                                    for msg in results["errors"]:
+                                        st.error(msg)
+                                    
+                                    if results["success"]:
+                                        st.balloons()
+                                        st.rerun()
                                 except Exception as e:
                                     st.error(f"❌ خطأ في المعالجة: {str(e)}")
-                                    import traceback
-                                    st.code(traceback.format_exc())
+                except Exception as e:
+                    st.error(f"❌ خطأ في قراءة الملف: {str(e)}")
 
     st.divider()
 
@@ -436,20 +400,17 @@ def render_products_page():
                                         for idx in selected_indices:
                                             product = new_products[idx]
                                             try:
-                                                # ✅ إعداد بيانات المنتج الجديد
                                                 is_taxable = str(product['خاضع للضريبة']).strip().lower() in ['نعم', 'true', '1', 'yes']
                                             
-                                                # ✅ استخدام 'type' الصحيح وليس 'product_type'
                                                 product_data = {
                                                     "name": str(product['اسم المنتج']),
                                                     "price": float(product['سعر المنتج']) if product['سعر المنتج'] else 0,
-                                                    "type": "product",  # ✅ النوع الافتراضي
+                                                    "type": "product",
                                                     "status": "sale",
                                                     "sku": f"SKU-{product['رقم المنتج']}",
                                                     "with_tax": is_taxable
                                                 }
                                             
-                                                # ✅ إذا كان غير خاضع للضريبة، إضافة سبب عدم الخضوع
                                                 if not is_taxable:
                                                     product_data['tax_exemption_cause'] = "الأدوية والمعدات الطبية"
                                             
@@ -521,7 +482,6 @@ def render_products_page():
                 
         if filter_hidden and p.get('status') != 'hidden': continue
         if filter_no_img and p.get('thumbnail') and p.get('main_image'): continue
-        # ✅ الإصلاح الجذري لفلتر العناوين الترويجية
         promo_obj = p.get('promotion', {})
         actual_promo_title = p.get('promotion_title') or (promo_obj.get('title') if isinstance(promo_obj, dict) else '')
         if filter_has_promo and not actual_promo_title: continue
@@ -557,7 +517,7 @@ def render_products_page():
         )
 
     # ==========================================
-    # ✅ 3. عرض المنتجات وبطاقاتها الفردية والتعديلات
+    # ✅ 3. عرض المنتجات
     # ==========================================
     for idx, p in enumerate(filtered_products):
         p_id = str(p.get('id', 'N/A'))
@@ -577,15 +537,18 @@ def render_products_page():
 
         base_price = regular_val if regular_val > 0 else price_val
         if sale_val > 0 and sale_val < base_price:
-            display_sale_price = sale_val; has_discount = True
+            display_sale_price = sale_val
+            has_discount = True
         elif price_val < regular_val and price_val > 0:
-            display_sale_price = price_val; has_discount = True
+            display_sale_price = price_val
+            has_discount = True
         else:
-            display_sale_price = base_price; has_discount = False
+            display_sale_price = base_price
+            has_discount = False
 
         discount_percent = int(((base_price - display_sale_price) / base_price) * 100) if has_discount and base_price > 0 else 0
-        sale_start_date = p.get('sale_start') or (p.get('sale_price', {}).get('start_at') if isinstance(p.get('sale_price'), dict) else None) or "غير محدد"
-        sale_end_date = p.get('sale_end') or (p.get('sale_price', {}).get('expired_at') if isinstance(p.get('sale_price'), dict) else None) or "غير محدد"
+        sale_start_date = p.get('sale_start') or "غير محدد"
+        sale_end_date = p.get('sale_end') or "غير محدد"
         
         disp_status = "🟢 معروض بالمتجر" if status == "sale" else "🔴 مخفي في المسودات"
         tax_status_badge = "🔥 خاضع للضريبة" if p.get('with_tax', True) else f"⚪ يخضع لنسبة الصفر ({p.get('tax_exemption_cause', 'بدون سبب')})"
@@ -593,13 +556,27 @@ def render_products_page():
         if p_id in offer_product_ids:
             offer_badge_html = "<span style='background: rgba(255, 193, 7, 0.3); color: #FFC107; padding: 4px 12px; border-radius: 20px; font-size: 11px; font-weight:600;'>🎁 مشمول في عرض خاص</span>"
         else:
-            offer_badge_html = "" # نتركه فارغاً تماماً
+            offer_badge_html = ""
 
-        st.markdown(f"<div style='background: linear-gradient(135deg, #243b55 0%, #141e30 100%); padding: 14px 20px; border-radius: 12px 12px 0px 0px; margin-top: 25px; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 10px; border-bottom: 3px solid #e67e22;'><span style='color: #ffffff; font-weight: bold; font-size: 15px;'>📦 {p_name}</span><div style='display: flex; gap: 8px; flex-wrap: wrap;'><span style='background: rgba(255,255,255,0.2); color: #fff; padding: 4px 12px; border-radius: 20px; font-size: 11px; font-weight:600;'>{disp_status}</span><span style='background: rgba(0, 235, 207, 0.2); color: #00EBCF; padding: 4px 12px; border-radius: 20px; font-size: 11px; font-weight:600;'>{tax_status_badge}</span>{offer_badge_html}</div></div>", unsafe_allow_html=True)
+        st.markdown(f"""
+            <div style="background: linear-gradient(135deg, #243b55 0%, #141e30 100%); 
+                        padding: 14px 20px; border-radius: 12px 12px 0px 0px; 
+                        margin-top: 25px; display: flex; justify-content: space-between; align-items: center; 
+                        flex-wrap: wrap; gap: 10px; border-bottom: 3px solid #e67e22;">
+                <span style="color: #ffffff; font-weight: bold; font-size: 15px;">📦 {p_name}</span>
+                <div style="display: flex; gap: 8px; flex-wrap: wrap;">
+                    <span style="background: rgba(255,255,255,0.2); color: #fff; padding: 4px 12px; border-radius: 20px; font-size: 11px; font-weight:600;">{disp_status}</span>
+                    <span style="background: rgba(0, 235, 207, 0.2); color: #00EBCF; padding: 4px 12px; border-radius: 20px; font-size: 11px; font-weight:600;">{tax_status_badge}</span>
+                    {offer_badge_html}
+                </div>
+            </div>
+        """, unsafe_allow_html=True)
         
-        # ✅ استخدام الحاوية الأصلية من Streamlit لمنع ظهور </div> كـ نص
         with st.container(border=True):
-            st.markdown("""<div style="background-color: #fafbfc; padding: 20px; border-radius: 0px 0px 12px 12px; border: 1px solid #e1e8ed; border-top: none; box-shadow: 0 4px 10px rgba(0,0,0,0.03); margin-bottom: 25px;">""", unsafe_allow_html=True)
+            st.markdown("""
+                <div style="background-color: #fafbfc; padding: 20px; border-radius: 0px 0px 12px 12px; 
+                            border: 1px solid #e1e8ed; border-top: none; box-shadow: 0 4px 10px rgba(0,0,0,0.03); margin-bottom: 25px;">
+            """, unsafe_allow_html=True)
             
             c_img, c_info, c_pricing, c_action = st.columns([1.5, 2.5, 2.5, 2])
             
@@ -636,16 +613,20 @@ def render_products_page():
             with c_pricing:
                 if has_discount:
                     st.markdown(f"""
-                    <div style="background:#fff3cd; padding:10px; border-radius:8px; border-right:5px solid #ffc107;">
-                        <span style="text-decoration: line-through; color: #7f8c8d; font-size:12px;">أصلي: {base_price:,.2f} SAR</span><br>
-                        <b style="color: #c0392b; font-size:15px;">مخفض: {display_sale_price:,.2f} SAR</b>
-                        <span style="background:#c0392b; color:#fff; padding:2px 5px; border-radius:4px; font-size:10px; margin-right:5px;">وفرت: {discount_percent}%</span>
-                    </div>
+                        <div style="background:#fff3cd; padding:10px; border-radius:8px; border-right:5px solid #ffc107;">
+                            <span style="text-decoration: line-through; color: #7f8c8d; font-size:12px;">أصلي: {base_price:,.2f} SAR</span><br>
+                            <b style="color: #c0392b; font-size:15px;">مخفض: {display_sale_price:,.2f} SAR</b>
+                            <span style="background:#c0392b; color:#fff; padding:2px 5px; border-radius:4px; font-size:10px; margin-right:5px;">وفرت: {discount_percent}%</span>
+                        </div>
                     """, unsafe_allow_html=True)
                     st.markdown(f"📅 بداية التخفيض: `{sale_start_date}`")
                     st.markdown(f"📅 نهاية التخفيض: `{sale_end_date}`")
                 else:
-                    st.markdown(f"""<div style="background:#e2e8f0; padding:10px; border-radius:8px; border-right:5px solid #4a5568;"><b style="color:#2d3748; font-size:14px;">سعر ثابت: {base_price:,.2f} SAR</b></div>""", unsafe_allow_html=True)
+                    st.markdown(f"""
+                        <div style="background:#e2e8f0; padding:10px; border-radius:8px; border-right:5px solid #4a5568;">
+                            <b style="color:#2d3748; font-size:14px;">سعر ثابت: {base_price:,.2f} SAR</b>
+                        </div>
+                    """, unsafe_allow_html=True)
                     
             with c_action:
                 st.markdown("<br>", unsafe_allow_html=True)
@@ -689,15 +670,25 @@ def render_products_page():
                         st.markdown("**أدخل الكمية الجديدة للفرع (سيتم استبدال الكمية الحالية):**")
                         branch_updates = []
                         for b in branches:
-                            # السماح للمستخدم بإدخال الكمية الجديدة بشكل مباشر دون الخلط بين المنتجات
                             new_q = st.number_input(f"تحديث الكمية في: {b['name']}", min_value=0, value=0, step=1, key=f"bq_{p_id}_{b['id']}_{idx}")
                             if new_q > 0:
-                                branch_updates.append({"identifer": p_id, "identifer_type": "id", "branch_id": b['id'], "quantity": new_q, "mode": "overwrite"})
+                                branch_updates.append({
+                                    "identifer": p_id, 
+                                    "identifer_type": "id", 
+                                    "branch_id": b['id'], 
+                                    "quantity": new_q, 
+                                    "mode": "overwrite"
+                                })
                         
                         if st.button("💾 حفظ كميات الفروع (للقيم المضافة)", key=f"save_bq_{p_id}_{idx}", type="primary", use_container_width=True):
                             if branch_updates:
                                 with st.spinner("جاري التوزيع في سلة..."):
-                                    res = safe_api_request("POST", "https://api.salla.dev/admin/v2/products/quantities/bulk", headers, json={"products": branch_updates})
+                                    res = safe_api_request(
+                                        "POST", 
+                                        "https://api.salla.dev/admin/v2/products/quantities/bulk", 
+                                        headers, 
+                                        json={"products": branch_updates}
+                                    )
                                     if res:
                                         st.success("✅ تم تحديث وتوزيع الكميات!")
                                         st.rerun()
