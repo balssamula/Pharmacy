@@ -109,43 +109,35 @@ def render_products_page():
                             
                                 for idx, row in df.iterrows():
                                     try:
-                                        # ✅ التحقق من وجود معرف المنتج
-                                        product_id = row.get('معرف المنتج')
-                                        if pd.isna(product_id) or product_id == '':
-                                            # ✅ إضافة منتج جديد
-                                            product_data = {
-                                                "name": str(row.get('اسم المنتج', 'منتج جديد')),
-                                                "price": float(row.get('السعر (SAR)', 0)) if pd.notna(row.get('السعر (SAR)')) else 0,
-                                                "type": "product",  # القيمة الافتراضية
-                                                "status": "sale",
-                                                "sku": str(row.get('SKU', '')) if pd.notna(row.get('SKU')) else None
-                                            }
-    
-                                            # ✅ معالجة عمود "النوع" (Type)
-                                            type_value = str(row.get('النوع', 'منتج')).strip()
-                                            if type_value == 'خيار':
-                                                # إذا كان النوع "خيار"، فهذا يعني أن المنتج له خيارات (Options)
-                                                product_data['type'] = 'product'  # لا يزال منتجاً عادياً ولكن مع خيارات
-    
-                                            # ✅ معالجة عمود "نوع المنتج" (Product Type)
-                                            product_type_raw = str(row.get('نوع المنتج', 'منتج جاهز')).strip()
-                                            product_type_mapping = {
-                                                'منتج جاهز': 'product',
-                                                'مجموعة منتجات': 'group_products',
-                                                'بطاقة رقمية': 'codes',
-                                                'منتج رقمي': 'digital',
-                                                'أكل': 'food',
-                                                'خدمة حسب الطلب': 'service',
-                                                'منتج حجز': 'booking'
-                                            }
-                                            # ✅ التأكد من وجود قيمة صالحة
-                                            if product_type_raw in product_type_mapping:
-                                                product_data['type'] = product_type_mapping[product_type_raw]
-                                            else:
-                                                product_data['type'] = 'product'  # القيمة الافتراضية
+                                            # ✅ التحقق من وجود معرف المنتج
+                                            product_id = row.get('معرف المنتج')
+                                            if pd.isna(product_id) or product_id == '':
+                                                # ✅ إضافة منتج جديد
+                                                product_data = {
+                                                    "name": str(row.get('اسم المنتج', 'منتج جديد')),
+                                                    "price": float(row.get('السعر (SAR)', 0)) if pd.notna(row.get('السعر (SAR)')) else 0,
+                                                    "type": "product",  # ✅ القيمة الافتراضية
+                                                    "status": "sale",
+                                                    "sku": str(row.get('SKU', '')) if pd.notna(row.get('SKU')) else None
+                                                }
 
-                                            # ✅ إضافة product_type في الـ Payload للتأكد (بعض APIs تحتاجه)
-                                            product_data['product_type'] = product_type_raw      
+                                                # ✅ معالجة عمود "النوع" (Type) - منتج / خيار
+                                                type_value = str(row.get('النوع', 'منتج')).strip()
+                                                # لا نحتاج لتغيير type هنا، لأن 'خيار' يعني أن المنتج له خيارات وليس نوع مختلف
+
+                                                # ✅ معالجة عمود "نوع المنتج" (Product Type) - تحويل القيمة العربية إلى قيمة API
+                                                product_type_raw = str(row.get('نوع المنتج', 'منتج جاهز')).strip()
+                                                product_type_mapping = {
+                                                    'منتج جاهز': 'product',
+                                                    'مجموعة منتجات': 'group_products',
+                                                    'بطاقة رقمية': 'codes',
+                                                    'منتج رقمي': 'digital',
+                                                    'أكل': 'food',
+                                                    'خدمة حسب الطلب': 'service',
+                                                    'منتج حجز': 'booking'
+                                                }
+                                                # ✅ استخدم 'type' وليس 'product_type'
+                                                product_data['type'] = product_type_mapping.get(product_type_raw, 'product')  
 
                                             # حالة المنتج
                                             status_text = str(row.get('حالة المنتج', 'معروض'))
