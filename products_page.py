@@ -2,6 +2,7 @@ import streamlit as st
 import pandas as pd
 import io
 import tempfile
+import requests
 from datetime import datetime
 from utils import (
     get_headers, safe_api_request, get_flat_price, update_product_status, 
