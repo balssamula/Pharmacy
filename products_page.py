@@ -624,7 +624,7 @@ def render_products_page():
                             # السماح للمستخدم بإدخال الكمية الجديدة بشكل مباشر دون الخلط بين المنتجات
                             new_q = st.number_input(f"تحديث الكمية في: {b['name']}", min_value=0, value=0, step=1, key=f"bq_{p_id}_{b['id']}_{idx}")
                             if new_q > 0:
-                                branch_updates.append({"sku": p_sku, "branch_id": b['id'], "quantity": new_q, "mode": "overwrite"})
+                                branch_updates.append({"identifer": p_id, "identifer_type": "id", "branch_id": b['id'], "quantity": new_q, "mode": "overwrite"})
                         
                         if st.button("💾 حفظ كميات الفروع (للقيم المضافة)", key=f"save_bq_{p_id}_{idx}", type="primary", use_container_width=True):
                             if branch_updates:
