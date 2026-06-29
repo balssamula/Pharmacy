@@ -356,7 +356,7 @@ def render_offers_page():
             </div>
         """, unsafe_allow_html=True)
         
-        with st.container():
+        with st.container(border=True):
             st.markdown("""
                 <div style="background-color: #ffffff; padding: 20px; border-radius: 0px 0px 12px 12px; 
                             border: 1px solid #e8edf2; border-top: none; box-shadow: 0 4px 12px rgba(0,0,0,0.05); margin-bottom: 25px;">
