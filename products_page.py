@@ -175,15 +175,6 @@ def render_products_page():
                         # ✅ زر استيراد المنتجات باستخدام /products/import
                         if st.button("🚀 استيراد المنتجات إلى سلة", type="primary"):
                             with st.spinner("🔄 جاري استيراد المنتجات..."):
-                                # ✅ استخدام 'products-update' لتحديث المنتجات الموجودة أو إضافة جديدة
-                                results = import_products_to_salla(import_df, import_type="products-update")
-                                for msg in results["success"]:
-                                    st.success(msg)
-                                for msg in results["errors"]:
-                                    st.error(msg)
-        
-                                if results["success"]:
-                                    st.rerun()
                             try:
                                 # ✅ تحضير DataFrame للاستيراد (تعريف المتغير هنا)
                                 import_df = df.copy()
