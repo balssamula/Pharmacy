@@ -13,7 +13,9 @@ from utils import (
 
 TAX_EXEMPTION_CAUSES = ["الخدمات المالية", "عقد تأمين على الحياة", "التوريدات العقارية المعفاة", "صادرات السلع من المملكة", "صادرات الخدمات من المملكة", "النقل الدولي للسلع", "النقل الدولي للركاب", "توريد وسائل النقل", "الأدوية والمعدات الطبية"]
 
-# ✅ في products_page.py - دالة import_products_to_salla
+# ==========================================
+# ✅ دالة استيراد المنتجات إلى سلة
+# ==========================================
 
 def import_products_to_salla(df: pd.DataFrame, import_type: str = "products-update") -> Dict:
     """استيراد المنتجات إلى سلة باستخدام /products/import"""
@@ -27,7 +29,6 @@ def import_products_to_salla(df: pd.DataFrame, import_type: str = "products-upda
         # ✅ تحويل DataFrame إلى Excel مؤقت
         output = io.BytesIO()
         
-        # ✅ استخدام ExcelWriter مع engine='openpyxl'
         with pd.ExcelWriter(output, engine='openpyxl') as writer:
             df.to_excel(writer, index=False, sheet_name='Sheet1')
             
@@ -35,7 +36,6 @@ def import_products_to_salla(df: pd.DataFrame, import_type: str = "products-upda
             workbook = writer.book
             worksheet = writer.sheets['Sheet1']
             
-            # ✅ ضبط عرض الأعمدة تلقائياً
             for column in worksheet.columns:
                 max_length = 0
                 column_letter = column[0].column_letter
@@ -50,12 +50,11 @@ def import_products_to_salla(df: pd.DataFrame, import_type: str = "products-upda
         
         output.seek(0)
         
-        # ✅ إعداد ملف للرفع مع تحديد Content-Type بشكل صحيح
+        # ✅ إعداد الملف للرفع
         files = {
             'file': ('products.xlsx', output.getvalue(), 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
         }
         
-        # ✅ إرسال type كـ form-data وليس JSON
         data = {
             'type': import_type
         }
@@ -63,9 +62,9 @@ def import_products_to_salla(df: pd.DataFrame, import_type: str = "products-upda
         # ✅ إرسال الطلب
         response = requests.post(
             "https://api.salla.dev/admin/v2/products/import",
-            headers=headers,  # ✅ headers تحتوي على Authorization فقط، وليس Content-Type
+            headers=headers,
             files=files,
-            data=data,  # ✅ type يُرسل كـ form-data
+            data=data,
             timeout=60
         )
         
@@ -82,7 +81,79 @@ def import_products_to_salla(df: pd.DataFrame, import_type: str = "products-upda
         results["errors"].append(f"❌ خطأ في الاستيراد: {str(e)}")
     
     return results
+
+# ==========================================
+# ✅ دالة تحضير DataFrame للاستيراد
+# ==========================================
+
+def prepare_import_dataframe(df: pd.DataFrame) -> pd.DataFrame:
+    """تحضير DataFrame للاستيراد إلى سلة"""
+    import_df = df.copy()
     
+    # ✅ إعادة تسمية الأعمدة
+    column_mapping = {
+        'معرف المنتج': 'id',
+        'SKU': 'sku',
+        'اسم المنتج': 'name',
+        'النوع': 'type',
+        'نوع المنتج': 'product_type',
+        'حالة المنتج': 'status',
+        'السعر (SAR)': 'price',
+        'السعر المخفض (SAR)': 'sale_price',
+        'بداية التخفيض': 'sale_start',
+        'نهاية التخفيض': 'sale_end',
+        'كمية غير محدودة': 'unlimited_quantity',
+        'خاضع للضريبة': 'with_tax',
+        'سبب عدم الخضوع': 'tax_reason_code',
+        'العنوان الترويجي': 'promotion_title',
+        'العنوان الفرعي': 'promotion_subtitle'
+    }
+    import_df = import_df.rename(columns=column_mapping)
+    
+    # ✅ تحويل القيم إلى الصيغة المطلوبة
+    # نوع المنتج
+    product_type_mapping = {
+        'منتج جاهز': 'product',
+        'مجموعة منتجات': 'group_products',
+        'بطاقة رقمية': 'codes',
+        'منتج رقمي': 'digital',
+        'أكل': 'food',
+        'خدمة حسب الطلب': 'service',
+        'منتج حجز': 'booking'
+    }
+    if 'product_type' in import_df.columns:
+        import_df['product_type'] = import_df['product_type'].map(product_type_mapping).fillna('product')
+    
+    # حالة المنتج
+    status_mapping = {
+        'معروض': 'sale',
+        'مخفي': 'hidden'
+    }
+    if 'status' in import_df.columns:
+        import_df['status'] = import_df['status'].map(status_mapping).fillna('sale')
+    
+    # خاضع للضريبة
+    tax_mapping = {
+        'نعم': 'true',
+        'لا': 'false'
+    }
+    if 'with_tax' in import_df.columns:
+        import_df['with_tax'] = import_df['with_tax'].map(tax_mapping).fillna('true')
+    
+    # كمية غير محدودة
+    unlimited_mapping = {
+        'نعم': 'true',
+        'لا': 'false'
+    }
+    if 'unlimited_quantity' in import_df.columns:
+        import_df['unlimited_quantity'] = import_df['unlimited_quantity'].map(unlimited_mapping).fillna('false')
+    
+    # ✅ تنظيف البيانات الفارغة
+    import_df = import_df.fillna('')
+    
+    return import_df
+
+
 def render_products_page():
     st.markdown("<h2 style='color:#0f1c2e;'>📦 مركز إدارة المنتجات المتقدمة</h2>", unsafe_allow_html=True)
     
@@ -92,7 +163,6 @@ def render_products_page():
     with st.spinner("جاري تهيئة الإعدادات..."):
         branches = get_branches_list()
         
-        # ✅ جلب العروض الترويجية النشطة لتمييز المنتجات المشمولة بها
         offers_res = safe_api_request("GET", "https://api.salla.dev/admin/v2/specialoffers", headers)
         active_offers = offers_res.get("data", []) if offers_res else []
         offer_product_ids = set()
@@ -158,26 +228,26 @@ def render_products_page():
                         st.error("❌ فشل تحميل المنتجات")
                     
             st.download_button("📥 تحميل نموذج استيراد منتجات جديدة", data=create_products_template(), file_name="Salla_Products_Template.xlsx", mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", use_container_width=True)
-
+            
             uploaded_file = st.file_uploader("ارفع ملف المنتجات (XLSX):", type=["xlsx"], key="import_products_file")
-
+        
             if uploaded_file:
                 try:
                     # ✅ قراءة الملف
                     df = pd.read_excel(uploaded_file)
                     st.dataframe(df, use_container_width=True)
                     st.info(f"✅ تم تحميل {len(df)} منتج")
-    
+                
                     # ✅ عرض الأعمدة المتوقعة
                     expected_cols = ['معرف المنتج', 'SKU', 'اسم المنتج', 'النوع', 'نوع المنتج', 'حالة المنتج']
                     missing_cols = [col for col in expected_cols if col not in df.columns]
-        
+                    
                     if missing_cols:
                         st.warning(f"⚠️ الأعمدة المفقودة: {', '.join(missing_cols)}")
                         st.info("💡 تأكد من استخدام النموذج الصحيح")
                     else:
                         st.success("✅ جميع الأعمدة المطلوبة موجودة")
-        
+                    
                         # ✅ زر استيراد المنتجات
                         if st.button("🚀 استيراد المنتجات إلى سلة", type="primary"):
                             with st.spinner("🔄 جاري استيراد المنتجات..."):
@@ -187,87 +257,14 @@ def render_products_page():
                                     
                                     # ✅ استيراد المنتجات
                                     results = import_products_to_salla(import_df, import_type="products-update")
-            
+                                    
                                     for msg in results["success"]:
                                         st.success(msg)
                                     for msg in results["errors"]:
                                         st.error(msg)
-            
+                                    
                                     if results["success"]:
                                         st.balloons()
-                                        st.rerun()
-                                except Exception as e:
-                                    st.error(f"❌ خطأ في المعالجة: {str(e)}")
-                        
-                                    # ✅ تحويل الأعمدة إلى الصيغة المطلوبة لسلة
-                                    column_mapping = {
-                                        'معرف المنتج': 'id',
-                                        'SKU': 'sku',
-                                        'اسم المنتج': 'name',
-                                        'النوع': 'type',
-                                        'نوع المنتج': 'product_type',
-                                        'حالة المنتج': 'status',
-                                        'السعر (SAR)': 'price',
-                                        'السعر المخفض (SAR)': 'sale_price',
-                                        'بداية التخفيض': 'sale_start',
-                                        'نهاية التخفيض': 'sale_end',
-                                        'كمية غير محدودة': 'unlimited_quantity',
-                                        'خاضع للضريبة': 'with_tax',
-                                        'سبب عدم الخضوع': 'tax_reason_code',
-                                        'العنوان الترويجي': 'promotion_title',
-                                        'العنوان الفرعي': 'promotion_subtitle'
-                                    }
-                        
-                                    # ✅ إعادة تسمية الأعمدة
-                                    import_df = import_df.rename(columns=column_mapping)
-                        
-                                    # ✅ معالجة قيم "نوع المنتج"
-                                    product_type_mapping = {
-                                        'منتج جاهز': 'product',
-                                        'مجموعة منتجات': 'group_products',
-                                        'بطاقة رقمية': 'codes',
-                                        'منتج رقمي': 'digital',
-                                        'أكل': 'food',
-                                        'خدمة حسب الطلب': 'service',
-                                        'منتج حجز': 'booking'
-                                    }
-                        
-                                    if 'product_type' in import_df.columns:
-                                        import_df['product_type'] = import_df['product_type'].map(product_type_mapping).fillna('product')
-                        
-                                    # ✅ معالجة حالة المنتج
-                                    status_mapping = {
-                                        'معروض': 'sale',
-                                        'مخفي': 'hidden'
-                                    }
-                                    if 'status' in import_df.columns:
-                                        import_df['status'] = import_df['status'].map(status_mapping).fillna('sale')
-                        
-                                    # ✅ معالجة "خاضع للضريبة"
-                                    tax_mapping = {
-                                        'نعم': 'true',
-                                        'لا': 'false'
-                                    }
-                                    if 'with_tax' in import_df.columns:
-                                        import_df['with_tax'] = import_df['with_tax'].map(tax_mapping).fillna('true')
-                                    
-                                    # ✅ معالجة "كمية غير محدودة"
-                                    unlimited_mapping = {
-                                        'نعم': 'true',
-                                        'لا': 'false'
-                                    }
-                                    if 'unlimited_quantity' in import_df.columns:
-                                        import_df['unlimited_quantity'] = import_df['unlimited_quantity'].map(unlimited_mapping).fillna('false')
-                        
-                                    # ✅ استيراد المنتجات
-                                    results = import_products_to_salla(import_df, import_type="products-update")
-                        
-                                    for msg in results["success"]:
-                                        st.success(msg)
-                                    for msg in results["errors"]:
-                                        st.error(msg)
-                        
-                                    if results["success"]:
                                         st.rerun()
                                 except Exception as e:
                                     st.error(f"❌ خطأ في المعالجة: {str(e)}")
