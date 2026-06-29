@@ -67,7 +67,24 @@ def render_products_page():
                     for m in res_q["success"]: st.success(m)
                     for m in res_q["errors"]: st.error(m)
 
-            st.download_button("📥 تحميل نموذج استيراد المنتجات", data=create_products_template(), file_name="Salla_Products_Template.xlsx", mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", use_container_width=True)
+            # ✅ زر تحميل المنتجات الحالية
+            if st.button("📥 المنتجات الحالية", use_container_width=True):
+                with st.spinner("🔄 جاري تحميل المنتجات..."):
+                    prod_res = safe_api_request("GET", "https://api.salla.dev/admin/v2/products?per_page=200", headers)
+                    if prod_res and prod_res.get("data"):
+                        current_products = prod_res["data"]
+                        template_data = create_products_template(current_products)
+                        st.download_button(
+                            label="📥 تحميل نموذج تحديث المنتجات الحالية",
+                            data=template_data,
+                            file_name=f"products_current_{datetime.now().strftime('%Y%m%d_%H%M%S')}.xlsx",
+                            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                            key="download_template_current"
+                        )
+                    else:
+                        st.error("❌ فشل تحميل المنتجات")
+                    
+            st.download_button("📥 تحميل نموذج استيراد منتجات جديدة", data=create_products_template(), file_name="Salla_Products_Template.xlsx", mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", use_container_width=True)
             uploaded_file = st.file_uploader("ارفع ملف المنتجات (XLSX):", type=["xlsx"], key="import_products_file")
         
             if uploaded_file:
@@ -77,7 +94,7 @@ def render_products_page():
                     st.info(f"✅ تم تحميل {len(df)} منتج")
                 
                     # ✅ عرض الأعمدة المتوقعة
-                    expected_cols = ['معرف المنتج', 'SKU', 'اسم المنتج', 'نوع المنتج', 'حالة المنتج']
+                    expected_cols = ['معرف المنتج', 'SKU', 'اسم المنتج', 'النوع', 'نوع المنتج', 'حالة المنتج']
                     missing_cols = [col for col in expected_cols if col not in df.columns]
                     if missing_cols:
                         st.warning(f"⚠️ الأعمدة المفقودة: {', '.join(missing_cols)}")
@@ -99,15 +116,29 @@ def render_products_page():
                                             product_data = {
                                                 "name": str(row.get('اسم المنتج', 'منتج جديد')),
                                                 "price": float(row.get('السعر (SAR)', 0)) if pd.notna(row.get('السعر (SAR)')) else 0,
-                                                "type": "product",
+                                                "type": "product",  # القيمة الافتراضية
                                                 "status": "sale",
                                                 "sku": str(row.get('SKU', '')) if pd.notna(row.get('SKU')) else None
                                             }
-                                        
-                                            # نوع المنتج
-                                            product_type = str(row.get('نوع المنتج', 'منتج جاهز'))
-                                            if product_type == 'مجموعة منتجات':
-                                                product_data['type'] = 'group_products'
+    
+                                            # ✅ معالجة عمود "النوع" (Type)
+                                            type_value = str(row.get('النوع', 'منتج')).strip()
+                                            if type_value == 'خيار':
+                                                # إذا كان النوع "خيار"، فهذا يعني أن المنتج له خيارات (Options)
+                                                product_data['type'] = 'product'  # لا يزال منتجاً عادياً ولكن مع خيارات
+    
+                                            # ✅ معالجة عمود "نوع المنتج" (Product Type)
+                                            product_type = str(row.get('نوع المنتج', 'منتج جاهز')).strip()
+                                            product_type_mapping = {
+                                                'منتج جاهز': 'product',
+                                                'مجموعة منتجات': 'group_products',
+                                                'بطاقة رقمية': 'codes',
+                                                'منتج رقمي': 'digital',
+                                                'أكل': 'food',
+                                                'خدمة حسب الطلب': 'service',
+                                                'منتج حجز': 'booking'
+                                            }
+                                            product_data['type'] = product_type_mapping.get(product_type, 'product')
                                         
                                             # حالة المنتج
                                             status_text = str(row.get('حالة المنتج', 'معروض'))
