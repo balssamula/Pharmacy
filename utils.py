@@ -53,7 +53,8 @@ def get_headers():
     if not token:
         st.warning("⚠️ الرجاء إدخال مفتاح الربط (Access Token)")
         return None
-    return {"Authorization": f"Bearer {token}", "Content-Type": "application/json"}
+    # ✅ لا نضيف Content-Type هنا لأنه سيتم تحديده حسب نوع الطلب
+    return {"Authorization": f"Bearer {token}"}
 
 def safe_float(val: Any, default: float = 0.0) -> float:
     if val is None: return default
