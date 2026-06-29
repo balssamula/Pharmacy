@@ -273,58 +273,17 @@ def render_products_page():
                     else:
                         st.error("❌ فشل تحميل المنتجات")
                     
-            st.download_button("📥 تحميل نموذج استيراد منتجات جديدة", data=create_products_template(), file_name="Salla_Products_Template.xlsx", mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", use_container_width=True)
-            
-            uploaded_file = st.file_uploader("ارفع ملف المنتجات (XLSX):", type=["xlsx"], key="import_products_file")
-        
-            if uploaded_file:
-                try:
-                    # ✅ قراءة الملف
-                    df = pd.read_excel(uploaded_file)
-                    st.dataframe(df, use_container_width=True)
-                    st.info(f"✅ تم تحميل {len(df)} منتج")
-                
-                    # ✅ عرض الأعمدة المتوقعة
-                    expected_cols = ['معرف المنتج', 'SKU', 'اسم المنتج', 'النوع', 'نوع المنتج', 'حالة المنتج']
-                    missing_cols = [col for col in expected_cols if col not in df.columns]
-                    
-                    if missing_cols:
-                        st.warning(f"⚠️ الأعمدة المفقودة: {', '.join(missing_cols)}")
-                        st.info("💡 تأكد من استخدام النموذج الصحيح")
-                    else:
-                        st.success("✅ جميع الأعمدة المطلوبة موجودة")
-                    
-                        # ✅ زر استيراد المنتجات (باستخدام القالب الأصلي)
-                        if st.button("🚀 استيراد المنتجات إلى سلة", type="primary"):
-                            with st.spinner("🔄 جاري استيراد المنتجات..."):
-                                try:
-                                    # ✅ عرض البيانات الأصلية
-                                    st.write("📊 البيانات الأصلية:")
-                                    st.dataframe(df)
-            
-                                    # ✅ تحضير ملف الاستيراد باستخدام القالب الأصلي
-                                    file_data = prepare_import_file(df)
-            
-                                    if not file_data or len(file_data) < 100:
-                                        st.error("❌ فشل تحضير الملف للاستيراد")
-                                    else:
-                                        st.info(f"📦 حجم الملف المحضر: {len(file_data)} بايت")
-                
-                                        # ✅ استيراد المنتجات
-                                        results = import_products_to_salla(file_data, import_type="products")
-                
-                                        for msg in results["success"]:
-                                            st.success(msg)
-                                        for msg in results["errors"]:
-                                            st.error(msg)
-                
-                                        if results["success"]:
-                                            st.balloons()
-                                            st.rerun()
-                                except Exception as e:
-                                    st.error(f"❌ خطأ في المعالجة: {str(e)}")
-                                    import traceback
-                                    st.code(traceback.format_exc())
+            if st.button("📥 تحميل القالب الأصلي للتعديل", use_container_width=True):
+                # نمرر المنتجات للقالب ليتم ملؤه بالبيانات الحالية
+                template_bytes = fill_salla_template(products)
+                if template_bytes:
+                    st.download_button(
+                        label="✅ انقر هنا للتنزيل",
+                        data=template_bytes,
+                        file_name="Salla_Products_Template.xlsx",
+                        mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                        key="download_template_btn"
+                    )            
 
     st.divider()
 
@@ -705,8 +664,8 @@ def render_products_page():
                             new_q = st.number_input(f"تحديث الكمية في: {b['name']}", min_value=0, value=0, step=1, key=f"bq_{p_id}_{b['id']}_{idx}")
                             if new_q > 0:
                                 branch_updates.append({
-                                    "identifer": p_id, 
-                                    "identifer_type": "id", 
+                                    "identifer": p_sku, 
+                                    "identifer_type": "sku", 
                                     "branch_id": b['id'], 
                                     "quantity": new_q, 
                                     "mode": "overwrite"
