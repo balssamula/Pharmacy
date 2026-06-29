@@ -109,63 +109,64 @@ def render_products_page():
                             
                                 for idx, row in df.iterrows():
                                     try:
-                                            # ✅ التحقق من وجود معرف المنتج
-                                            product_id = row.get('معرف المنتج')
-                                            if pd.isna(product_id) or product_id == '':
-                                                # ✅ إضافة منتج جديد
-                                                product_data = {
-                                                    "name": str(row.get('اسم المنتج', 'منتج جديد')),
-                                                    "price": float(row.get('السعر (SAR)', 0)) if pd.notna(row.get('السعر (SAR)')) else 0,
-                                                    "type": "product",  # ✅ القيمة الافتراضية
-                                                    "status": "sale",
-                                                    "sku": str(row.get('SKU', '')) if pd.notna(row.get('SKU')) else None
-                                                }
+                                        # ✅ التحقق من وجود معرف المنتج
+                                        product_id = row.get('معرف المنتج')
+                                        
+                                        if pd.isna(product_id) or product_id == '':
+                                            # ✅ إضافة منتج جديد
+                                            product_data = {
+                                                "name": str(row.get('اسم المنتج', 'منتج جديد')),
+                                                "price": float(row.get('السعر (SAR)', 0)) if pd.notna(row.get('السعر (SAR)')) else 0,
+                                                "type": "product",  # ✅ القيمة الافتراضية
+                                                "status": "sale",
+                                                "sku": str(row.get('SKU', '')) if pd.notna(row.get('SKU')) else None
+                                            }
 
-                                                # ✅ معالجة عمود "النوع" (Type) - منتج / خيار
-                                                type_value = str(row.get('النوع', 'منتج')).strip()
-                                                # لا نحتاج لتغيير type هنا، لأن 'خيار' يعني أن المنتج له خيارات وليس نوع مختلف
+                                            # ✅ معالجة عمود "النوع" (Type) - منتج / خيار
+                                            type_value = str(row.get('النوع', 'منتج')).strip()
+                                            # لا نحتاج لتغيير type هنا
 
-                                                # ✅ معالجة عمود "نوع المنتج" (Product Type) - تحويل القيمة العربية إلى قيمة API
-                                                product_type_raw = str(row.get('نوع المنتج', 'منتج جاهز')).strip()
-                                                product_type_mapping = {
-                                                    'منتج جاهز': 'product',
-                                                    'مجموعة منتجات': 'group_products',
-                                                    'بطاقة رقمية': 'codes',
-                                                    'منتج رقمي': 'digital',
-                                                    'أكل': 'food',
-                                                    'خدمة حسب الطلب': 'service',
-                                                    'منتج حجز': 'booking'
-                                                }
-                                                # ✅ استخدم 'type' وليس 'product_type'
-                                                product_data['type'] = product_type_mapping.get(product_type_raw, 'product')  
+                                            # ✅ معالجة عمود "نوع المنتج" (Product Type) - تحويل القيمة العربية إلى قيمة API
+                                            product_type_raw = str(row.get('نوع المنتج', 'منتج جاهز')).strip()
+                                            product_type_mapping = {
+                                                'منتج جاهز': 'product',
+                                                'مجموعة منتجات': 'group_products',
+                                                'بطاقة رقمية': 'codes',
+                                                'منتج رقمي': 'digital',
+                                                'أكل': 'food',
+                                                'خدمة حسب الطلب': 'service',
+                                                'منتج حجز': 'booking'
+                                            }
+                                            # ✅ استخدم 'type' وليس 'product_type'
+                                            product_data['type'] = product_type_mapping.get(product_type_raw, 'product')
 
-                                            # حالة المنتج
+                                            # ✅ حالة المنتج
                                             status_text = str(row.get('حالة المنتج', 'معروض'))
                                             product_data['status'] = 'sale' if status_text == 'معروض' else 'hidden'
                                         
-                                            # السعر المخفض
+                                            # ✅ السعر المخفض
                                             if pd.notna(row.get('السعر المخفض (SAR)')) and float(row.get('السعر المخفض (SAR)')) > 0:
                                                 product_data['sale_price'] = float(row.get('السعر المخفض (SAR)'))
                                         
-                                            # بداية ونهاية التخفيض
+                                            # ✅ بداية ونهاية التخفيض
                                             if pd.notna(row.get('بداية التخفيض')):
                                                 product_data['sale_start'] = str(row.get('بداية التخفيض'))
                                             if pd.notna(row.get('نهاية التخفيض')):
                                                 product_data['sale_end'] = str(row.get('نهاية التخفيض'))
                                         
-                                            # كمية غير محدودة
+                                            # ✅ كمية غير محدودة
                                             if pd.notna(row.get('كمية غير محدودة')):
                                                 product_data['unlimited_quantity'] = str(row.get('كمية غير محدودة')) == 'نعم'
                                         
-                                            # خاضع للضريبة
+                                            # ✅ خاضع للضريبة
                                             if pd.notna(row.get('خاضع للضريبة')):
                                                 product_data['with_tax'] = str(row.get('خاضع للضريبة')) == 'نعم'
                                         
-                                            # سبب عدم الخضوع
+                                            # ✅ سبب عدم الخضوع
                                             if pd.notna(row.get('سبب عدم الخضوع')):
                                                 product_data['tax_reason_code'] = str(row.get('سبب عدم الخضوع'))
                                         
-                                            # العنوان الترويجي والفرعي
+                                            # ✅ العنوان الترويجي والفرعي
                                             if pd.notna(row.get('العنوان الترويجي')):
                                                 product_data['promotion_title'] = str(row.get('العنوان الترويجي'))
                                             if pd.notna(row.get('العنوان الفرعي')):
@@ -177,6 +178,15 @@ def render_products_page():
                                                 headers,
                                                 json=product_data
                                             )
+                                            if response:
+                                                success_count += 1
+                                            else:
+                                                error_count += 1
+                                        
+                                        else:
+                                            # ✅ تحديث منتج موجود
+                                            product_id = int(float(product_id))
+                                            update_payload = {}
                                         
                                             if pd.notna(row.get('اسم المنتج')):
                                                 update_payload['name'] = str(row.get('اسم المنتج'))
@@ -361,11 +371,11 @@ def render_products_page():
                                                 # ✅ إعداد بيانات المنتج الجديد
                                                 is_taxable = str(product['خاضع للضريبة']).strip().lower() in ['نعم', 'true', '1', 'yes']
                                             
+                                                # ✅ استخدام 'type' الصحيح وليس 'product_type'
                                                 product_data = {
                                                     "name": str(product['اسم المنتج']),
                                                     "price": float(product['سعر المنتج']) if product['سعر المنتج'] else 0,
-                                                    "type": "product",  # النوع الافتراضي
-                                                    "product_type": "منتج جاهز",  # نوع المنتج الافتراضي
+                                                    "type": "product",  # ✅ النوع الافتراضي
                                                     "status": "sale",
                                                     "sku": f"SKU-{product['رقم المنتج']}",
                                                     "with_tax": is_taxable
