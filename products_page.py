@@ -9,7 +9,7 @@ from utils import (
     get_headers, safe_api_request, get_flat_price, update_product_status, 
     export_products_to_excel, attach_product_image_api, update_product_promotions_secure,
     update_product_tax_secure, get_branches_list, generate_quantities_template, 
-    process_quantities_import, create_products_template
+    process_quantities_import, create_products_template, fill_salla_template
 )
 
 TAX_EXEMPTION_CAUSES = ["الخدمات المالية", "عقد تأمين على الحياة", "التوريدات العقارية المعفاة", "صادرات السلع من المملكة", "صادرات الخدمات من المملكة", "النقل الدولي للسلع", "النقل الدولي للركاب", "توريد وسائل النقل", "الأدوية والمعدات الطبية"]
