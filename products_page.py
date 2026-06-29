@@ -165,6 +165,9 @@ def import_products_to_salla(df: pd.DataFrame, import_type: str = "products") ->
 
         st.write("عدد البايتات:", len(excel_bytes))
         st.write("أول 20 بايت:", excel_bytes[:20])
+        st.write(files.keys())
+        st.write(files["file"][0])
+        st.write(len(files["file"][1]))
         
         # ✅ إرسال الطلب
         response = requests.post(
