@@ -101,8 +101,7 @@ def prepare_import_dataframe(df: pd.DataFrame) -> pd.DataFrame:
 # ==========================================
 # ✅ دالة استيراد المنتجات إلى سلة
 # ==========================================
-
-def import_products_to_salla(df: pd.DataFrame, import_type: str = "products") -> Dict:
+def import_products_to_salla(uploaded_file, import_type="products"):
     """استيراد المنتجات إلى سلة باستخدام /products/import"""
     results = {"success": [], "errors": []}
     headers = get_headers()
@@ -119,8 +118,7 @@ def import_products_to_salla(df: pd.DataFrame, import_type: str = "products") ->
         # ✅ تحويل DataFrame إلى Excel
         
         # ✅ استخدام تنسيق Excel متوافق مع سلة
-        with pd.ExcelWriter(output, engine='openpyxl') as writer:
-            df.to_excel(writer, index=False, sheet_name='Sheet1')
+
             
             # ✅ ضبط تنسيق الأعمدة
             workbook = writer.book
@@ -299,7 +297,6 @@ def render_products_page():
                                     st.dataframe(df)
                                     
                                     # ✅ تحضير DataFrame للاستيراد
-                                    import_df = prepare_import_dataframe(df)
                                     
                                     # ✅ التحقق من وجود بيانات بعد التحضير
                                     if import_df.empty:
@@ -310,7 +307,7 @@ def render_products_page():
                                         st.dataframe(import_df)
                                         
                                         # ✅ استيراد المنتجات
-                                        results = import_products_to_salla(import_df, import_type="products")
+                                        results = import_products_to_salla(df, import_type="products")
                                         
                                         for msg in results["success"]:
                                             st.success(msg)
