@@ -596,16 +596,29 @@ def attach_product_image_api(product_id: int, image_bytes: bytes=None, filename:
     except Exception as e: return False
 
 def update_product_promotions_secure(product_id: int, new_promo: str, new_sub: str, headers: dict) -> bool:
+    """تحديث العناوين الترويجية والفرعية بشكل آمن مع حماية السعر الأصلي"""
     current_res = safe_api_request("GET", f"https://api.salla.dev/admin/v2/products/{product_id}", headers)
     if not current_res or not current_res.get('data'): return False
+    
     p_data = current_res['data']
     price_val = get_flat_price(p_data.get('price', 0))
     sale_val = get_flat_price(p_data.get('sale_price', 0))
     regular_val = get_flat_price(p_data.get('regular_price', 0))
+    
     base_price = regular_val if regular_val > 0 else price_val
     
-    payload = {"name": p_data.get('name'), "price": base_price, "promotion_title": new_promo, "promotion_subtitle": new_sub}
-    if sale_val > 0: payload['sale_price'] = sale_val
+    # ✅ إجبار إرسال العنوان الترويجي والفرعي كنصوص لسلة
+    payload = {
+        "name": p_data.get('name'),
+        "price": base_price,
+        "promotion_title": new_promo if new_promo else "",
+        "promotion_subtitle": new_sub if new_sub else ""
+    }
+    
+    # نحافظ على السعر المخفض إن وجد
+    if sale_val > 0: 
+        payload['sale_price'] = sale_val
+        
     res = safe_api_request("PUT", f"https://api.salla.dev/admin/v2/products/{product_id}", headers, json=payload)
     return res is not None
 
