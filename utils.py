@@ -301,7 +301,7 @@ def export_products_to_excel(products: List[Dict]) -> bytes:
             sale_start = p.get('sale_start') or (p.get('sale_price', {}).get('start_at') if isinstance(p.get('sale_price'), dict) else None) or "غير محدد"
             sale_end = p.get('sale_end') or (p.get('sale_price', {}).get('expired_at') if isinstance(p.get('sale_price'), dict) else None) or "غير محدد"
             data.append({
-                'المعرف': p.get('id', ''), 'الاسم': p.get('name', ''), 'SKU': p.get('sku', ''), 'نوع المنتج': p.get('type', 'product'),
+                'المعرف': p.get('id', ''), 'الاسم': p.get('name', ''), 'SKU': p.get('sku', ''),
                 'السعر الأساسي الأصل': base_price, 'السعر المخفض الحالي': sale_price if sale_price > 0 else 'لا يوجد',
                 'خاضع للضريبة': 'نعم' if p.get('with_tax', True) else 'لا',
                 'العنوان الترويجي': promo_title, 'العنوان الفرعي': promo_sub,
