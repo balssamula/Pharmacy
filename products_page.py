@@ -329,9 +329,11 @@ def render_products_page():
         disp_status = "🟢 معروض بالمتجر" if status == "sale" else "🔴 مخفي في المسودات"
         tax_status_badge = "🔥 خاضع للضريبة" if p.get('with_tax', True) else f"⚪ يخضع لنسبة الصفر ({p.get('tax_exemption_cause', 'بدون سبب')})"
 
-        # ✅ شارة إضافية لتوضيح إذا كان المنتج مشمولاً في عرض خاص أم لا
-        offer_badge = "🎁 مشمول في عرض خاص" if p_id in offer_product_ids else "|"
-        
+        if p_id in offer_product_ids:
+            offer_badge_html = "<span style='background: rgba(255, 193, 7, 0.3); color: #FFC107; padding: 4px 12px; border-radius: 20px; font-size: 11px; font-weight:600;'>🎁 مشمول في عرض خاص</span>"
+        else:
+            offer_badge_html = "" # نتركه فارغاً تماماً
+
         st.markdown(f"""
             <div style="background: linear-gradient(135deg, #243b55 0%, #141e30 100%); 
                         padding: 14px 20px; border-radius: 12px 12px 0px 0px; 
@@ -341,7 +343,7 @@ def render_products_page():
                 <div style="display: flex; gap: 8px; flex-wrap: wrap;">
                     <span style="background: rgba(255,255,255,0.2); color: #fff; padding: 4px 12px; border-radius: 20px; font-size: 11px; font-weight:600;">{disp_status}</span>
                     <span style="background: rgba(0, 235, 207, 0.2); color: #00EBCF; padding: 4px 12px; border-radius: 20px; font-size: 11px; font-weight:600;">{tax_status_badge}</span>
-                    {f"<span style='background: rgba(255, 193, 7, 0.3); color: #FFC107; padding: 4px 12px; border-radius: 20px; font-size: 11px; font-weight:600;'>{offer_badge}</span>" if offer_badge else ""}
+                    {offer_badge_html}
                 </div>
             </div>
         """, unsafe_allow_html=True)
