@@ -130,6 +130,73 @@ def style_excel_file(ws, is_template=False, header_color="0F1C2E"):
         col_letter = get_column_letter(col[0].column)
         ws.column_dimensions[col_letter].width = min(max(max_len + 4, 16), 35)
 
+def prepare_import_dataframe(df: pd.DataFrame) -> pd.DataFrame:
+    """تحضير DataFrame للاستيراد إلى سلة"""
+    import_df = df.copy()
+    
+    # ✅ إعادة تسمية الأعمدة
+    column_mapping = {
+        'معرف المنتج': 'id',
+        'SKU': 'sku',
+        'اسم المنتج': 'name',
+        'النوع': 'type',
+        'نوع المنتج': 'product_type',
+        'حالة المنتج': 'status',
+        'السعر (SAR)': 'price',
+        'السعر المخفض (SAR)': 'sale_price',
+        'بداية التخفيض': 'sale_start',
+        'نهاية التخفيض': 'sale_end',
+        'كمية غير محدودة': 'unlimited_quantity',
+        'خاضع للضريبة': 'with_tax',
+        'سبب عدم الخضوع': 'tax_reason_code',
+        'العنوان الترويجي': 'promotion_title',
+        'العنوان الفرعي': 'promotion_subtitle'
+    }
+    import_df = import_df.rename(columns=column_mapping)
+    
+    # ✅ تحويل القيم إلى الصيغة المطلوبة
+    # نوع المنتج
+    product_type_mapping = {
+        'منتج جاهز': 'product',
+        'مجموعة منتجات': 'group_products',
+        'بطاقة رقمية': 'codes',
+        'منتج رقمي': 'digital',
+        'أكل': 'food',
+        'خدمة حسب الطلب': 'service',
+        'منتج حجز': 'booking'
+    }
+    if 'product_type' in import_df.columns:
+        import_df['product_type'] = import_df['product_type'].map(product_type_mapping).fillna('product')
+    
+    # حالة المنتج
+    status_mapping = {
+        'معروض': 'sale',
+        'مخفي': 'hidden'
+    }
+    if 'status' in import_df.columns:
+        import_df['status'] = import_df['status'].map(status_mapping).fillna('sale')
+    
+    # خاضع للضريبة
+    tax_mapping = {
+        'نعم': 'true',
+        'لا': 'false'
+    }
+    if 'with_tax' in import_df.columns:
+        import_df['with_tax'] = import_df['with_tax'].map(tax_mapping).fillna('true')
+    
+    # كمية غير محدودة
+    unlimited_mapping = {
+        'نعم': 'true',
+        'لا': 'false'
+    }
+    if 'unlimited_quantity' in import_df.columns:
+        import_df['unlimited_quantity'] = import_df['unlimited_quantity'].map(unlimited_mapping).fillna('false')
+    
+    # ✅ تنظيف البيانات الفارغة
+    import_df = import_df.fillna('')
+    
+    return import_df
+
 # ==========================================
 # 🎁 دوال العروض الخاصة
 # ==========================================
