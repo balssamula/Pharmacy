@@ -128,7 +128,7 @@ def render_products_page():
                                                 product_data['type'] = 'product'  # لا يزال منتجاً عادياً ولكن مع خيارات
     
                                             # ✅ معالجة عمود "نوع المنتج" (Product Type)
-                                            product_type = str(row.get('نوع المنتج', 'منتج جاهز')).strip()
+                                            product_type_raw = str(row.get('نوع المنتج', 'منتج جاهز')).strip()
                                             product_type_mapping = {
                                                 'منتج جاهز': 'product',
                                                 'مجموعة منتجات': 'group_products',
@@ -138,8 +138,15 @@ def render_products_page():
                                                 'خدمة حسب الطلب': 'service',
                                                 'منتج حجز': 'booking'
                                             }
-                                            product_data['type'] = product_type_mapping.get(product_type, 'product')
-                                        
+                                            # ✅ التأكد من وجود قيمة صالحة
+                                            if product_type_raw in product_type_mapping:
+                                                product_data['type'] = product_type_mapping[product_type_raw]
+                                            else:
+                                                product_data['type'] = 'product'  # القيمة الافتراضية
+
+                                            # ✅ إضافة product_type في الـ Payload للتأكد (بعض APIs تحتاجه)
+                                            product_data['product_type'] = product_type_raw      
+
                                             # حالة المنتج
                                             status_text = str(row.get('حالة المنتج', 'معروض'))
                                             product_data['status'] = 'sale' if status_text == 'معروض' else 'hidden'
@@ -247,6 +254,167 @@ def render_products_page():
                     st.error(f"❌ خطأ في قراءة الملف: {str(e)}")
 
     st.divider()
+
+    # ==========================================
+    # ✅ مطابقة منتجات سلة مع النظام
+    # ==========================================
+    with st.expander("🔄 مطابقة منتجات سلة مع النظام", expanded=False):
+        st.markdown("#### 🔄 مطابقة منتجات سلة مع النظام")
+        st.info("""
+        📋 **تعليمات المطابقة:**
+        - قم برفع ملف Excel يحتوي على شيتين: `salla` و `system`
+        - كل شيت يحتوي على 4 أعمدة: رقم المنتج، اسم المنتج، سعر المنتج، خاضع للضريبة؟
+        - سيتم عرض المنتجات الموجودة في النظام (system) وغير الموجودة في سلة (salla)
+        - يمكنك اختيار المنتجات لرفعها مباشرة كمنتجات جديدة
+        """)
+    
+        uploaded_matching_file = st.file_uploader(
+            "📂 رفع ملف المطابقة (XLSX):",
+            type=["xlsx"],
+            key="matching_file_uploader"
+        )
+    
+        if uploaded_matching_file:
+            try:
+                # ✅ قراءة ملف Excel
+                excel_file = pd.ExcelFile(uploaded_matching_file)
+            
+                # ✅ التحقق من وجود الشيتين
+                if 'salla' not in excel_file.sheet_names:
+                    st.error("❌ الشيت 'salla' غير موجود في الملف")
+                elif 'system' not in excel_file.sheet_names:
+                    st.error("❌ الشيت 'system' غير موجود في الملف")
+                else:
+                    # ✅ قراءة الشيتين
+                    df_salla = pd.read_excel(uploaded_matching_file, sheet_name='salla')
+                    df_system = pd.read_excel(uploaded_matching_file, sheet_name='system')
+                
+                    # ✅ عرض البيانات
+                    st.markdown("**📊 بيانات سلة (Salla):**")
+                    st.dataframe(df_salla, use_container_width=True)
+                    st.caption(f"عدد المنتجات في سلة: {len(df_salla)}")
+                
+                    st.markdown("**📊 بيانات النظام (System):**")
+                    st.dataframe(df_system, use_container_width=True)
+                    st.caption(f"عدد المنتجات في النظام: {len(df_system)}")
+                
+                    # ✅ التحقق من الأعمدة المطلوبة
+                    required_cols = ['رقم المنتج', 'اسم المنتج', 'سعر المنتج', 'خاضع للضريبة؟']
+                    salla_missing = [col for col in required_cols if col not in df_salla.columns]
+                    system_missing = [col for col in required_cols if col not in df_system.columns]
+                
+                    if salla_missing:
+                        st.warning(f"⚠️ الأعمدة المفقودة في شيت salla: {', '.join(salla_missing)}")
+                    if system_missing:
+                        st.warning(f"⚠️ الأعمدة المفقودة في شيت system: {', '.join(system_missing)}")
+                
+                    if not salla_missing and not system_missing:
+                        # ✅ استخراج أرقام المنتجات من سلة
+                        salla_ids = set(df_salla['رقم المنتج'].astype(str).tolist())
+                    
+                        # ✅ تحديد المنتجات الموجودة في النظام وليس في سلة
+                        new_products = []
+                        for idx, row in df_system.iterrows():
+                            product_id = str(row['رقم المنتج'])
+                            if product_id not in salla_ids:
+                                new_products.append({
+                                    'رقم المنتج': product_id,
+                                    'اسم المنتج': row['اسم المنتج'],
+                                    'سعر المنتج': row['سعر المنتج'],
+                                    'خاضع للضريبة': row['خاضع للضريبة؟']
+                                })
+                    
+                        if new_products:
+                            st.success(f"✅ تم العثور على {len(new_products)} منتج جديد غير موجود في سلة")
+                        
+                            # ✅ عرض المنتجات الجديدة
+                            df_new = pd.DataFrame(new_products)
+                            st.dataframe(df_new, use_container_width=True)
+                        
+                            # ✅ اختيار المنتجات للرفع
+                            st.markdown("#### ☑️ اختر المنتجات لإضافتها إلى سلة")
+                        
+                            # ✅ إضافة أزرار اختيار الكل/إلغاء الكل
+                            col_select_all, col_deselect_all = st.columns(2)
+                            with col_select_all:
+                                if st.button("☑️ اختيار الكل", key="select_all_matching", use_container_width=True):
+                                    for idx in range(len(new_products)):
+                                        st.session_state[f"select_product_{idx}"] = True
+                                    st.rerun()
+                            with col_deselect_all:
+                                if st.button("⬜ إلغاء الكل", key="deselect_all_matching", use_container_width=True):
+                                    for idx in range(len(new_products)):
+                                        st.session_state[f"select_product_{idx}"] = False
+                                    st.rerun()
+                        
+                            # ✅ عرض خانات الاختيار لكل منتج
+                            selected_indices = []
+                            for idx, product in enumerate(new_products):
+                                key = f"select_product_{idx}"
+                                if key not in st.session_state:
+                                    st.session_state[key] = True
+                            
+                                checked = st.checkbox(
+                                    f"🆔 {product['رقم المنتج']} - {product['اسم المنتج']} (السعر: {product['سعر المنتج']} SAR)",
+                                    value=st.session_state[key],
+                                    key=f"matching_check_{idx}"
+                                )
+                                if checked:
+                                    selected_indices.append(idx)
+                        
+                            # ✅ زر رفع المنتجات المختارة
+                            if st.button(f"🚀 رفع {len(selected_indices)} منتج مختار", type="primary", use_container_width=True):
+                                if not selected_indices:
+                                    st.warning("⚠️ الرجاء اختيار منتج واحد على الأقل للرفع")
+                                else:
+                                    with st.spinner(f"🔄 جاري رفع {len(selected_indices)} منتج..."):
+                                        success_count = 0
+                                        error_count = 0
+                                    
+                                        for idx in selected_indices:
+                                            product = new_products[idx]
+                                            try:
+                                                # ✅ إعداد بيانات المنتج الجديد
+                                                is_taxable = str(product['خاضع للضريبة']).strip().lower() in ['نعم', 'true', '1', 'yes']
+                                            
+                                                product_data = {
+                                                    "name": str(product['اسم المنتج']),
+                                                    "price": float(product['سعر المنتج']) if product['سعر المنتج'] else 0,
+                                                    "type": "product",  # النوع الافتراضي
+                                                    "product_type": "منتج جاهز",  # نوع المنتج الافتراضي
+                                                    "status": "sale",
+                                                    "sku": f"SKU-{product['رقم المنتج']}",
+                                                    "with_tax": is_taxable
+                                                }
+                                            
+                                                # ✅ إذا كان غير خاضع للضريبة، إضافة سبب عدم الخضوع
+                                                if not is_taxable:
+                                                    product_data['tax_exemption_cause'] = "الأدوية والمعدات الطبية"
+                                            
+                                                response = safe_api_request(
+                                                    "POST",
+                                                    "https://api.salla.dev/admin/v2/products",
+                                                    headers,
+                                                    json=product_data
+                                                )
+                                                if response:
+                                                    success_count += 1
+                                                else:
+                                                    error_count += 1
+                                            except Exception as e:
+                                                error_count += 1
+                                                st.error(f"❌ خطأ في رفع المنتج {product['رقم المنتج']}: {str(e)}")
+                                    
+                                        st.success(f"✅ تم رفع {success_count} منتج بنجاح")
+                                        if error_count > 0:
+                                            st.warning(f"⚠️ فشل رفع {error_count} منتج")
+                                    
+                                        if success_count > 0:
+                                            st.rerun()
+                        else:
+                            st.info("ℹ️ جميع منتجات النظام موجودة بالفعل في سلة")
+            except Exception as e:
+                st.error(f"❌ خطأ في قراءة الملف: {str(e)}")
 
     # ==========================================
     # ✅ 2. الفلاتر والبحث في المنتجات
