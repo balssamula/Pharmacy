@@ -24,10 +24,10 @@ def import_products_to_salla(df: pd.DataFrame, import_type: str = "products-upda
         return results
     
     try:
-        # ✅ تحويل DataFrame إلى Excel مؤقت مع تنسيق صحيح
+        # ✅ تحويل DataFrame إلى Excel مؤقت
         output = io.BytesIO()
         
-        # ✅ استخدام ExcelWriter مع engine='openpyxl' وتنسيق صحيح
+        # ✅ استخدام ExcelWriter مع engine='openpyxl'
         with pd.ExcelWriter(output, engine='openpyxl') as writer:
             df.to_excel(writer, index=False, sheet_name='Sheet1')
             
@@ -50,19 +50,22 @@ def import_products_to_salla(df: pd.DataFrame, import_type: str = "products-upda
         
         output.seek(0)
         
-        # ✅ رفع الملف إلى API سلة
+        # ✅ إعداد ملف للرفع مع تحديد Content-Type بشكل صحيح
         files = {
             'file': ('products.xlsx', output.getvalue(), 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
         }
+        
+        # ✅ إرسال type كـ form-data وليس JSON
         data = {
-            'type': import_type  # ✅ products, prices, quantities, seo, products-update, etc.
+            'type': import_type
         }
         
+        # ✅ إرسال الطلب
         response = requests.post(
             "https://api.salla.dev/admin/v2/products/import",
-            headers=headers,
+            headers=headers,  # ✅ headers تحتوي على Authorization فقط، وليس Content-Type
             files=files,
-            data=data,
+            data=data,  # ✅ type يُرسل كـ form-data
             timeout=60
         )
         
@@ -179,8 +182,22 @@ def render_products_page():
                         if st.button("🚀 استيراد المنتجات إلى سلة", type="primary"):
                             with st.spinner("🔄 جاري استيراد المنتجات..."):
                                 try:
-                                    # ✅ نسخ DataFrame للاستيراد
-                                    import_df = df.copy()
+                                    # ✅ تحضير DataFrame للاستيراد
+                                    import_df = prepare_import_dataframe(df)
+                                    
+                                    # ✅ استيراد المنتجات
+                                    results = import_products_to_salla(import_df, import_type="products-update")
+            
+                                    for msg in results["success"]:
+                                        st.success(msg)
+                                    for msg in results["errors"]:
+                                        st.error(msg)
+            
+                                    if results["success"]:
+                                        st.balloons()
+                                        st.rerun()
+                                except Exception as e:
+                                    st.error(f"❌ خطأ في المعالجة: {str(e)}")
                         
                                     # ✅ تحويل الأعمدة إلى الصيغة المطلوبة لسلة
                                     column_mapping = {
