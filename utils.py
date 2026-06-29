@@ -301,7 +301,7 @@ def export_products_to_excel(products: List[Dict]) -> bytes:
             sale_start = p.get('sale_start') or (p.get('sale_price', {}).get('start_at') if isinstance(p.get('sale_price'), dict) else None) or "غير محدد"
             sale_end = p.get('sale_end') or (p.get('sale_price', {}).get('expired_at') if isinstance(p.get('sale_price'), dict) else None) or "غير محدد"
             data.append({
-                'المعرف': p.get('id', ''), 'الاسم': p.get('name', ''), 'SKU': p.get('sku', ''),
+                'المعرف': p.get('id', ''), 'الاسم': p.get('name', ''), 'SKU': p.get('sku', ''), 'نوع المنتج': p.get('type', 'product'),
                 'السعر الأساسي الأصل': base_price, 'السعر المخفض الحالي': sale_price if sale_price > 0 else 'لا يوجد',
                 'خاضع للضريبة': 'نعم' if p.get('with_tax', True) else 'لا',
                 'العنوان الترويجي': promo_title, 'العنوان الفرعي': promo_sub,
@@ -333,7 +333,7 @@ def create_products_template(products=None) -> bytes:
         
         # ✅ تعريف الأعمدة باللغة العربية (مطابقة لسلة)
         columns = [
-            "معرف المنتج", "SKU", "اسم المنتج", "النوع", "نوع المنتج", "حالة المنتج",
+            "معرف المنتج", "SKU", "اسم المنتج", "نوع المنتج", "النوع", "حالة المنتج",
             "السعر (SAR)", "السعر المخفض (SAR)", "بداية التخفيض", "نهاية التخفيض",
             "كمية غير محدودة", "خاضع للضريبة", "سبب عدم الخضوع",
             "العنوان الترويجي", "العنوان الفرعي"
@@ -425,10 +425,10 @@ def create_products_template(products=None) -> bytes:
         else:
             # ✅ بيانات نموذجية للتعليمات
             sample_data = [
-                ["", "SKU-001", "منتج جديد", "منتج", "منتج جاهز", "معروض", 
+                ["", "SKU-001", "منتج جديد", "منتج جاهز", "منتج", "معروض", 
                  100, 80, "2026-07-01", "2026-07-31", 
                  "لا", "نعم", "", "عرض خاص", "خصم 20%"],
-                ["", "SKU-002", "منتج آخر", "منتج", "مجموعة منتجات", "مخفي", 
+                ["", "SKU-002", "منتج آخر", "مجموعة منتجات", "منتج", "مخفي", 
                  200, "", "", "", 
                  "نعم", "لا", "الأدوية والمعدات الطبية", "", ""]
             ]
@@ -451,8 +451,8 @@ def create_products_template(products=None) -> bytes:
             'A': 18,  # معرف المنتج
             'B': 18,  # SKU
             'C': 25,  # اسم المنتج
-            'D': 18,  # نوع المنتج
-            'E': 18,  # النوع
+            'D': 18,  # النوع
+            'E': 18,  # نوع المنتج
             'F': 18,  # حالة المنتج
             'G': 16,  # السعر
             'H': 18,  # السعر المخفض
@@ -717,7 +717,7 @@ def process_quantities_import(df: pd.DataFrame) -> Dict:
             quantity = int(safe_float(row.get('Quantity', 0)))
             mode = str(row.get('Mode', 'increment')).strip()
             if sku and pd.notna(branch_id):
-                quantities_payload.append({"sku": sku, "branch_id": int(float(branch_id)), "quantity": quantity, "mode": mode})
+                quantities_payload.append({"identifer": sku, "identifer_type": "sku", "branch_id": int(float(branch_id)), "quantity": quantity, "mode": mode})
         except Exception as e:
             results["errors"].append(f"❌ خطأ في قراءة الصف {idx+1}: {str(e)}")
             
