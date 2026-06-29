@@ -155,7 +155,6 @@ def render_products_page():
                         st.error("❌ فشل تحميل المنتجات")
                     
             st.download_button("📥 تحميل نموذج استيراد منتجات جديدة", data=create_products_template(), file_name="Salla_Products_Template.xlsx", mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", use_container_width=True)
-            st.download_button("📥 تحميل نموذج استيراد منتجات جديدة", data=create_products_template(), file_name="Salla_Products_Template.xlsx", mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", use_container_width=True)
 
             uploaded_file = st.file_uploader("ارفع ملف المنتجات (XLSX):", type=["xlsx"], key="import_products_file")
 
