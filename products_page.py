@@ -159,6 +159,13 @@ def import_products_to_salla(df: pd.DataFrame, import_type: str = "products") ->
             'type': import_type
         }
         
+        st.write("حجم الملف:", file_size)
+
+        excel_bytes = output.getvalue()
+
+        st.write("عدد البايتات:", len(excel_bytes))
+        st.write("أول 20 بايت:", excel_bytes[:20])
+        
         # ✅ إرسال الطلب
         response = requests.post(
             "https://api.salla.dev/admin/v2/products/import",
