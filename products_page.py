@@ -17,49 +17,56 @@ from utils import (
 TAX_EXEMPTION_CAUSES = ["الخدمات المالية", "عقد تأمين على الحياة", "التوريدات العقارية المعفاة", "صادرات السلع من المملكة", "صادرات الخدمات من المملكة", "النقل الدولي للسلع", "النقل الدولي للركاب", "توريد وسائل النقل", "الأدوية والمعدات الطبية"]
 
 def render_products_page():
-    st.markdown("<h2 style='color:#0f1c2e;'>📦 مركز إدارة المنتجات الذكي والمتقدم</h2>", unsafe_allow_html=True)
-    
     headers = get_headers()
     if not headers: return
 
     # ==========================================
-    # 0. جلب البيانات في بداية الصفحة لتكون متاحة لجميع الأزرار
+    # 0. إدارة الذاكرة المؤقتة (Caching) لسرعة صاروخية
     # ==========================================
-    with st.spinner("جاري تهيئة الإعدادات وتحميل المنتجات..."):
-        branches = get_branches_list()
-        
-        # ✅ جلب جميع المنتجات عبر التنقل بين الصفحات (Pagination) لضمان جلب الـ 400+ منتج بالكامل
-        all_products = []
-        page = 1
-        while True:
-            url = f"https://api.salla.dev/admin/v2/products?per_page=100&page={page}"
-            res = safe_api_request("GET", url, headers)
-            
-            # الخروج من الحلقة إذا لم يوجد رد أو بيانات
-            if not res or not res.get("data"):
-                break
+    if "all_products" not in st.session_state:
+        st.session_state["all_products"] = []
+    if "branches" not in st.session_state:
+        st.session_state["branches"] = get_branches_list()
+    if "offer_product_ids" not in st.session_state:
+        st.session_state["offer_product_ids"] = set()
+
+    # تصميم ترويسة الصفحة مع زر التحديث المنفصل
+    c_title, c_btn = st.columns([3, 1])
+    with c_title:
+        st.markdown("<h2 style='color:#0f1c2e;'>📦 مركز إدارة المنتجات الذكي والمتقدم</h2>", unsafe_allow_html=True)
+    with c_btn:
+        if st.button("🔄 مزامنة وجلب كافة المنتجات", use_container_width=True, type="primary"):
+            with st.spinner("⏳ جاري سحب كافة المنتجات من متجرك (قد يستغرق بعض الوقت)..."):
+                # جلب العروض النشطة
+                offers_res = safe_api_request("GET", "https://api.salla.dev/admin/v2/specialoffers", headers)
+                active_offers = offers_res.get("data", []) if offers_res else []
+                offer_ids = set()
+                for offer in active_offers:
+                    if offer.get("status") == "active":
+                        for p in offer.get("buy", {}).get("products", []): offer_ids.add(str(p.get("id", p) if isinstance(p, dict) else p))
+                        for p in offer.get("get", {}).get("products", []): offer_ids.add(str(p.get("id", p) if isinstance(p, dict) else p))
+                st.session_state["offer_product_ids"] = offer_ids
+
+                # جلب كافة المنتجات بنظام الترقيم
+                all_p = []
+                page = 1
+                while True:
+                    url = f"https://api.salla.dev/admin/v2/products?per_page=100&page={page}"
+                    res = safe_api_request("GET", url, headers)
+                    if not res or not res.get("data"): break
+                    all_p.extend(res["data"])
+                    
+                    total_pages = res.get("pagination", {}).get("totalPages", 1)
+                    if page >= total_pages: break
+                    page += 1
                 
-            # إضافة منتجات هذه الصفحة إلى القائمة الكلية
-            all_products.extend(res["data"])
-            
-            # التحقق من وجود صفحات أخرى باستخدام بيانات الترقيم من سلة
-            pagination = res.get("pagination", {})
-            total_pages = pagination.get("totalPages", 1)
-            
-            if page >= total_pages:
-                break
-                
-            page += 1
-        
-        offers_res = safe_api_request("GET", "https://api.salla.dev/admin/v2/specialoffers", headers)
-        active_offers = offers_res.get("data", []) if offers_res else []
-        offer_product_ids = set()
-        for offer in active_offers:
-            if offer.get("status") == "active":
-                for p in offer.get("buy", {}).get("products", []):
-                    offer_product_ids.add(str(p.get("id", p) if isinstance(p, dict) else p))
-                for p in offer.get("get", {}).get("products", []):
-                    offer_product_ids.add(str(p.get("id", p) if isinstance(p, dict) else p))
+                st.session_state["all_products"] = all_p
+                st.success(f"✅ تم جلب {len(all_p)} منتج بنجاح!")
+
+    # المتغيرات الأساسية المتاحة الآن فوريًا للصفحة
+    all_products = st.session_state["all_products"]
+    branches = st.session_state["branches"]
+    offer_product_ids = st.session_state["offer_product_ids"]
 
     # =========================================================================
     # ✅ 1. إعدادات ربط التطبيقات الترويجية والذكية وإدارة الفروع
