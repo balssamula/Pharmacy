@@ -722,3 +722,62 @@ def export_customer_groups_to_excel(groups: List[Dict]) -> bytes:
             style_excel_file(writer.sheets['Sheet1'], is_template=False, header_color="0F1C2E")
         return buffer.getvalue()
     except Exception as e: return b""
+
+def generate_salla_new_products_file(products: List[Dict]) -> bytes:
+    """
+    إنشاء ملف إكسيل للمنتجات الجديدة متوافق 100% مع نموذج سلة الخاص بالإضافة 
+    (يبدأ بعمود 'النوع' ولا يحتوي على عمود 'No.')
+    """
+    try:
+        from openpyxl import Workbook
+        import io
+
+        wb = Workbook()
+        ws = wb.active
+        ws.title = "Salla Products Template Sheet"
+
+        # الصف الأول: سلة تستخدمه كعنوان تجميعي
+        row1 = ["بيانات المنتج"] + [""] * 39
+        ws.append(row1)
+
+        # الصف الثاني: أسماء الأعمدة الدقيقة للنموذج الجديد كما هي في منصة سلة
+        headers = [
+            "النوع ", "أسم المنتج", "تصنيف المنتج", "صورة المنتج", "وصف صورة المنتج",
+            "نوع المنتج", "سعر المنتج", "الوصف", "هل يتطلب شحن؟", "رمز المنتج sku",
+            "سعر التكلفة", "السعر المخفض", "تاريخ بداية التخفيض", "تاريخ نهاية التخفيض",
+            "اقصي كمية لكل عميل", "إخفاء خيار تحديد الكمية", "اضافة صورة عند الطلب",
+            "الوزن", "وحدة الوزن", "الماركة", "العنوان الترويجي", "تثبيت المنتج",
+            "الباركود", "السعرات الحرارية", "MPN", "GTIN", "خاضع للضريبة ؟",
+            "سبب عدم الخضوع للضريبة", "[1] الاسم", "[1] النوع", "[1] القيمة",
+            "[1] الصورة / اللون", "[2] الاسم", "[2] النوع", "[2] القيمة",
+            "[2] الصورة / اللون", "[3] الاسم", "[3] النوع", "[3] القيمة", "[3] الصورة / اللون"
+        ]
+        ws.append(headers)
+
+        # ملء البيانات
+        for p in products:
+            price = get_flat_price(p.get('price', 0))
+            is_taxable = p.get('with_tax', True)
+            tax_cause = p.get('tax_exemption_cause', 'الأدوية والمعدات الطبية') if not is_taxable else ""
+            
+            row_data = [""] * len(headers)
+            row_data[0] = 'منتج'                             # النوع
+            row_data[1] = p.get('name', 'بدون اسم')          # أسم المنتج
+            row_data[5] = 'منتج جاهز'                        # نوع المنتج
+            row_data[6] = price if price > 0 else 0          # سعر المنتج
+            row_data[8] = 'نعم'                              # هل يتطلب شحن؟
+            row_data[9] = p.get('sku', "")                   # رمز المنتج sku
+            row_data[17] = 1                                 # الوزن
+            row_data[18] = 'kg'                              # وحدة الوزن
+            row_data[20] = p.get('promotion_title', "")      # العنوان الترويجي
+            row_data[26] = 'نعم' if is_taxable else 'لا'     # خاضع للضريبة ؟
+            row_data[27] = tax_cause                         # سبب عدم الخضوع للضريبة
+            
+            ws.append(row_data)
+
+        output = io.BytesIO()
+        wb.save(output)
+        return output.getvalue()
+    except Exception as e:
+        st.error(f"❌ خطأ في إنشاء قالب المنتجات الجديدة: {str(e)}")
+        return b""
