@@ -515,7 +515,7 @@ def update_product_promotions_secure(product_id: int, new_promo: str, new_sub: s
         "name": p_data.get('name'),
         "price": base_price,
         "promotion_title": new_promo if new_promo else "",
-        "promotion_subtitle": new_promo_sub if new_promo_sub else ""
+        "promotion_subtitle": new_sub if new_sub else ""
     }
     
     # نحافظ على السعر المخفض إن وجد
