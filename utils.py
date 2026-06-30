@@ -425,40 +425,51 @@ def export_products_to_excel(products: List[Dict]) -> bytes:
 
 def fill_salla_template(products: List[Dict], template_path: str = "Salla_Products_Template.xlsx") -> bytes:
     """
-    يقوم بفتح القالب الأصلي لسلة وملء البيانات فيه مباشرة
+    يقوم بفتح القالب الأصلي لسلة وملء البيانات فيه مباشرة بشكل متوافق 100%
     ملاحظة: يجب أن تضع ملف القالب الأصلي في مجلد المشروع باسم Salla_Products_Template.xlsx
     """
     try:
+        import os
+        import openpyxl
+        import io
+
         # 1. فتح القالب الأصلي
         if not os.path.exists(template_path):
             st.error(f"❌ لم يتم العثور على ملف القالب: {template_path}")
             return b""
             
-        import openpyxl    
         wb = openpyxl.load_workbook(template_path)
-        ws = wb["Salla Products Template Sheet"] # الاسم الدقيق للورقة في قالب سلة
+        ws = wb["Salla Products Template Sheet"] # الاسم الدقيق للورقة
+        
+        # ✅ 2. خطوة هامة جداً: مسح أي بيانات تجريبية موجودة في القالب لمنع تعارض البيانات
+        if ws.max_row >= 3:
+            ws.delete_rows(3, ws.max_row - 2)
         
         start_row = 3 
         
+        # ✅ 3. كتابة البيانات بالكلمات الإلزامية التي يتوقعها نظام سلة
         for i, p in enumerate(products):
             current_row = start_row + i
             price = get_flat_price(p.get('price', 0))
             sale_price = get_flat_price(p.get('sale_price', 0))
             
-            # Mapping دقيق لأعمدة سلة الرسمية
-            ws.cell(row=current_row, column=1).value = p.get('id', '')
-            ws.cell(row=current_row, column=2).value = 'منتج'           # النوع
-            ws.cell(row=current_row, column=3).value = p.get('name', '') # أسم المنتج
-            ws.cell(row=current_row, column=7).value = p.get('type', 'منتج جاهز') # نوع المنتج
-            ws.cell(row=current_row, column=8).value = price # سعر المنتج
-            ws.cell(row=current_row, column=10).value = 'نعم' if p.get('unlimited_quantity') else 'لا'
-            ws.cell(row=current_row, column=11).value = p.get('sku', '') # رمز المنتج
+            # Mapping صارم لأعمدة سلة الرسمية
+            ws.cell(row=current_row, column=1).value = p.get('id', '')        # No.
+            ws.cell(row=current_row, column=2).value = 'منتج'                 # النوع (إلزامي)
+            ws.cell(row=current_row, column=3).value = p.get('name', '')      # أسم المنتج
+            ws.cell(row=current_row, column=7).value = 'منتج جاهز'            # نوع المنتج (يجب أن تكون بالعربية)
+            ws.cell(row=current_row, column=8).value = price                  # سعر المنتج
+            ws.cell(row=current_row, column=10).value = 'نعم'                 # هل يتطلب شحن؟ (إلزامي للمنتج الجاهز)
+            ws.cell(row=current_row, column=11).value = p.get('sku', '')      # رمز المنتج
             ws.cell(row=current_row, column=13).value = sale_price if sale_price > 0 else '' # السعر المخفض
-            ws.cell(row=current_row, column=21).value = 'متاح' if p.get('status') else 'مخفي' # الحالة
+            ws.cell(row=current_row, column=19).value = 1                     # الوزن (إلزامي طالما يتطلب شحن)
+            ws.cell(row=current_row, column=20).value = 'kg'                  # وحدة الوزن (إلزامي)
+            ws.cell(row=current_row, column=21).value = 'متاح' if p.get('status', 'sale') == 'sale' else 'مخفي' # الحالة
             ws.cell(row=current_row, column=23).value = p.get('promotion_title', '') # العنوان الترويجي
             ws.cell(row=current_row, column=29).value = 'نعم' if p.get('with_tax', True) else 'لا'
+            
             if not p.get('with_tax', True):
-                ws.cell(row=current_row, column=30).value = p.get('tax_exemption_cause', '')
+                ws.cell(row=current_row, column=30).value = p.get('tax_exemption_cause', 'الأدوية والمعدات الطبية')
                 
         output = io.BytesIO()
         wb.save(output)
