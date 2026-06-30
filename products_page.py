@@ -217,24 +217,33 @@ def render_products_page():
                                     for idx in range(len(new_products)):
                                         st.session_state[f"select_product_{idx}"] = True
                                     st.rerun()
+
                             with col_deselect_all:
                                 if st.button("⬜ إلغاء الكل", key="deselect_all_matching", use_container_width=True):
                                     for idx in range(len(new_products)):
                                         st.session_state[f"select_product_{idx}"] = False
                                     st.rerun()
-                        
+
                             # ✅ عرض خانات الاختيار لكل منتج
                             selected_indices = []
                             for idx, product in enumerate(new_products):
                                 key = f"select_product_{idx}"
+    
+                                # ✅ التحقق من وجود المفتاح في session_state
                                 if key not in st.session_state:
-                                    st.session_state[key] = True
-                            
+                                    st.session_state[key] = True  # افتراضي: محدد
+    
+                                # ✅ استخدام القيمة من session_state
                                 checked = st.checkbox(
                                     f"🆔 {product['رقم المنتج']} - {product['اسم المنتج']} (السعر: {product['سعر المنتج']} SAR)",
                                     value=st.session_state[key],
-                                    key=f"matching_check_{idx}"
+                                    key=key  # ✅ استخدام نفس المفتاح
                                 )
+    
+                                # ✅ تحديث session_state إذا تغيرت القيمة
+                                if checked != st.session_state[key]:
+                                    st.session_state[key] = checked
+    
                                 if checked:
                                     selected_indices.append(idx)
                         
@@ -257,7 +266,7 @@ def render_products_page():
                                             products_for_template.append({
                                                 "name": str(product['اسم المنتج']),
                                                 "price": float(product['سعر المنتج']) if product['سعر المنتج'] else 0,
-                                                "type": "product", # منتج جاهز
+                                                "type": "منتج جاهز", # نوع المنتج
                                                 "sku": str(product['رقم المنتج']),
                                                 "with_tax": is_taxable,
                                                 "tax_exemption_cause": "" if is_taxable else "الأدوية والمعدات الطبية"
