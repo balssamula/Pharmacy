@@ -726,21 +726,22 @@ def export_customer_groups_to_excel(groups: List[Dict]) -> bytes:
 def generate_salla_new_products_file(products: List[Dict]) -> bytes:
     """
     إنشاء ملف إكسيل للمنتجات الجديدة متوافق 100% مع نموذج سلة الخاص بالإضافة 
-    (يبدأ بعمود 'النوع' ولا يحتوي على عمود 'No.')
+    مع تطبيق تنسيقات سلة الأصلية (ألوان، خطوط، وتوسيع للأعمدة)
     """
     try:
         from openpyxl import Workbook
+        from openpyxl.styles import PatternFill, Font, Alignment, Border, Side
+        from openpyxl.utils import get_column_letter
         import io
 
         wb = Workbook()
         ws = wb.active
         ws.title = "Salla Products Template Sheet"
 
-        # الصف الأول: سلة تستخدمه كعنوان تجميعي
+        # 1. كتابة العناوين
         row1 = ["بيانات المنتج"] + [""] * 39
         ws.append(row1)
 
-        # الصف الثاني: أسماء الأعمدة الدقيقة للنموذج الجديد كما هي في منصة سلة
         headers = [
             "النوع ", "أسم المنتج", "تصنيف المنتج", "صورة المنتج", "وصف صورة المنتج",
             "نوع المنتج", "سعر المنتج", "الوصف", "هل يتطلب شحن؟", "رمز المنتج sku",
@@ -754,26 +755,67 @@ def generate_salla_new_products_file(products: List[Dict]) -> bytes:
         ]
         ws.append(headers)
 
-        # ملء البيانات
+        # ==========================================
+        # 🎨 تطبيق التنسيقات لمطابقة قالب سلة الأصلي
+        # ==========================================
+        # دمج خلايا الصف الأول
+        ws.merge_cells(start_row=1, start_column=1, end_row=1, end_column=len(headers))
+        
+        # إعداد الألوان والخطوط
+        salla_green = PatternFill(start_color="00EBCF", end_color="00EBCF", fill_type="solid")
+        dark_blue = PatternFill(start_color="0F1C2E", end_color="0F1C2E", fill_type="solid")
+        font_title = Font(name="Segoe UI", size=12, bold=True, color="0F1C2E")
+        font_headers = Font(name="Segoe UI", size=11, bold=True, color="FFFFFF")
+        center_align = Alignment(horizontal="center", vertical="center", wrap_text=True)
+        thin_border = Border(left=Side(style='thin', color='DDDDDD'), right=Side(style='thin', color='DDDDDD'), 
+                             top=Side(style='thin', color='DDDDDD'), bottom=Side(style='thin', color='DDDDDD'))
+        
+        # تنسيق الصف الأول (عنوان "بيانات المنتج")
+        ws.row_dimensions[1].height = 30
+        cell_1 = ws.cell(row=1, column=1)
+        cell_1.fill = salla_green
+        cell_1.font = font_title
+        cell_1.alignment = center_align
+
+        # تنسيق الصف الثاني (رؤوس الأعمدة) وتوسيعها
+        ws.row_dimensions[2].height = 25
+        for col_idx in range(1, len(headers) + 1):
+            cell = ws.cell(row=2, column=col_idx)
+            cell.fill = dark_blue
+            cell.font = font_headers
+            cell.alignment = center_align
+            cell.border = thin_border
+            
+            # توسيع الأعمدة لتصبح مقروءة بوضوح (عرض 22)
+            col_letter = get_column_letter(col_idx)
+            ws.column_dimensions[col_letter].width = 22
+
+        # ==========================================
+        
+        # 2. ملء بيانات المنتجات (إن وجدت)
         for p in products:
             price = get_flat_price(p.get('price', 0))
             is_taxable = p.get('with_tax', True)
             tax_cause = p.get('tax_exemption_cause', 'الأدوية والمعدات الطبية') if not is_taxable else ""
             
             row_data = [""] * len(headers)
-            row_data[0] = 'منتج'                             # النوع
-            row_data[1] = p.get('name', 'بدون اسم')          # أسم المنتج
-            row_data[5] = 'منتج جاهز'                        # نوع المنتج
-            row_data[6] = price if price > 0 else 0          # سعر المنتج
-            row_data[8] = 'نعم'                              # هل يتطلب شحن؟
-            row_data[9] = p.get('sku', "")                   # رمز المنتج sku
-            row_data[17] = 1                                 # الوزن
-            row_data[18] = 'kg'                              # وحدة الوزن
-            row_data[20] = p.get('promotion_title', "")      # العنوان الترويجي
-            row_data[26] = 'نعم' if is_taxable else 'لا'     # خاضع للضريبة ؟
-            row_data[27] = tax_cause                         # سبب عدم الخضوع للضريبة
+            row_data[0] = 'منتج'
+            row_data[1] = p.get('name', 'بدون اسم')
+            row_data[5] = 'منتج جاهز'
+            row_data[6] = price if price > 0 else 0
+            row_data[8] = 'نعم'
+            row_data[9] = p.get('sku', "")
+            row_data[17] = 1
+            row_data[18] = 'kg'
+            row_data[20] = p.get('promotion_title', "")
+            row_data[26] = 'نعم' if is_taxable else 'لا'
+            row_data[27] = tax_cause
             
             ws.append(row_data)
+            
+            # محاذاة البيانات في المنتصف للمنتجات المضافة
+            for col_idx in range(1, len(headers) + 1):
+                ws.cell(row=ws.max_row, column=col_idx).alignment = Alignment(horizontal="center", vertical="center")
 
         output = io.BytesIO()
         wb.save(output)
