@@ -10,7 +10,8 @@ from utils import (
     get_headers, safe_api_request, get_flat_price, update_product_status, 
     export_products_to_excel, attach_product_image_api, update_product_promotions_secure,
     update_product_tax_secure, get_branches_list, generate_quantities_template, 
-    process_quantities_import, create_products_template, fill_salla_template
+    process_quantities_import, create_products_template, fill_salla_template,
+    generate_salla_new_products_file
 )
 
 TAX_EXEMPTION_CAUSES = ["الخدمات المالية", "عقد تأمين على الحياة", "التوريدات العقارية المعفاة", "صادرات السلع من المملكة", "صادرات الخدمات من المملكة", "النقل الدولي للسلع", "النقل الدولي للركاب", "توريد وسائل النقل", "الأدوية والمعدات الطبية"]
@@ -257,7 +258,6 @@ def render_products_page():
                                     with st.spinner(f"🔄 جاري تحضير القالب ورفع {len(selected_indices)} منتج لمتجرك..."):
                                         import requests
                                         
-                                        # 1. تجهيز قائمة المنتجات لتتوافق مع دالة القالب
                                         products_for_template = []
                                         for idx in selected_indices:
                                             product = new_products[idx]
@@ -266,21 +266,19 @@ def render_products_page():
                                             products_for_template.append({
                                                 "name": str(product['اسم المنتج']),
                                                 "price": float(product['سعر المنتج']) if product['سعر المنتج'] else 0,
-                                                "type": "منتج جاهز", # نوع المنتج
                                                 "sku": str(product['رقم المنتج']),
                                                 "with_tax": is_taxable,
                                                 "tax_exemption_cause": "" if is_taxable else "الأدوية والمعدات الطبية"
                                             })
                                         
-                                        # 2. إنشاء القالب الأصلي في الذاكرة باستخدام دالتنا السابقة
-                                        template_bytes = fill_salla_template(products_for_template)
+                                        # ✅ استخدام مولد القالب الخاص بالمنتجات الجديدة (بدون الاعتماد على ملف خارجي)
+                                        template_bytes = generate_salla_new_products_file(products_for_template)
                                         
                                         if template_bytes:
-                                            # 3. إرسال القالب مباشرة إلى مسار الاستيراد
-                                            files = {'file': ('Salla_Products_Template.xlsx', template_bytes, 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')}
-                                            data = {'type': 'products-update'} # "products" لإضافة منتجات جديدة كلياً
+                                            files = {'file': ('Salla_New_Products.xlsx', template_bytes, 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')}
+                                            # نوع العملية منتجات جديدة كلياً
+                                            data = {'type': 'products'} 
                                             
-                                            # حذف Content-Type ليقوم requests بضبط الـ boundary تلقائياً للملفات
                                             upload_headers = headers.copy()
                                             if "Content-Type" in upload_headers:
                                                 del upload_headers["Content-Type"]
@@ -293,7 +291,7 @@ def render_products_page():
                                             )
                                             
                                             if res.status_code < 400:
-                                                st.success(f"✅ تم رفع الملف بنجاح! ستقوم سلة بمعالجة وإضافة {len(selected_indices)} منتج في الخلفية.")
+                                                st.success(f"✅ تم رفع الملف بنجاح! ستقوم سلة بمعالجة وإضافة {len(selected_indices)} منتج جديد.")
                                             else:
                                                 try: err_msg = res.json()
                                                 except: err_msg = res.text
