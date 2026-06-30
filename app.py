@@ -88,12 +88,19 @@ if not st.session_state["logged_in"]:
                 st.error("❌ عذراً، تأكد من صحة البيانات والتوكن المرفق!")
     st.stop()
 
-st.markdown("<h1 style='color:#0f1c2e;'>🏥 لوحة التحكم الإدارية للعروض الخاصة والمنتجات</h1>", unsafe_allow_html=True)
+st.markdown("""
+<div style="background: linear-gradient(135deg, #1E293B 0%, #3B82F6 100%); padding: 25px; border-radius: 12px; color: white; text-align: center; margin-bottom: 20px; box-shadow: 0 4px 6px rgba(0,0,0,0.1);">
+    <h1 style="color: white; margin: 0; font-size: 2.2rem;">🎁 منظومة إدارة العروض الخاصة والمنتجات</h1>
+    <p style="margin: 5px 0 0 0; opacity: 0.9; font-size: 1.1rem;">تحكم كامل وسريع بمتجرك على منصة سلة</p>
+</div>
+""", unsafe_allow_html=True)
+
 st.markdown("---")
 
 c_tok, c_pwd, _ = st.columns([2, 2, 4])
 with c_tok:
     with st.popover("⚙️ إعدادات مفتاح الربط"):
+        st.markdown("<div style='background:#f8fafc; padding:10px; border-radius:8px; border-right:4px solid #3B82F6;'>تحديث توكن الاتصال بمنصة سلة</div>", unsafe_allow_html=True)
         new_t = st.text_input("أدخل توكن الربط الجديد:", value=st.session_state["access_token"], type="password")
         if st.button("تحديث التوكن والربط", type="primary", use_container_width=True):
             st.session_state["access_token"] = new_t
@@ -101,6 +108,7 @@ with c_tok:
             st.rerun()
 with c_pwd:
     with st.popover("🔒 تعديل كلمة مرور النظام"):
+        st.markdown("<div style='background:#f8fafc; padding:10px; border-radius:8px; border-right:4px solid #10B981;'>تحديث كلمة مرور الدخول للوحة</div>", unsafe_allow_html=True)
         new_p = st.text_input("أدخل الباسورد الجديد:", type="password")
         if st.button("حفظ الباسورد الجديد", type="primary", use_container_width=True):
             st.session_state["admin_password"] = new_p
