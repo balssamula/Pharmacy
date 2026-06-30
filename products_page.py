@@ -14,8 +14,6 @@ from utils import (
 
 TAX_EXEMPTION_CAUSES = ["الخدمات المالية", "عقد تأمين على الحياة", "التوريدات العقارية المعفاة", "صادرات السلع من المملكة", "صادرات الخدمات من المملكة", "النقل الدولي للسلع", "النقل الدولي للركاب", "توريد وسائل النقل", "الأدوية والمعدات الطبية"]
 
-TAX_EXEMPTION_CAUSES = ["الخدمات المالية", "عقد تأمين على الحياة", "التوريدات العقارية المعفاة", "صادرات السلع من المملكة", "صادرات الخدمات من المملكة", "النقل الدولي للسلع", "النقل الدولي للركاب", "توريد وسائل النقل", "الأدوية والمعدات الطبية"]
-
 def render_products_page():
     st.markdown("<h2 style='color:#0f1c2e;'>📦 مركز إدارة المنتجات الذكي والمتقدم</h2>", unsafe_allow_html=True)
     
@@ -93,46 +91,7 @@ def render_products_page():
                     res_q = process_quantities_import(df_q)
                     for m in res_q["success"]: st.success(m)
                     for m in res_q["errors"]: st.error(m)
-
-    st.divider()
-
-    # =========================================================================
-    # ✅ 1. إعدادات ربط التطبيقات الترويجية والذكية وإدارة الفروع
-    # =========================================================================
-    col_widget1, col_widget2 = st.columns(2)
-
-    with col_widget1:
-        with st.expander("⚙️ إعدادات ربط تطبيقات التوصيات وشاهدتها مؤخراً", expanded=False):
-            st.markdown("#### 🛠️ إعدادات المنتجات المستعرضة مؤخراً")
-            section_title = st.text_input("📝 عنوان القسم الفعال:", value="شاهدتها مؤخراً", key="app_recent_section_title")
-            st.markdown("**🎯 تخصيص ظهور القسم في الصفحات:**")
-            show_home = st.checkbox("الصفحة الرئيسية بالمتجر", value=False, key="app_show_home_recent")
-            show_categories = st.checkbox("صفحة التصنيفات والأقسام", value=False, key="app_show_cat_recent")
-            show_details = st.checkbox("صفحة تفاصيل وعرض المنتج", value=True, key="app_show_details_recent")
-            products_limit = st.number_input("🔢 عدد المنتجات المعروضة:", min_value=1, max_value=32, value=6, key="app_recent_limit")
-            
-            st.markdown("#### 🛠️ نظام التوصية الذكي والحزم")
-            global_enable = st.checkbox("✅ تفعيل التوصيات في المتجر", value=True, key="app_reco_global_enable")
-            buy_together = st.checkbox("🤝 تشترى معًا", value=True, key="app_reco_buy_together")
-            prod_group = st.checkbox("📦 عرض المنتجات كحزمة", value=True, key="app_reco_prod_group")
-            cart_btn_option = st.selectbox("🛒 عرض زر إضافة للسلة:", ["في صفحة السلة فقط", "في جميع الصفحات"], index=0, key="app_reco_cart_btn")
-            
-            if st.button("💾 حفظ وتثبيت إعدادات التطبيقات", type="primary", use_container_width=True):
-                st.success("✅ تم حفظ إعدادات ربط التطبيقات بنجاح!")
-
-    with col_widget2:
-        with st.expander("🏢 التحكم في كميات ومخزون الفروع (استيراد)", expanded=False):
-            st.markdown("#### 📦 إدارة وتحديث كميات الفروع جماعياً (Excel)")
-            st.download_button("📥 تنزيل نموذج استيراد الكميات للفروع", data=generate_quantities_template(), file_name="Salla_Quantities_Template.xlsx", mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", use_container_width=True)
-            
-            uploaded_q_file = st.file_uploader("📂 رفع ملف Excel لتحديث الكميات:", type=['xlsx'], key="upload_quantities_file")
-            if uploaded_q_file and st.button("🚀 تحديث كميات الفروع (Bulk)", type="primary", use_container_width=True):
-                df_q = pd.read_excel(uploaded_q_file)
-                with st.spinner("جاري التحديث في سلة..."):
-                    res_q = process_quantities_import(df_q)
-                    for m in res_q["success"]: st.success(m)
-                    for m in res_q["errors"]: st.error(m)
-
+                        
             # ✅ زر تحميل المنتجات الحالية
             if st.button("📥 المنتجات الحالية", use_container_width=True):
                 with st.spinner("🔄 جاري تحميل المنتجات..."):
@@ -148,22 +107,10 @@ def render_products_page():
                             key="download_template_current"
                         )
                     else:
-                        st.error("❌ فشل تحميل المنتجات")
-                    
-            if st.button("📥 تحميل القالب الأصلي للتعديل", use_container_width=True):
-                # نمرر المنتجات للقالب ليتم ملؤه بالبيانات الحالية
-                template_bytes = fill_salla_template(products)
-                if template_bytes:
-                    st.download_button(
-                        label="✅ انقر هنا للتنزيل",
-                        data=template_bytes,
-                        file_name="Salla_Products_Template.xlsx",
-                        mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-                        key="download_template_btn"
-                    )            
+                        st.error("❌ فشل تحميل المنتجات")    
 
     st.divider()
-
+    
     # ==========================================
     # ✅ مطابقة منتجات سلة مع النظام
     # ==========================================
