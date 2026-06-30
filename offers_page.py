@@ -171,65 +171,57 @@ def render_offers_page():
                 for offer in active_offers:
                     offer_id = offer.get("id")
                 
-                    # 1. دالة صغيرة لاستخراج المعرفات من القواميس المعقدة التي ترجعها سلة
                     def get_id(field_name):
                         val = offer.get(field_name)
                         return val.get("id") if isinstance(val, dict) else val
 
-                    # 2. بناء هيكل العرض بالكامل من جديد لتجنب خطأ 422
                     payload = {
                         "name": offer.get("name", "عرض خاص"),
                         "status": get_id("status") or "active",
                         "offer_type": get_id("offer_type") or "buy_x_get_y",
                         "applied_channel": get_id("applied_channel") or "browser",
                         "applied_to": get_id("applied_to") or "all",
-                        "applied_with_coupon": True # 🔥 التعديل السحري هنا: تفعيل الكوبون
+                        "applied_with_coupon": True 
                     }
                 
-                    # نسخ التواريخ إن وجدت
                     if offer.get("start_date"): payload["start_date"] = offer["start_date"]
                     if offer.get("end_date"): payload["end_date"] = offer["end_date"]
                 
-                    # نسخ الشروط المالية
                     for key in ["max_discount_amount", "min_purchase_amount", "min_items_count"]:
                         if offer.get(key) is not None:
                             payload[key] = float(offer[key]) if "amount" in key else int(offer[key])
                         
-                    # نسخ مجموعات العملاء
                     if offer.get("customer_groups"):
                         payload["customer_groups"] = [g.get("id", g) if isinstance(g, dict) else g for g in offer["customer_groups"]]
                     
-                    # نسخ تفاصيل سلة المشتريات (Buy)
+                    # ✅ الحل الجذري لخطأ 422: ضمان وجود products كـ مصفوفة دائماً
                     if offer.get("buy"):
                         buy = offer["buy"]
                         b_type = buy.get("type", {}).get("id") if isinstance(buy.get("type"), dict) else buy.get("type")
-                        payload["buy"] = {"type": b_type or "quantity", "quantity": int(buy.get("quantity", 1))}
-                        if buy.get("products"): 
-                            payload["buy"]["products"] = [p.get("id", p) if isinstance(p, dict) else p for p in buy["products"]]
+                        payload["buy"] = {
+                            "type": b_type or "quantity", 
+                            "quantity": int(buy.get("quantity", 1)),
+                            "products": [p.get("id", p) if isinstance(p, dict) else p for p in buy.get("products", [])]
+                        }
                         
-                    # نسخ تفاصيل الهدية أو الخصم (Get)
                     if offer.get("get"):
                         get_obj = offer["get"]
                         g_type = get_obj.get("type", {}).get("id") if isinstance(get_obj.get("type"), dict) else get_obj.get("type")
                         g_disc_type = get_obj.get("discount_type", {}).get("id") if isinstance(get_obj.get("discount_type"), dict) else get_obj.get("discount_type")
-                    
                         payload["get"] = {
                             "type": g_type or "quantity",
                             "quantity": int(get_obj.get("quantity", 1)),
-                            "discount_type": g_disc_type or "percentage"
+                            "discount_type": g_disc_type or "percentage",
+                            "products": [p.get("id", p) if isinstance(p, dict) else p for p in get_obj.get("products", [])]
                         }
-                        if get_obj.get("products"): 
-                            payload["get"]["products"] = [p.get("id", p) if isinstance(p, dict) else p for p in get_obj["products"]]
                         if get_obj.get("discount_amount") is not None: 
                             payload["get"]["discount_amount"] = float(get_obj["discount_amount"])
 
-                    # 3. إرسال الهيكل الكامل لسلة
                     res = safe_api_request("PUT", f"https://api.salla.dev/admin/v2/specialoffers/{offer_id}", headers, json=payload)
                     if res:
                         success_count += 1
                     
                 st.success(f"✅ تم تفعيل دمج الكوبونات لـ {success_count} عرض بنجاح!")
-                st.rerun()
                 
     # --- حاوية إنشاء عرض جديد ---
     with st.expander("➕ إنشاء عرض ترويجي جديد", expanded=False):
