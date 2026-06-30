@@ -67,31 +67,7 @@ def render_products_page():
     with col_widget2:
         with st.expander("🏢 التحكم في المنتجات وكميات الفروع", expanded=False):
             st.markdown("#### 📥 تصدير المنتجات للتعديل")
-            
-            # ✅ إضافة key فريد للزر وتمرير المتغير الصحيح all_products
-            if st.button("📥 تحميل القالب الأصلي للتعديل", use_container_width=True, key="btn_download_original_template_unique"):
-                template_bytes = fill_salla_template(all_products)
-                if template_bytes:
-                    st.download_button(
-                        label="✅ انقر هنا للتنزيل",
-                        data=template_bytes,
-                        file_name="Salla_Products_Template.xlsx",
-                        mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-                        key="download_template_btn_unique"
-                    )
 
-            st.markdown("---")
-            st.markdown("#### 📦 تحديث كميات الفروع جماعياً (Excel)")
-            st.download_button("📥 تنزيل نموذج استيراد الكميات للفروع", data=generate_quantities_template(), file_name="Salla_Quantities_Template.xlsx", mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", use_container_width=True, key="btn_dl_qty_template")
-            
-            uploaded_q_file = st.file_uploader("📂 رفع ملف Excel لتحديث الكميات:", type=['xlsx'], key="upload_quantities_file")
-            if uploaded_q_file and st.button("🚀 تحديث كميات الفروع (Bulk)", type="primary", use_container_width=True, key="btn_upload_qty_bulk"):
-                df_q = pd.read_excel(uploaded_q_file)
-                with st.spinner("جاري التحديث في سلة..."):
-                    res_q = process_quantities_import(df_q)
-                    for m in res_q["success"]: st.success(m)
-                    for m in res_q["errors"]: st.error(m)
-                        
             # ✅ زر تحميل المنتجات الحالية
             if st.button("📥 المنتجات الحالية", use_container_width=True):
                 with st.spinner("🔄 جاري تحميل المنتجات..."):
@@ -107,7 +83,31 @@ def render_products_page():
                             key="download_template_current"
                         )
                     else:
-                        st.error("❌ فشل تحميل المنتجات")    
+                        st.error("❌ فشل تحميل المنتجات") 
+                        
+            # ✅ إضافة key فريد للزر وتمرير المتغير الصحيح all_products
+            if st.button("📥 تحميل القالب الأصلي للتعديل", use_container_width=True, key="btn_download_original_template_unique"):
+                template_bytes = fill_salla_template(all_products)
+                if template_bytes:
+                    st.download_button(
+                        label="✅ انقر هنا للتنزيل",
+                        data=template_bytes,
+                        file_name="Salla_Products_Template.xlsx",
+                        mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                        key="download_template_btn_unique"
+                    )
+
+            st.markdown("---")
+            st.markdown("#### 📦 تحديث كميات الفروع (Excel)")
+            st.download_button("📥 تنزيل نموذج استيراد الكميات للفروع", data=generate_quantities_template(), file_name="Salla_Quantities_Template.xlsx", mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", use_container_width=True, key="btn_dl_qty_template")
+            
+            uploaded_q_file = st.file_uploader("📂 رفع ملف Excel لتحديث الكميات:", type=['xlsx'], key="upload_quantities_file")
+            if uploaded_q_file and st.button("🚀 تحديث كميات الفروع (Bulk)", type="primary", use_container_width=True, key="btn_upload_qty_bulk"):
+                df_q = pd.read_excel(uploaded_q_file)
+                with st.spinner("جاري التحديث في سلة..."):
+                    res_q = process_quantities_import(df_q)
+                    for m in res_q["success"]: st.success(m)
+                    for m in res_q["errors"]: st.error(m)   
 
     st.divider()
     
