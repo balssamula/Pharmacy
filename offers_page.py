@@ -58,7 +58,7 @@ def render_offers_page():
     # ==========================================
     st.markdown("### ⚡ إجراءات جماعية سريعة على العروض")
     
-    col_bulk1, col_bulk2, col_bulk3 = st.columns(3)
+    col_bulk1, col_bulk2, col_bulk3, col_bulk4 = st.columns(4)
     
     with col_bulk1:
         if st.button("⏹️ إيقاف جميع العروض المفعلة", use_container_width=True, type="primary"):
@@ -159,7 +159,28 @@ def render_offers_page():
         else:
             if st.button("📥 تصدير العروض المفلترة", use_container_width=True, type="secondary", key="bulk_export_filtered_top_disabled"):
                 st.info("💡 يرجى كتابة أو اختيار فلاتر البحث في الأسفل أولاً، ليقوم الزر بحصرها وتصديرها فوراً!")
-    
+
+    with col_bulk4:
+        if st.button("🚀 تفعيل تطبيق العرض مع كوبون التخفيض على جميع العروض", type="primary", use_container_width=True):
+            headers = get_headers()
+            with st.spinner("🔄 جاري تحديث كافة العروض النشطة..."):
+                offers_res = safe_api_request("GET", "https://api.salla.dev/admin/v2/specialoffers", headers)
+                active_offers = [o for o in offers_res.get("data", []) if o.get("status") == "active"]
+            
+                success_count = 0
+                for offer in active_offers:
+                    offer_id = offer.get("id")
+                    # إرسال طلب التحديث (معامل السماح بالكوبونات)
+                    payload = {
+                        "is_discountable": True  # هذا الحقل قد يختلف قليلاً (مثل is_combinable) حسب إصدار واجهة سلة
+                    }
+                    res = safe_api_request("PUT", f"https://api.salla.dev/admin/v2/specialoffers/{offer_id}", headers, json=payload)
+                    if res:
+                        success_count += 1
+                    
+                st.success(f"✅ تم تفعيل دمج الكوبونات لـ {success_count} عرض بنجاح!")
+                st.rerun()
+                
     # --- حاوية إنشاء عرض جديد ---
     with st.expander("➕ إنشاء عرض ترويجي جديد", expanded=False):
         st.markdown("### 📝 تفاصيل العرض الأساسية")
