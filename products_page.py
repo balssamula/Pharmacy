@@ -14,217 +14,87 @@ from utils import (
 
 TAX_EXEMPTION_CAUSES = ["الخدمات المالية", "عقد تأمين على الحياة", "التوريدات العقارية المعفاة", "صادرات السلع من المملكة", "صادرات الخدمات من المملكة", "النقل الدولي للسلع", "النقل الدولي للركاب", "توريد وسائل النقل", "الأدوية والمعدات الطبية"]
 
-# ==========================================
-# ✅ دالة تحضير ملف الاستيراد باستخدام قالب سلة الأصلي
-# ==========================================
-
-def prepare_import_file(df: pd.DataFrame) -> bytes:
-    """
-    تحضير ملف استيراد باستخدام قالب سلة الأصلي
-    """
-    try:
-        # ✅ تحميل القالب الأصلي لسلة (يجب أن يكون موجوداً في المشروع)
-        template_path = "Salla_Products_Template.xlsx"
-        
-        # ✅ محاولة تحميل القالب
-        try:
-            wb = load_workbook(template_path)
-        except FileNotFoundError:
-            # ✅ إذا لم يوجد القالب، قم بإنشاء نسخة مبسطة
-            st.warning("⚠️ القالب الأصلي غير موجود، سيتم إنشاء قالب مبسط")
-            return create_simple_template(df)
-        
-        # ✅ استخدام الورقة الصحيحة
-        sheet_name = "Salla Products Template Sheet"
-        if sheet_name not in wb.sheetnames:
-            # ✅ إذا لم توجد الورقة، استخدم أول ورقة
-            sheet_name = wb.sheetnames[0]
-        
-        ws = wb[sheet_name]
-        
-        # ✅ تحديد الصف الذي نبدأ منه (الصف الرابع في القالب الأصلي)
-        start_row = 4
-        
-        # ✅ تعيين الأعمدة حسب القالب الأصلي
-        column_mapping = {
-            'معرف المنتج': 'A',
-            'SKU': 'B',
-            'اسم المنتج': 'C',
-            'النوع': 'D',
-            'نوع المنتج': 'E',
-            'حالة المنتج': 'F',
-            'السعر (SAR)': 'G',
-            'السعر المخفض (SAR)': 'H',
-            'بداية التخفيض': 'I',
-            'نهاية التخفيض': 'J',
-            'كمية غير محدودة': 'K',
-            'خاضع للضريبة': 'L',
-            'سبب عدم الخضوع': 'M',
-            'العنوان الترويجي': 'N',
-            'العنوان الفرعي': 'O'
-        }
-        
-        # ✅ تعيين قيم الأعمدة الثابتة
-        static_values = {
-            'النوع': 'منتج',  # القيمة الافتراضية للنوع
-        }
-        
-        # ✅ ملء البيانات
-        for row_idx, (_, row) in enumerate(df.iterrows(), start=start_row):
-            # ✅ تعيين قيمة النوع (ثابتة)
-            ws[f'D{row_idx}'] = static_values['النوع']
-            
-            # ✅ تعيين باقي القيم من DataFrame
-            for col_name, col_letter in column_mapping.items():
-                if col_name in df.columns:
-                    value = row.get(col_name, '')
-                    if pd.notna(value) and value != '':
-                        ws[f'{col_letter}{row_idx}'] = value
-        
-        # ✅ حفظ الملف
-        output = io.BytesIO()
-        wb.save(output)
-        output.seek(0)
-        
-        return output.getvalue()
-        
-    except Exception as e:
-        st.error(f"❌ خطأ في تحضير الملف: {str(e)}")
-        return b""
-
-
-def create_simple_template(df: pd.DataFrame) -> bytes:
-    """
-    إنشاء قالب مبسط إذا لم يوجد القالب الأصلي
-    """
-    try:
-        from openpyxl import Workbook
-        from openpyxl.styles import PatternFill, Font, Alignment
-        
-        wb = Workbook()
-        ws = wb.active
-        ws.title = "Salla Products Template Sheet"
-        
-        # ✅ تعريف الرؤوس (مطابقة لسلة)
-        headers = [
-            "معرف المنتج", "SKU", "اسم المنتج", "النوع", "نوع المنتج",
-            "حالة المنتج", "السعر (SAR)", "السعر المخفض (SAR)",
-            "بداية التخفيض", "نهاية التخفيض", "كمية غير محدودة",
-            "خاضع للضريبة", "سبب عدم الخضوع", "العنوان الترويجي", "العنوان الفرعي"
-        ]
-        
-        # ✅ إضافة الرؤوس في الصف الثاني (كما في قالب سلة)
-        for col_idx, header in enumerate(headers, 1):
-            cell = ws.cell(row=2, column=col_idx, value=header)
-            cell.fill = PatternFill(start_color="1F497D", end_color="1F497D", fill_type="solid")
-            cell.font = Font(color="FFFFFF", bold=True)
-            cell.alignment = Alignment(horizontal="center", vertical="center")
-        
-        # ✅ ملء البيانات من الصف الرابع
-        start_row = 4
-        for row_idx, (_, row) in enumerate(df.iterrows(), start=start_row):
-            ws.cell(row=row_idx, column=1, value=row.get('معرف المنتج', ''))
-            ws.cell(row=row_idx, column=2, value=row.get('SKU', ''))
-            ws.cell(row=row_idx, column=3, value=row.get('اسم المنتج', ''))
-            ws.cell(row=row_idx, column=4, value='منتج')  # النوع ثابت
-            ws.cell(row=row_idx, column=5, value=row.get('نوع المنتج', 'منتج جاهز'))
-            ws.cell(row=row_idx, column=6, value=row.get('حالة المنتج', 'معروض'))
-            ws.cell(row=row_idx, column=7, value=row.get('السعر (SAR)', 0))
-            ws.cell(row=row_idx, column=8, value=row.get('السعر المخفض (SAR)', ''))
-            ws.cell(row=row_idx, column=9, value=row.get('بداية التخفيض', ''))
-            ws.cell(row=row_idx, column=10, value=row.get('نهاية التخفيض', ''))
-            ws.cell(row=row_idx, column=11, value=row.get('كمية غير محدودة', 'لا'))
-            ws.cell(row=row_idx, column=12, value=row.get('خاضع للضريبة', 'نعم'))
-            ws.cell(row=row_idx, column=13, value=row.get('سبب عدم الخضوع', ''))
-            ws.cell(row=row_idx, column=14, value=row.get('العنوان الترويجي', ''))
-            ws.cell(row=row_idx, column=15, value=row.get('العنوان الفرعي', ''))
-        
-        output = io.BytesIO()
-        wb.save(output)
-        output.seek(0)
-        return output.getvalue()
-        
-    except Exception as e:
-        st.error(f"❌ خطأ في إنشاء القالب المبسط: {str(e)}")
-        return b""
-
-
-# ==========================================
-# ✅ دالة استيراد المنتجات إلى سلة (محسنة)
-# ==========================================
-
-def import_products_to_salla(file_data: bytes, import_type: str = "products") -> Dict:
-    """استيراد المنتجات إلى سلة باستخدام /products/import"""
-    results = {"success": [], "errors": []}
-    headers = get_headers()
-    if not headers:
-        results["errors"].append("❌ الرجاء إدخال مفتاح الربط أولاً")
-        return results
-    
-    try:
-        # ✅ التحقق من أن الملف ليس فارغاً
-        if not file_data or len(file_data) < 100:
-            results["errors"].append("❌ الملف فارغ أو صغير جداً")
-            return results
-        
-        # ✅ إعداد الملف للرفع
-        files = {
-            'file': ('products.xlsx', file_data, 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
-        }
-        
-        data = {
-            'type': import_type
-        }
-        
-        # ✅ إرسال الطلب
-        response = requests.post(
-            "https://api.salla.dev/admin/v2/products/import",
-            headers=headers,
-            files=files,
-            data=data,
-            timeout=60
-        )
-        
-        if response.status_code == 201:
-            results["success"].append("✅ تم استيراد المنتجات بنجاح! سيتم معالجتها في الخلفية.")
-        else:
-            try:
-                error_data = response.json()
-                results["errors"].append(f"❌ خطأ {response.status_code}: {error_data}")
-            except:
-                results["errors"].append(f"❌ خطأ {response.status_code}: {response.text}")
-                
-    except Exception as e:
-        results["errors"].append(f"❌ خطأ في الاستيراد: {str(e)}")
-    
-    return results
+TAX_EXEMPTION_CAUSES = ["الخدمات المالية", "عقد تأمين على الحياة", "التوريدات العقارية المعفاة", "صادرات السلع من المملكة", "صادرات الخدمات من المملكة", "النقل الدولي للسلع", "النقل الدولي للركاب", "توريد وسائل النقل", "الأدوية والمعدات الطبية"]
 
 def render_products_page():
-    st.markdown("<h2 style='color:#0f1c2e;'>📦 مركز إدارة المنتجات الذكي</h2>", unsafe_allow_html=True)
+    st.markdown("<h2 style='color:#0f1c2e;'>📦 مركز إدارة المنتجات الذكي والمتقدم</h2>", unsafe_allow_html=True)
     
     headers = get_headers()
     if not headers: return
 
-    # 1. جلب البيانات في البداية (لتصبح متاحة للجميع)
-    with st.spinner("🔄 جاري تحميل المنتجات..."):
+    # ==========================================
+    # 0. جلب البيانات في بداية الصفحة لتكون متاحة لجميع الأزرار
+    # ==========================================
+    with st.spinner("جاري تهيئة الإعدادات وتحميل المنتجات..."):
         branches = get_branches_list()
         
+        # ✅ جلب المنتجات أولاً ليتمكن زر التحميل من رؤيتها (يحل مشكلة products is not defined)
         prod_res = safe_api_request("GET", "https://api.salla.dev/admin/v2/products?per_page=100", headers)
-        products = prod_res.get("data", []) if prod_res else []
+        all_products = prod_res.get("data", []) if prod_res else []
+        
+        offers_res = safe_api_request("GET", "https://api.salla.dev/admin/v2/specialoffers", headers)
+        active_offers = offers_res.get("data", []) if offers_res else []
+        offer_product_ids = set()
+        for offer in active_offers:
+            if offer.get("status") == "active":
+                for p in offer.get("buy", {}).get("products", []):
+                    offer_product_ids.add(str(p.get("id", p) if isinstance(p, dict) else p))
+                for p in offer.get("get", {}).get("products", []):
+                    offer_product_ids.add(str(p.get("id", p) if isinstance(p, dict) else p))
 
-    # 2. الآن يمكننا استخدام المتغير 'products' في أي مكان (أزرار، جداول، فلاتر)
-    
-    # 3. مثال على زر تحميل النموذج الذي يسبب المشكلة
-    if st.button("📥 تحميل القالب الأصلي للتعديل", use_container_width=True):
-        template_bytes = fill_salla_template(products) # الآن المتغير products موجود ومعرف
-        if template_bytes:
-            st.download_button(
-                label="✅ انقر هنا للتنزيل",
-                data=template_bytes,
-                file_name="Salla_Products_Template.xlsx",
-                mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-                key="download_template_btn"
-            )
+    # =========================================================================
+    # ✅ 1. إعدادات ربط التطبيقات الترويجية والذكية وإدارة الفروع
+    # =========================================================================
+    col_widget1, col_widget2 = st.columns(2)
+
+    with col_widget1:
+        with st.expander("⚙️ إعدادات ربط تطبيقات التوصيات وشاهدتها مؤخراً", expanded=False):
+            st.markdown("#### 🛠️ إعدادات المنتجات المستعرضة مؤخراً")
+            section_title = st.text_input("📝 عنوان القسم الفعال:", value="شاهدتها مؤخراً", key="app_recent_section_title")
+            st.markdown("**🎯 تخصيص ظهور القسم في الصفحات:**")
+            show_home = st.checkbox("الصفحة الرئيسية بالمتجر", value=False, key="app_show_home_recent")
+            show_categories = st.checkbox("صفحة التصنيفات والأقسام", value=False, key="app_show_cat_recent")
+            show_details = st.checkbox("صفحة تفاصيل وعرض المنتج", value=True, key="app_show_details_recent")
+            products_limit = st.number_input("🔢 عدد المنتجات المعروضة:", min_value=1, max_value=32, value=6, key="app_recent_limit")
+            
+            st.markdown("#### 🛠️ نظام التوصية الذكي والحزم")
+            global_enable = st.checkbox("✅ تفعيل التوصيات في المتجر", value=True, key="app_reco_global_enable")
+            buy_together = st.checkbox("🤝 تشترى معًا", value=True, key="app_reco_buy_together")
+            prod_group = st.checkbox("📦 عرض المنتجات كحزمة", value=True, key="app_reco_prod_group")
+            cart_btn_option = st.selectbox("🛒 عرض زر إضافة للسلة:", ["في صفحة السلة فقط", "في جميع الصفحات"], index=0, key="app_reco_cart_btn")
+            
+            if st.button("💾 حفظ وتثبيت إعدادات التطبيقات", type="primary", use_container_width=True, key="btn_save_apps_settings"):
+                st.success("✅ تم حفظ إعدادات ربط التطبيقات بنجاح!")
+
+    with col_widget2:
+        with st.expander("🏢 التحكم في المنتجات وكميات الفروع", expanded=False):
+            st.markdown("#### 📥 تصدير المنتجات للتعديل")
+            
+            # ✅ إضافة key فريد للزر وتمرير المتغير الصحيح all_products
+            if st.button("📥 تحميل القالب الأصلي للتعديل", use_container_width=True, key="btn_download_original_template_unique"):
+                template_bytes = fill_salla_template(all_products)
+                if template_bytes:
+                    st.download_button(
+                        label="✅ انقر هنا للتنزيل",
+                        data=template_bytes,
+                        file_name="Salla_Products_Template.xlsx",
+                        mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                        key="download_template_btn_unique"
+                    )
+
+            st.markdown("---")
+            st.markdown("#### 📦 تحديث كميات الفروع جماعياً (Excel)")
+            st.download_button("📥 تنزيل نموذج استيراد الكميات للفروع", data=generate_quantities_template(), file_name="Salla_Quantities_Template.xlsx", mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", use_container_width=True, key="btn_dl_qty_template")
+            
+            uploaded_q_file = st.file_uploader("📂 رفع ملف Excel لتحديث الكميات:", type=['xlsx'], key="upload_quantities_file")
+            if uploaded_q_file and st.button("🚀 تحديث كميات الفروع (Bulk)", type="primary", use_container_width=True, key="btn_upload_qty_bulk"):
+                df_q = pd.read_excel(uploaded_q_file)
+                with st.spinner("جاري التحديث في سلة..."):
+                    res_q = process_quantities_import(df_q)
+                    for m in res_q["success"]: st.success(m)
+                    for m in res_q["errors"]: st.error(m)
+
+    st.divider()
 
     # =========================================================================
     # ✅ 1. إعدادات ربط التطبيقات الترويجية والذكية وإدارة الفروع
