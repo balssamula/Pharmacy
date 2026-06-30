@@ -67,25 +67,7 @@ def render_products_page():
 
     with col_widget2:
         with st.expander("🏢 التحكم في المنتجات وكميات الفروع", expanded=False):
-            st.markdown("#### 📥 تصدير المنتجات للتعديل")
-
-            # ✅ زر تحميل المنتجات الحالية
-            if st.button("📥 المنتجات الحالية", use_container_width=True):
-                with st.spinner("🔄 جاري تحميل المنتجات..."):
-                    prod_res = safe_api_request("GET", "https://api.salla.dev/admin/v2/products?per_page=200", headers)
-                    if prod_res and prod_res.get("data"):
-                        current_products = prod_res["data"]
-                        template_data = create_products_template(current_products)
-                        st.download_button(
-                            label="📥 تحميل نموذج تحديث المنتجات الحالية",
-                            data=template_data,
-                            file_name=f"products_current_{datetime.now().strftime('%Y%m%d_%H%M%S')}.xlsx",
-                            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-                            key="download_template_current"
-                        )
-                    else:
-                        st.error("❌ فشل تحميل المنتجات") 
-                        
+            st.markdown("#### 📥 استيراد وتصدير المنتجات اكسيل")                        
             # ✅ إضافة key فريد للزر وتمرير المتغير الصحيح all_products
             if st.button("📥 تحميل القالب الأصلي للتعديل", use_container_width=True, key="btn_download_original_template_unique"):
                 template_bytes = fill_salla_template(all_products)
@@ -97,7 +79,44 @@ def render_products_page():
                         mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
                         key="download_template_btn_unique"
                     )
-
+                    
+            st.markdown("---")
+            # ==========================================
+            # ✅ إضافة زر وأداة رفع ملف المنتجات (إضافة / تحديث)
+            # ==========================================
+            st.markdown("#### 🚀 رفع ملف المنتجات إلى سلة")
+            import_type_label = st.radio("اختر نوع العملية:", ["تحديث منتجات حالية", "إضافة منتجات جديدة"], key="import_type_radio")
+            import_type_value = "products-update" if import_type_label == "تحديث منتجات حالية" else "products"
+            
+            uploaded_products_file = st.file_uploader("📂 ارفع ملف الإكسيل (القالب الأصلي):", type=['xlsx'], key="upload_products_file_salla")
+            
+            if uploaded_products_file and st.button(f"رفع الملف ({import_type_label})", type="primary", use_container_width=True, key="btn_upload_products_bulk"):
+                with st.spinner("جاري رفع الملف إلى خوادم سلة..."):
+                    import requests
+                    
+                    # 1. تجهيز الملف والبيانات كما تطلبها سلة
+                    files = {'file': (uploaded_products_file.name, uploaded_products_file.getvalue(), 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')}
+                    data = {'type': import_type_value}
+                    
+                    # 2. ⚠️ خطوة حرجة جداً: مسح الـ Content-Type حتى تقوم مكتبة requests بإنشاء Boundary صحيح للملف
+                    upload_headers = headers.copy()
+                    if "Content-Type" in upload_headers:
+                        del upload_headers["Content-Type"]
+                        
+                    res = requests.post(
+                        "https://api.salla.dev/admin/v2/products/import",
+                        headers=upload_headers,
+                        files=files,
+                        data=data
+                    )
+                    
+                    if res.status_code < 400:
+                        st.success("✅ تم رفع الملف بنجاح! ستقوم سلة بمعالجته وإضافة/تحديث المنتجات في الخلفية.")
+                    else:
+                        try: err_msg = res.json()
+                        except: err_msg = res.text
+                        st.error(f"❌ فشل الرفع: {err_msg}")
+            
             st.markdown("---")
             st.markdown("#### 📦 تحديث كميات الفروع (Excel)")
             st.download_button("📥 تنزيل نموذج استيراد الكميات للفروع", data=generate_quantities_template(), file_name="Salla_Quantities_Template.xlsx", mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", use_container_width=True, key="btn_dl_qty_template")
