@@ -199,25 +199,32 @@ def import_products_to_salla(file_data: bytes, import_type: str = "products") ->
     
     return results
 
-
 def render_products_page():
-    st.markdown("<h2 style='color:#0f1c2e;'>📦 مركز إدارة المنتجات المتقدمة</h2>", unsafe_allow_html=True)
+    st.markdown("<h2 style='color:#0f1c2e;'>📦 مركز إدارة المنتجات الذكي</h2>", unsafe_allow_html=True)
     
     headers = get_headers()
     if not headers: return
 
-    with st.spinner("جاري تهيئة الإعدادات..."):
+    # 1. جلب البيانات في البداية (لتصبح متاحة للجميع)
+    with st.spinner("🔄 جاري تحميل المنتجات..."):
         branches = get_branches_list()
         
-        offers_res = safe_api_request("GET", "https://api.salla.dev/admin/v2/specialoffers", headers)
-        active_offers = offers_res.get("data", []) if offers_res else []
-        offer_product_ids = set()
-        for offer in active_offers:
-            if offer.get("status") == "active":
-                for p in offer.get("buy", {}).get("products", []):
-                    offer_product_ids.add(str(p.get("id", p) if isinstance(p, dict) else p))
-                for p in offer.get("get", {}).get("products", []):
-                    offer_product_ids.add(str(p.get("id", p) if isinstance(p, dict) else p))
+        prod_res = safe_api_request("GET", "https://api.salla.dev/admin/v2/products?per_page=100", headers)
+        products = prod_res.get("data", []) if prod_res else []
+
+    # 2. الآن يمكننا استخدام المتغير 'products' في أي مكان (أزرار، جداول، فلاتر)
+    
+    # 3. مثال على زر تحميل النموذج الذي يسبب المشكلة
+    if st.button("📥 تحميل القالب الأصلي للتعديل", use_container_width=True):
+        template_bytes = fill_salla_template(products) # الآن المتغير products موجود ومعرف
+        if template_bytes:
+            st.download_button(
+                label="✅ انقر هنا للتنزيل",
+                data=template_bytes,
+                file_name="Salla_Products_Template.xlsx",
+                mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                key="download_template_btn"
+            )
 
     # =========================================================================
     # ✅ 1. إعدادات ربط التطبيقات الترويجية والذكية وإدارة الفروع
