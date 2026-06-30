@@ -68,19 +68,36 @@ def render_products_page():
 
     with col_widget2:
         with st.expander("🏢 التحكم في المنتجات وكميات الفروع", expanded=False):
-            st.markdown("#### 📥 استيراد وتصدير المنتجات اكسيل")                        
-            # ✅ إضافة key فريد للزر وتمرير المتغير الصحيح all_products
-            if st.button("📥 تحميل القالب الأصلي للتعديل", use_container_width=True, key="btn_download_original_template_unique"):
-                template_bytes = fill_salla_template(all_products)
-                if template_bytes:
-                    st.download_button(
-                        label="✅ انقر هنا للتنزيل",
-                        data=template_bytes,
-                        file_name="Salla_Products_Template.xlsx",
-                        mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-                        key="download_template_btn_unique"
-                    )
-                    
+            st.markdown("#### 📥 قوالب المنتجات (Excel)")
+            
+            c_dl1, c_dl2 = st.columns(2)
+            with c_dl1:
+                # 1️⃣ زر تحميل قالب التعديل (للمنتجات الحالية)
+                if st.button("📥 تحميل قالب تعديل المنتجات", use_container_width=True, key="btn_download_update_template"):
+                    template_bytes = fill_salla_template(all_products)
+                    if template_bytes:
+                        st.download_button(
+                            label="✅ تنزيل قالب التعديل",
+                            data=template_bytes,
+                            file_name="Salla_Products_Update_Template.xlsx",
+                            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                            key="dl_update_template_btn_unique"
+                        )
+            
+            with c_dl2:
+                # 2️⃣ زر تحميل قالب الإضافة (للمنتجات الجديدة)
+                if st.button("📥 تحميل قالب إضافة منتجات", use_container_width=True, key="btn_download_new_template"):
+                    # نمرر قائمة فارغة [] لتوليد العناوين (الهيدر) فقط بدون منتجات
+                    template_bytes = generate_salla_new_products_file([]) 
+                    if template_bytes:
+                        st.download_button(
+                            label="✅ تنزيل القالب الفارغ",
+                            data=template_bytes,
+                            file_name="Salla_New_Products_Template.xlsx",
+                            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                            key="dl_new_template_btn_unique"
+                        )
+
             st.markdown("---")
             # ==========================================
             # ✅ إضافة زر وأداة رفع ملف المنتجات (إضافة / تحديث)
