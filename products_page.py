@@ -455,7 +455,7 @@ def render_products_page():
                             
                 with st.popover("✏️ تعديل العناوين"):
                     new_promo = st.text_input("العنوان الترويجي:", value=(p_promotion if p_promotion != "لا يوجد عنوان ترويجي" else ""), key=f"promo_in_{p_id}_{idx}")
-                    new_sub = st.text_input("العنوان الفرعي:", value=(p_subtitle if p_subtitle != "لا يوجد عنوان فرعي" else ""), key=f"sub_in_{p_id}_{idx}")
+                    new_sub = st.text_input("العنوان الفرعي:", value=(p_sub_title if p_sub_title != "لا يوجد عنوان فرعي" else ""), key=f"sub_in_{p_id}_{idx}")
                     
                     if st.button("💾 حفظ العناوين الآمن", key=f"save_promo_{p_id}_{idx}", type="primary", use_container_width=True):
                         with st.spinner("جاري الحفظ الآمن للأسعار..."):
