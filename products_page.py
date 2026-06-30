@@ -28,9 +28,28 @@ def render_products_page():
     with st.spinner("جاري تهيئة الإعدادات وتحميل المنتجات..."):
         branches = get_branches_list()
         
-        # ✅ جلب المنتجات أولاً ليتمكن زر التحميل من رؤيتها (يحل مشكلة products is not defined)
-        prod_res = safe_api_request("GET", "https://api.salla.dev/admin/v2/products?per_page=100", headers)
-        all_products = prod_res.get("data", []) if prod_res else []
+        # ✅ جلب جميع المنتجات عبر التنقل بين الصفحات (Pagination) لضمان جلب الـ 400+ منتج بالكامل
+        all_products = []
+        page = 1
+        while True:
+            url = f"https://api.salla.dev/admin/v2/products?per_page=100&page={page}"
+            res = safe_api_request("GET", url, headers)
+            
+            # الخروج من الحلقة إذا لم يوجد رد أو بيانات
+            if not res or not res.get("data"):
+                break
+                
+            # إضافة منتجات هذه الصفحة إلى القائمة الكلية
+            all_products.extend(res["data"])
+            
+            # التحقق من وجود صفحات أخرى باستخدام بيانات الترقيم من سلة
+            pagination = res.get("pagination", {})
+            total_pages = pagination.get("totalPages", 1)
+            
+            if page >= total_pages:
+                break
+                
+            page += 1
         
         offers_res = safe_api_request("GET", "https://api.salla.dev/admin/v2/specialoffers", headers)
         active_offers = offers_res.get("data", []) if offers_res else []
