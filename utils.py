@@ -207,7 +207,11 @@ def create_products_template(products=None) -> bytes:
             "No.", "النوع", "أسم المنتج", "تصنيف المنتج", "صورة المنتج", 
             "وصف صورة المنتج", "نوع المنتج", "سعر المنتج", "الوصف", 
             "هل يتطلب شحن؟", "رمز المنتج sku", "سعر التكلفة", 
-            "السعر المخفض", "تاريخ بداية التخفيض", "تاريخ نهاية التخفيض"
+            "السعر المخفض", "تاريخ بداية التخفيض", "تاريخ نهاية التخفيض",
+            "اقصي كمية لكل عميل", "إخفاء خيار تحديد الكمية", "اضافة صورة عند الطلب",
+            "السعر المخفض", "وحدة الوزن", "حالة المنتج","الماركة","العنوان الترويجي",
+            "تثبيت المنتج", "الباركود", "السعرات الحرارية","MPN","GTIN",
+            "خاضع للضريبة ؟", "سبب عدم الخضوع للضريبة
         ]
         wb = Workbook()
         ws = wb.active
@@ -443,15 +447,15 @@ def fill_salla_template(products: List[Dict], template_path: str = "Salla_Produc
             
             # Mapping دقيق لأعمدة سلة الرسمية
             ws.cell(row=current_row, column=1).value = p.get('id', '')
+            ws.cell(row=current_row, column=2).value = 'منتج'           # النوع
             ws.cell(row=current_row, column=3).value = p.get('name', '') # أسم المنتج
-            ws.cell(row=current_row, column=7).value = p.get('type', 'منتج') # نوع المنتج
+            ws.cell(row=current_row, column=7).value = p.get('type', 'منتج جاهز') # نوع المنتج
             ws.cell(row=current_row, column=8).value = price # سعر المنتج
             ws.cell(row=current_row, column=10).value = 'نعم' if p.get('unlimited_quantity') else 'لا'
             ws.cell(row=current_row, column=11).value = p.get('sku', '') # رمز المنتج
             ws.cell(row=current_row, column=13).value = sale_price if sale_price > 0 else '' # السعر المخفض
             ws.cell(row=current_row, column=21).value = 'متاح' if p.get('status') else 'مخفي' # الحالة
             ws.cell(row=current_row, column=23).value = p.get('promotion_title', '') # العنوان الترويجي
-            ws.cell(row=current_row, column=22).value = p.get('promotion_subtitle', '') # العنوان الفرعي
             ws.cell(row=current_row, column=29).value = 'نعم' if p.get('with_tax', True) else 'لا'
             if not p.get('with_tax', True):
                 ws.cell(row=current_row, column=30).value = p.get('tax_exemption_cause', '')
