@@ -739,7 +739,7 @@ def generate_salla_new_products_file(products: List[Dict]) -> bytes:
         ws.title = "Salla Products Template Sheet"
 
         # 1. كتابة العناوين
-        row1 = ["بيانات المنتج"] + [""] * 39
+        row1 = ["بيانات المنتج"] + [""] * 18 + ["الخيارات والبيانات الإضافية"] + [""] * 20
         ws.append(row1)
 
         headers = [
@@ -758,35 +758,44 @@ def generate_salla_new_products_file(products: List[Dict]) -> bytes:
         # ==========================================
         # 🎨 تطبيق التنسيقات لمطابقة قالب سلة الأصلي
         # ==========================================
-        # دمج خلايا الصف الأول
-        ws.merge_cells(start_row=1, start_column=1, end_row=1, end_column=len(headers))
+        # ✅ التعديل المطلوب: الدمج من A إلى S (1 إلى 19) ومن T إلى AN (20 إلى 40)
+        ws.merge_cells(start_row=1, start_column=1, end_row=1, end_column=19)
+        ws.merge_cells(start_row=1, start_column=20, end_row=1, end_column=40)
         
-        # إعداد الألوان والخطوط
-        salla_green = PatternFill(start_color="00EBCF", end_color="00EBCF", fill_type="solid")
-        dark_blue = PatternFill(start_color="0F1C2E", end_color="0F1C2E", fill_type="solid")
-        font_title = Font(name="Segoe UI", size=12, bold=True, color="0F1C2E")
+        # ألوان جديدة وجذابة جداً
+        elegant_purple = PatternFill(start_color="8B5CF6", end_color="8B5CF6", fill_type="solid") # بنفسجي جذاب
+        dark_slate = PatternFill(start_color="1E293B", end_color="1E293B", fill_type="solid")     # أردواز داكن للترويسات
+        
+        font_title = Font(name="Segoe UI", size=14, bold=True, color="FFFFFF")
         font_headers = Font(name="Segoe UI", size=11, bold=True, color="FFFFFF")
         center_align = Alignment(horizontal="center", vertical="center", wrap_text=True)
         thin_border = Border(left=Side(style='thin', color='DDDDDD'), right=Side(style='thin', color='DDDDDD'), 
                              top=Side(style='thin', color='DDDDDD'), bottom=Side(style='thin', color='DDDDDD'))
         
-        # تنسيق الصف الأول (عنوان "بيانات المنتج")
-        ws.row_dimensions[1].height = 30
+        # تنسيق الصف الأول (الترويسات العلوية)
+        ws.row_dimensions[1].height = 35
+        
+        # تنسيق القسم الأول (A:S)
         cell_1 = ws.cell(row=1, column=1)
-        cell_1.fill = salla_green
+        cell_1.fill = elegant_purple
         cell_1.font = font_title
         cell_1.alignment = center_align
+
+        # تنسيق القسم الثاني (T:AN)
+        cell_20 = ws.cell(row=1, column=20)
+        cell_20.fill = elegant_purple
+        cell_20.font = font_title
+        cell_20.alignment = center_align
 
         # تنسيق الصف الثاني (رؤوس الأعمدة) وتوسيعها
         ws.row_dimensions[2].height = 25
         for col_idx in range(1, len(headers) + 1):
             cell = ws.cell(row=2, column=col_idx)
-            cell.fill = dark_blue
+            cell.fill = dark_slate
             cell.font = font_headers
             cell.alignment = center_align
             cell.border = thin_border
             
-            # توسيع الأعمدة لتصبح مقروءة بوضوح (عرض 22)
             col_letter = get_column_letter(col_idx)
             ws.column_dimensions[col_letter].width = 22
 
