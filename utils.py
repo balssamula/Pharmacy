@@ -441,7 +441,7 @@ def fill_salla_template(products: List[Dict], template_path: str = "Salla_Produc
         wb = openpyxl.load_workbook(template_path)
         ws = wb["Salla Products Template Sheet"] # الاسم الدقيق للورقة
         
-        # ✅ 2. مسح أي بيانات تجريبية موجودة في القالب لمنع تعارض البيانات
+        # ✅ 2. خطوة هامة جداً: مسح أي بيانات تجريبية موجودة في القالب لمنع تعارض البيانات
         if ws.max_row >= 3:
             ws.delete_rows(3, ws.max_row - 2)
         
@@ -453,50 +453,23 @@ def fill_salla_template(products: List[Dict], template_path: str = "Salla_Produc
             price = get_flat_price(p.get('price', 0))
             sale_price = get_flat_price(p.get('sale_price', 0))
             
-            # ✅ إصلاح 1: استخراج العنوان الترويجي بدقة من القاموس المتداخل
-            promo_obj = p.get('promotion', {})
-            promo_title = p.get('promotion_title') or (promo_obj.get('title') if isinstance(promo_obj, dict) else '')
-            
-            # ✅ إصلاح 2: استخراج تواريخ التخفيض بدقة لمنع مسحها عند التحديث
-            sale_start = p.get('sale_start') or (p.get('sale_price', {}).get('start_at') if isinstance(p.get('sale_price'), dict) else None)
-            sale_end = p.get('sale_end') or (p.get('sale_price', {}).get('expired_at') if isinstance(p.get('sale_price'), dict) else None)
-            
-            # قص الوقت والاكتفاء بالتاريخ YYYY-MM-DD ليتوافق مع الإكسيل
-            if sale_start and isinstance(sale_start, str): sale_start = sale_start[:10]
-            if sale_end and isinstance(sale_end, str): sale_end = sale_end[:10]
-            
-            # ✅ إصلاح 3: استخدام None بدلاً من '' لمنع رفض سلة للمنتجات الجديدة (الملف فارغ)
-            p_id = p.get('id')
-            ws.cell(row=current_row, column=1).value = p_id if p_id else None # No. (إلزامي أن يكون None للمنتجات الجديدة)
-            
-            ws.cell(row=current_row, column=2).value = 'منتج'                 # النوع
-            ws.cell(row=current_row, column=3).value = p.get('name') or 'بدون اسم' # أسم المنتج
-            ws.cell(row=current_row, column=7).value = 'منتج جاهز'            # نوع المنتج
-            ws.cell(row=current_row, column=8).value = price if price > 0 else 0 # سعر المنتج
-            ws.cell(row=current_row, column=10).value = 'نعم'                 # هل يتطلب شحن؟
-            
-            p_sku = p.get('sku')
-            ws.cell(row=current_row, column=11).value = p_sku if p_sku else None # رمز المنتج
-            
-            ws.cell(row=current_row, column=13).value = sale_price if sale_price > 0 else None # السعر المخفض
-            
-            # ✅ إضافة أعمدة التواريخ (14 و 15) للحفاظ عليها في المتجر
-            ws.cell(row=current_row, column=14).value = sale_start if sale_start else None
-            ws.cell(row=current_row, column=15).value = sale_end if sale_end else None
-            
-            ws.cell(row=current_row, column=19).value = 1                     # الوزن
-            ws.cell(row=current_row, column=20).value = 'kg'                  # وحدة الوزن
-            ws.cell(row=current_row, column=21).value = 'متاح' if p.get('status', 'sale') == 'sale' else 'مخفي'
-            
-            # وضع العنوان الترويجي
-            ws.cell(row=current_row, column=23).value = promo_title if promo_title else None
-            
+            # Mapping صارم لأعمدة سلة الرسمية
+            ws.cell(row=current_row, column=1).value = p.get('id', '')        # No.
+            ws.cell(row=current_row, column=2).value = 'منتج'                 # النوع (إلزامي)
+            ws.cell(row=current_row, column=3).value = p.get('name', '')      # أسم المنتج
+            ws.cell(row=current_row, column=7).value = 'منتج جاهز'            # نوع المنتج (يجب أن تكون بالعربية)
+            ws.cell(row=current_row, column=8).value = price                  # سعر المنتج
+            ws.cell(row=current_row, column=10).value = 'نعم'                 # هل يتطلب شحن؟ (إلزامي للمنتج الجاهز)
+            ws.cell(row=current_row, column=11).value = p.get('sku', '')      # رمز المنتج
+            ws.cell(row=current_row, column=13).value = sale_price if sale_price > 0 else '' # السعر المخفض
+            ws.cell(row=current_row, column=19).value = 1                     # الوزن (إلزامي طالما يتطلب شحن)
+            ws.cell(row=current_row, column=20).value = 'kg'                  # وحدة الوزن (إلزامي)
+            ws.cell(row=current_row, column=21).value = 'متاح' if p.get('status', 'sale') == 'sale' else 'مخفي' # الحالة
+            ws.cell(row=current_row, column=23).value = p.get('promotion_title', '') # العنوان الترويجي
             ws.cell(row=current_row, column=29).value = 'نعم' if p.get('with_tax', True) else 'لا'
             
             if not p.get('with_tax', True):
-                ws.cell(row=current_row, column=30).value = p.get('tax_exemption_cause') or 'الأدوية والمعدات الطبية'
-            else:
-                ws.cell(row=current_row, column=30).value = None
+                ws.cell(row=current_row, column=30).value = p.get('tax_exemption_cause', 'الأدوية والمعدات الطبية')
                 
         output = io.BytesIO()
         wb.save(output)
