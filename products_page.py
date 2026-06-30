@@ -284,11 +284,11 @@ def render_products_page():
     
     st.markdown("#### 🎯 فلاتر سريعة:")
     f_col1, f_col2, f_col3, f_col4, f_col5 = st.columns(5)
-    with f_col1: filter_hidden = st.checkbox("المنتجات المخفية فقط", key="f_hidden")
-    with f_col2: filter_no_img = st.checkbox("بدون صورة رئيسية", key="f_no_img")
-    with f_col3: filter_has_promo = st.checkbox("يحتوي على عنوان ترويجي", key="f_promo")
-    with f_col4: filter_discounted = st.checkbox("يوجد عليه خصم", key="f_discount")
-    with f_col5: filter_out_stock = st.checkbox("نفذت الكمية", key="f_out")
+    with f_col1: filter_hidden = st.checkbox("المنتجات المخفية", key="f_hidden")
+    with f_col2: filter_no_img = st.checkbox("منتجات بدون صورة", key="f_no_img")
+    with f_col3: filter_has_promo = st.checkbox("منتجات لها عنوان ترويجي", key="f_promo")
+    with f_col4: filter_discounted = st.checkbox("منتجات مخفضة", key="f_discount")
+    with f_col5: filter_out_stock = st.checkbox("منتجات نفذت كميتها", key="f_out")
 
     available_end_dates = set()
     for p in all_products:
@@ -359,7 +359,7 @@ def render_products_page():
         
         promo = p.get('promotion', {})
         p_promotion = p.get('promotion_title') or (promo.get('title') if isinstance(promo, dict) else '') or "-"
-        p_sub_title = (promo.get('sub_title') if isinstance(promo, dict) else '') or "-"
+        p_sub_title = (promo.get('subtitle') if isinstance(promo, dict) else '') or "-"
         
         price_val = get_flat_price(p.get('price', 0))
         regular_val = get_flat_price(p.get('regular_price', 0))
