@@ -238,52 +238,59 @@ def render_products_page():
                                 if checked:
                                     selected_indices.append(idx)
                         
-                            # ✅ زر رفع المنتجات المختارة
-                            if st.button(f"🚀 رفع {len(selected_indices)} منتج مختار", type="primary", use_container_width=True):
+                            # =========================================================
+                            # ✅ التحديث الجديد: رفع المنتجات دفعة واحدة عبر القالب الأصلي
+                            # =========================================================
+                            if st.button(f"🚀 رفع {len(selected_indices)} منتج مختار (عبر قالب سلة)", type="primary", use_container_width=True):
                                 if not selected_indices:
                                     st.warning("⚠️ الرجاء اختيار منتج واحد على الأقل للرفع")
                                 else:
-                                    with st.spinner(f"🔄 جاري رفع {len(selected_indices)} منتج..."):
-                                        success_count = 0
-                                        error_count = 0
-                                    
+                                    with st.spinner(f"🔄 جاري تحضير القالب ورفع {len(selected_indices)} منتج لمتجرك..."):
+                                        import requests
+                                        
+                                        # 1. تجهيز قائمة المنتجات لتتوافق مع دالة القالب
+                                        products_for_template = []
                                         for idx in selected_indices:
                                             product = new_products[idx]
-                                            try:
-                                                is_taxable = str(product['خاضع للضريبة']).strip().lower() in ['نعم', 'true', '1', 'yes']
+                                            is_taxable = str(product['خاضع للضريبة']).strip().lower() in ['نعم', 'true', '1', 'yes']
                                             
-                                                product_data = {
-                                                    "name": str(product['اسم المنتج']),
-                                                    "price": float(product['سعر المنتج']) if product['سعر المنتج'] else 0,
-                                                    "type": "product",
-                                                    "status": "sale",
-                                                    "sku": f"SKU-{product['رقم المنتج']}",
-                                                    "with_tax": is_taxable
-                                                }
+                                            products_for_template.append({
+                                                "name": str(product['اسم المنتج']),
+                                                "price": float(product['سعر المنتج']) if product['سعر المنتج'] else 0,
+                                                "type": "product", # منتج جاهز
+                                                "sku": str(product['رقم المنتج']),
+                                                "with_tax": is_taxable,
+                                                "tax_exemption_cause": "" if is_taxable else "الأدوية والمعدات الطبية"
+                                            })
+                                        
+                                        # 2. إنشاء القالب الأصلي في الذاكرة باستخدام دالتنا السابقة
+                                        template_bytes = fill_salla_template(products_for_template)
+                                        
+                                        if template_bytes:
+                                            # 3. إرسال القالب مباشرة إلى مسار الاستيراد
+                                            files = {'file': ('Salla_Products_Template.xlsx', template_bytes, 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')}
+                                            data = {'type': 'products'} # "products" لإضافة منتجات جديدة كلياً
                                             
-                                                if not is_taxable:
-                                                    product_data['tax_exemption_cause'] = "الأدوية والمعدات الطبية"
+                                            # حذف Content-Type ليقوم requests بضبط الـ boundary تلقائياً للملفات
+                                            upload_headers = headers.copy()
+                                            if "Content-Type" in upload_headers:
+                                                del upload_headers["Content-Type"]
+                                                
+                                            res = requests.post(
+                                                "https://api.salla.dev/admin/v2/products/import",
+                                                headers=upload_headers,
+                                                files=files,
+                                                data=data
+                                            )
                                             
-                                                response = safe_api_request(
-                                                    "POST",
-                                                    "https://api.salla.dev/admin/v2/products",
-                                                    headers,
-                                                    json=product_data
-                                                )
-                                                if response:
-                                                    success_count += 1
-                                                else:
-                                                    error_count += 1
-                                            except Exception as e:
-                                                error_count += 1
-                                                st.error(f"❌ خطأ في رفع المنتج {product['رقم المنتج']}: {str(e)}")
-                                    
-                                        st.success(f"✅ تم رفع {success_count} منتج بنجاح")
-                                        if error_count > 0:
-                                            st.warning(f"⚠️ فشل رفع {error_count} منتج")
-                                    
-                                        if success_count > 0:
-                                            st.rerun()
+                                            if res.status_code < 400:
+                                                st.success(f"✅ تم رفع الملف بنجاح! ستقوم سلة بمعالجة وإضافة {len(selected_indices)} منتج في الخلفية.")
+                                            else:
+                                                try: err_msg = res.json()
+                                                except: err_msg = res.text
+                                                st.error(f"❌ فشل الرفع: {err_msg}")
+                                        else:
+                                            st.error("❌ فشل توليد قالب سلة. يرجى التأكد من وجود الملف الأصلي 'Salla_Products_Template.xlsx' في المجلد.")
                         else:
                             st.info("ℹ️ جميع منتجات النظام موجودة بالفعل في سلة")
             except Exception as e:
