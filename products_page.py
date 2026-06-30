@@ -278,7 +278,7 @@ def render_products_page():
                                         if template_bytes:
                                             # 3. إرسال القالب مباشرة إلى مسار الاستيراد
                                             files = {'file': ('Salla_Products_Template.xlsx', template_bytes, 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')}
-                                            data = {'type': 'products'} # "products" لإضافة منتجات جديدة كلياً
+                                            data = {'type': 'products-update'} # "products" لإضافة منتجات جديدة كلياً
                                             
                                             # حذف Content-Type ليقوم requests بضبط الـ boundary تلقائياً للملفات
                                             upload_headers = headers.copy()
