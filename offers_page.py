@@ -85,86 +85,86 @@ def render_offers_page():
                     st.success(f"✅ تم إيقاف {success_count} عرض بنجاح من أصل {len(active_offers)}")
                     if success_count > 0: st.rerun()
     
-    with col_bulk2:
-        with st.popover("📅 تمديد العروض المنتهية"):
-            st.markdown("تمديد العروض التي تنتهي في تاريخ محدد")
-            st.markdown("**📅 تاريخ انتهاء العرض الحالي:**")
+with col_bulk2:
+        with st.popover("📅 تمديد/إيقاف العروض المنتهية"):
+            st.markdown("إدارة العروض التي تنتهي في تاريخ محدد")
+            st.markdown("**📅 تاريخ انتهاء العرض الحالي (للفلترة):**")
             col_date1, col_time1 = st.columns(2)
             with col_date1:
                 target_date = st.date_input("اختر التاريخ:", value=datetime.now().date(), key="bulk_extend_target_date")
             with col_time1:
                 target_time = st.time_input("اختر الوقت:", value=datetime.now().time().replace(minute=59, second=59), key="bulk_extend_target_time", step=60)
             target_datetime = datetime.combine(target_date, target_time)
-            
-            st.markdown("**📅 التاريخ الجديد للتمديد:**")
-            col_date2, col_time2 = st.columns(2)
-            with col_date2:
-                new_date = st.date_input("اختر التاريخ الجديد:", value=datetime.now().date() + timedelta(days=30), key="bulk_extend_new_date")
-            with col_time2:
-                new_time = st.time_input("اختر الوقت الجديد:", value=datetime.now().time().replace(minute=59, second=59), key="bulk_extend_new_time", step=60)
-            new_datetime = datetime.combine(new_date, new_time)
-            
             target_str = target_datetime.strftime('%Y-%m-%d')
+            
             matching_offers = [o for o in raw_offers if o.get('expiry_date', '') and o.get('expiry_date', '').startswith(target_str)]
-            
             st.info(f"📊 عدد العروض التي تنتهي في {target_str}: **{len(matching_offers)}** عرض")
-            st.info(f"📅 سيتم تمديدها إلى **{new_datetime.strftime('%Y-%m-%d %H:%M:%S')}**")
+
+            # --- الخيارات الجديدة للإجراء المطلوب ---
+            st.markdown("**🛠️ الإجراء المطلوب تنفيذه:**")
+            action_type = st.radio("اختر الإجراء:", ["تاريخ جديد للتمديد", "إلغاء التفعيل (إيقاف)"], key="bulk_expired_action", label_visibility="collapsed")
             
-            if st.button("🔄 تطبيق التمديد على جميع العروض", use_container_width=True, type="primary"):
+            if action_type == "تاريخ جديد للتمديد":
+                st.markdown("**📅 التاريخ الجديد للتمديد:**")
+                col_date2, col_time2 = st.columns(2)
+                with col_date2:
+                    new_date = st.date_input("اختر التاريخ الجديد:", value=datetime.now().date() + timedelta(days=30), key="bulk_extend_new_date")
+                with col_time2:
+                    new_time = st.time_input("اختر الوقت الجديد:", value=datetime.now().time().replace(minute=59, second=59), key="bulk_extend_new_time", step=60)
+                new_datetime = datetime.combine(new_date, new_time)
+                new_datetime_str = new_datetime.strftime('%Y-%m-%d %H:%M:%S')
+                st.info(f"📅 سيتم تمديد العروض المطابقة إلى **{new_datetime_str}**")
+                btn_lbl = "🔄 تطبيق التمديد"
+            else:
+                st.info("🔴 سيتم إيقاف العروض المطابقة ونقلها للمسودات")
+                btn_lbl = "🛑 تطبيق الإيقاف وإلغاء التفعيل"
+            
+            if st.button(btn_lbl, use_container_width=True, type="primary"):
                 if not matching_offers:
                     st.warning(f"⚠️ لا توجد عروض تنتهي في تاريخ {target_str}")
                 else:
-                    new_datetime_str = new_datetime.strftime('%Y-%m-%d %H:%M:%S')
-                    with st.spinner(f"🔄 جاري تمديد {len(matching_offers)} عرض..."):
+                    with st.spinner(f"🔄 جاري معالجة {len(matching_offers)} عرض..."):
                         success_count = 0
                         for offer in matching_offers:
                             offer_id = offer.get('id')
                             if offer_id:
-                                current = safe_api_request("GET", f"{SALLA_API_URL}/{offer_id}", headers)
-                                if current and current.get('data'):
-                                    offer_data = current['data']
-                                    offer_data['expiry_date'] = new_datetime_str
-                                    
-                                    if 'buy' in offer_data and isinstance(offer_data['buy'], dict):
-                                        if 'products' in offer_data['buy'] and isinstance(offer_data['buy']['products'], list):
-                                            offer_data['buy']['products'] = [p.get('id') if isinstance(p, dict) else p for p in offer_data['buy']['products']]
-                                        if 'categories' in offer_data['buy'] and isinstance(offer_data['buy']['categories'], list):
-                                            offer_data['buy']['categories'] = [c.get('id') if isinstance(c, dict) else c for c in offer_data['buy']['categories']]
-                                            
-                                    if 'get' in offer_data and isinstance(offer_data['get'], dict):
-                                        if 'products' in offer_data['get'] and isinstance(offer_data['get']['products'], list):
-                                            offer_data['get']['products'] = [p.get('id') if isinstance(p, dict) else p for p in offer_data['get']['products']]
-                                        if 'categories' in offer_data['get'] and isinstance(offer_data['get']['categories'], list):
-                                            offer_data['get']['categories'] = [c.get('id') if isinstance(c, dict) else c for c in offer_data['get']['categories']]
-                                            
-                                    if 'customer_groups' in offer_data and isinstance(offer_data['customer_groups'], list):
-                                        offer_data['customer_groups'] = [g.get('id') if isinstance(g, dict) else g for g in offer_data['customer_groups']]
-                                    
-                                    for key in ['id', 'created_at', 'updated_at', 'show_price_after_discount', 'show_discounts_table_message']:
-                                        offer_data.pop(key, None)
-                                    
-                                    res = safe_api_request("PUT", f"{SALLA_API_URL}/{offer_id}", headers, json=offer_data)
+                                if action_type == "إلغاء التفعيل (إيقاف)":
+                                    # إجراء إيقاف العرض السريع
+                                    res = safe_api_request("PUT", f"{SALLA_API_URL}/{offer_id}/status", headers, json={"status": "inactive"})
                                     if res: success_count += 1
-                        st.success(f"✅ تم تمديد {success_count} عرض بنجاح من أصل {len(matching_offers)}")
+                                else:
+                                    # إجراء التمديد (نفس الكود القديم المعقد لضمان سلامة العرض)
+                                    current = safe_api_request("GET", f"{SALLA_API_URL}/{offer_id}", headers)
+                                    if current and current.get('data'):
+                                        offer_data = current['data']
+                                        offer_data['expiry_date'] = new_datetime_str
+                                        
+                                        if 'buy' in offer_data and isinstance(offer_data['buy'], dict):
+                                            if 'products' in offer_data['buy'] and isinstance(offer_data['buy']['products'], list):
+                                                offer_data['buy']['products'] = [p.get('id') if isinstance(p, dict) else p for p in offer_data['buy']['products']]
+                                            if 'categories' in offer_data['buy'] and isinstance(offer_data['buy']['categories'], list):
+                                                offer_data['buy']['categories'] = [c.get('id') if isinstance(c, dict) else c for c in offer_data['buy']['categories']]
+                                                
+                                        if 'get' in offer_data and isinstance(offer_data['get'], dict):
+                                            if 'products' in offer_data['get'] and isinstance(offer_data['get']['products'], list):
+                                                offer_data['get']['products'] = [p.get('id') if isinstance(p, dict) else p for p in offer_data['get']['products']]
+                                            if 'categories' in offer_data['get'] and isinstance(offer_data['get']['categories'], list):
+                                                offer_data['get']['categories'] = [c.get('id') if isinstance(c, dict) else c for c in offer_data['get']['categories']]
+                                                
+                                        if 'customer_groups' in offer_data and isinstance(offer_data['customer_groups'], list):
+                                            offer_data['customer_groups'] = [g.get('id') if isinstance(g, dict) else g for g in offer_data['customer_groups']]
+                                        
+                                        for key in ['id', 'created_at', 'updated_at', 'show_price_after_discount', 'show_discounts_table_message']:
+                                            offer_data.pop(key, None)
+                                        
+                                        res = safe_api_request("PUT", f"{SALLA_API_URL}/{offer_id}", headers, json=offer_data)
+                                        if res: success_count += 1
+                                        
+                        action_msg = "تمديد" if action_type == "تاريخ جديد للتمديد" else "إيقاف"
+                        st.success(f"✅ تم {action_msg} {success_count} عرض بنجاح من أصل {len(matching_offers)}")
                         if success_count > 0: st.rerun()
-    
-    with col_bulk3:
-        # الاستفادة من العروض المفلترة المخزنة في الجلسة من التحديث السابق لزر التصدير العلوي
-        if "filtered_offers" in st.session_state and st.session_state["filtered_offers"] and len(st.session_state["filtered_offers"]) < len(raw_offers):
-            st.download_button(
-                label="📥 تصدير العروض المفلترة",
-                data=export_offers_to_excel(st.session_state["filtered_offers"]),
-                file_name=f"filtered_offers_export_{datetime.now().strftime('%Y%m%d_%H%M%S')}.xlsx",
-                mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-                key="bulk_export_filtered_top_active",
-                use_container_width=True,
-                type="secondary"
-            )
-        else:
-            if st.button("📥 تصدير العروض المفلترة", use_container_width=True, type="secondary", key="bulk_export_filtered_top_disabled"):
-                st.info("💡 يرجى كتابة أو اختيار فلاتر البحث في الأسفل أولاً، ليقوم الزر بحصرها وتصديرها فوراً!")
 
-    with col_bulk4:
+    with col_bulk3:
         if st.button("🚀 تطبيق العرض مع كوبون التخفيض لجميع العروض", type="primary", use_container_width=True):
             headers = get_headers()
             with st.spinner("🔄 جاري قراءة التفاصيل الكاملة وتحديث كافة العروض النشطة..."):
@@ -239,6 +239,22 @@ def render_offers_page():
                         success_count += 1
                     
                 st.success(f"✅ تم تفعيل دمج الكوبونات لـ {success_count} عرض بنجاح!")
+
+    with col_bulk4:
+        # الاستفادة من العروض المفلترة المخزنة في الجلسة من التحديث السابق لزر التصدير العلوي
+        if "filtered_offers" in st.session_state and st.session_state["filtered_offers"] and len(st.session_state["filtered_offers"]) < len(raw_offers):
+            st.download_button(
+                label="📥 تصدير العروض المفلترة",
+                data=export_offers_to_excel(st.session_state["filtered_offers"]),
+                file_name=f"filtered_offers_export_{datetime.now().strftime('%Y%m%d_%H%M%S')}.xlsx",
+                mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                key="bulk_export_filtered_top_active",
+                use_container_width=True,
+                type="secondary"
+            )
+        else:
+            if st.button("📥 تصدير العروض المفلترة", use_container_width=True, type="secondary", key="bulk_export_filtered_top_disabled"):
+                st.info("💡 يرجى كتابة أو اختيار فلاتر البحث في الأسفل أولاً، ليقوم الزر بحصرها وتصديرها فوراً!")
                 
     # --- حاوية إنشاء عرض جديد ---
     with st.expander("➕ إنشاء عرض ترويجي جديد", expanded=False):
