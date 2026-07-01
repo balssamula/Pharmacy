@@ -438,18 +438,27 @@ def render_products_page():
         else:
             all_products = st.session_state.get("all_products", [])
 
-    # ✅ إضافة خيار تحديث تلقائي
-    with st.expander("⚙️ إعدادات التحميل", expanded=False):
+    # ✅ إضافة خيارات الأداء
+    with st.expander("⚙️ إعدادات التحميل والأداء", expanded=False):
         st.info("""
-        **ملاحظات حول أداء التطبيق:**
+        **تحسينات الأداء:**
+        - عند تحديث منتج واحد، يتم تحديث البيانات في الذاكرة مباشرة
         - يتم تحميل جميع المنتجات في الذاكرة مرة واحدة فقط عند الضغط على زر المزامنة
-        - عمليات البحث والفلترة تعمل على البيانات المخزنة محلياً بدون طلب API إضافي
         - إذا قمت بإضافة أو تعديل منتجات في المتجر، اضغط على زر المزامنة لتحديث البيانات
         """)
         
-        if st.button("🔄 إعادة تحميل المنتجات من المتجر", use_container_width=True):
-            st.session_state["all_products_fetched"] = False
-            st.rerun()
+        col_perf1, col_perf2 = st.columns(2)
+        with col_perf1:
+            if st.button("🔄 إعادة تحميل المنتجات (كامل)", use_container_width=True):
+                st.session_state["all_products_fetched"] = False
+                st.rerun()
+        
+        with col_perf2:
+            if st.button("🗑️ مسح الذاكرة المؤقتة", use_container_width=True):
+                st.session_state["all_products"] = []
+                st.session_state["all_products_fetched"] = False
+                st.success("✅ تم مسح الذاكرة المؤقتة")
+                st.rerun()
             
     # عرض عدد المنتجات الفعلي
     st.info(f"📊 إجمالي عدد المنتجات في المتجر: {len(all_products)}")
