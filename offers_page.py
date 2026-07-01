@@ -163,51 +163,58 @@ def render_offers_page():
     with col_bulk4:
         if st.button("🚀 تفعيل تطبيق العرض مع كوبون التخفيض على جميع العروض", type="primary", use_container_width=True):
             headers = get_headers()
-            with st.spinner("🔄 جاري قراءة وتحديث كافة العروض النشطة..."):
+            with st.spinner("🔄 جاري قراءة التفاصيل الكاملة وتحديث كافة العروض النشطة..."):
                 offers_res = safe_api_request("GET", "https://api.salla.dev/admin/v2/specialoffers", headers)
                 active_offers = [o for o in offers_res.get("data", []) if o.get("status") == "active"]
             
                 success_count = 0
-                for offer in active_offers:
-                    offer_id = offer.get("id")
+                for offer_summary in active_offers:
+                    offer_id = offer_summary.get("id")
+                
+                    # ✅ الحل الجذري: جلب التفاصيل "الكاملة" للعرض من سلة لتفادي اختفاء مصفوفة المنتجات
+                    full_offer_res = safe_api_request("GET", f"https://api.salla.dev/admin/v2/specialoffers/{offer_id}", headers)
+                    if not full_offer_res or not full_offer_res.get("data"):
+                        continue
+                
+                    full_offer = full_offer_res["data"]
                 
                     def get_id(field_name):
-                        val = offer.get(field_name)
+                        val = full_offer.get(field_name)
                         return val.get("id") if isinstance(val, dict) else val
 
                     payload = {
-                        "name": offer.get("name", "عرض خاص"),
+                        "name": full_offer.get("name", "عرض خاص"),
                         "status": get_id("status") or "active",
                         "offer_type": get_id("offer_type") or "buy_x_get_y",
                         "applied_channel": get_id("applied_channel") or "browser",
                         "applied_to": get_id("applied_to") or "all",
-                        "applied_with_coupon": True 
+                        "applied_with_coupon": True  # التعديل السحري هنا
                     }
                 
-                    if offer.get("start_date"): payload["start_date"] = offer["start_date"]
-                    if offer.get("end_date"): payload["end_date"] = offer["end_date"]
+                    if full_offer.get("start_date"): payload["start_date"] = full_offer["start_date"]
+                    if full_offer.get("end_date"): payload["end_date"] = full_offer["end_date"]
                 
                     for key in ["max_discount_amount", "min_purchase_amount", "min_items_count"]:
-                        if offer.get(key) is not None:
-                            payload[key] = float(offer[key]) if "amount" in key else int(offer[key])
+                        if full_offer.get(key) is not None:
+                            payload[key] = float(full_offer[key]) if "amount" in key else int(full_offer[key])
                         
-                    if offer.get("customer_groups"):
-                        payload["customer_groups"] = [g.get("id", g) if isinstance(g, dict) else g for g in offer["customer_groups"]]
+                    if full_offer.get("customer_groups"):
+                        payload["customer_groups"] = [g.get("id", g) if isinstance(g, dict) else g for g in full_offer["customer_groups"]]
                     
-                    # ✅ التعديل الجذري: لا نرسل حقل products أبداً إلا إذا كان يحتوي على منتجات فعلية
-                    if offer.get("buy"):
-                        buy = offer["buy"]
+                    if full_offer.get("buy"):
+                        buy = full_offer["buy"]
                         b_type = buy.get("type", {}).get("id") if isinstance(buy.get("type"), dict) else buy.get("type")
                         payload["buy"] = {
                             "type": b_type or "quantity", 
                             "quantity": int(buy.get("quantity", 1))
                         }
                         b_prods = [p.get("id", p) if isinstance(p, dict) else p for p in buy.get("products", [])]
-                        if b_prods:  # يتم الإرسال فقط إذا لم تكن المصفوفة فارغة
-                            payload["buy"]["products"] = b_prods
+                        if b_prods: payload["buy"]["products"] = b_prods
+                        b_cats = [c.get("id", c) if isinstance(c, dict) else c for c in buy.get("categories", [])]
+                        if b_cats: payload["buy"]["categories"] = b_cats
                         
-                    if offer.get("get"):
-                        get_obj = offer["get"]
+                    if full_offer.get("get"):
+                        get_obj = full_offer["get"]
                         g_type = get_obj.get("type", {}).get("id") if isinstance(get_obj.get("type"), dict) else get_obj.get("type")
                         g_disc_type = get_obj.get("discount_type", {}).get("id") if isinstance(get_obj.get("discount_type"), dict) else get_obj.get("discount_type")
                         payload["get"] = {
@@ -219,8 +226,9 @@ def render_offers_page():
                             payload["get"]["discount_amount"] = float(get_obj["discount_amount"])
                         
                         g_prods = [p.get("id", p) if isinstance(p, dict) else p for p in get_obj.get("products", [])]
-                        if g_prods:  # يتم الإرسال فقط إذا لم تكن المصفوفة فارغة
-                            payload["get"]["products"] = g_prods
+                        if g_prods: payload["get"]["products"] = g_prods
+                        g_cats = [c.get("id", c) if isinstance(c, dict) else c for c in get_obj.get("categories", [])]
+                        if g_cats: payload["get"]["categories"] = g_cats
 
                     res = safe_api_request("PUT", f"https://api.salla.dev/admin/v2/specialoffers/{offer_id}", headers, json=payload)
                     if res:
