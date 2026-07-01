@@ -2,6 +2,8 @@ import streamlit as st
 import pandas as pd
 import requests
 import pickle
+import threading
+import time
 import io
 import os
 from datetime import datetime
@@ -28,7 +30,25 @@ def load_products_from_cache():
             return pickle.load(f)
     except:
         return []
-        
+
+# ✅ استخدام cache لتخزين المنتجات
+@st.cache_data(ttl=3600)  # تخزين لمدة ساعة
+def fetch_all_products(headers):
+    """جلب جميع المنتجات مع التخزين المؤقت"""
+    all_products = []
+    page = 1
+    
+    while True:
+        res = safe_api_request("GET", f"https://api.salla.dev/admin/v2/products?per_page=100&page={page}", headers)
+        if not res or not res.get("data"):
+            break
+        all_products.extend(res["data"])
+        if page >= res.get("pagination", {}).get("totalPages", 1):
+            break
+        page += 1
+    
+    return all_products
+            
 def render_products_page():
     # ترويسة جمالية لصفحة المنتجات
     st.markdown("""
@@ -56,59 +76,20 @@ def render_products_page():
     c_title, c_btn = st.columns([3, 1])
     with c_btn:
         if st.button("🔄 مزامنة كافة المنتجات", use_container_width=True, type="primary"):
-            with st.spinner("⏳ جاري سحب كافة المنتجات والعروض..."):
-                progress_bar = st.progress(0)
-                all_p = []
-                page = 1
-                total_pages = None
-        
-                while True:
-                    res = safe_api_request("GET", f"https://api.salla.dev/admin/v2/products?per_page=100&page={page}", headers)
-                    if not res or not res.get("data"):
-                        break
-            
-                    if total_pages is None:
-                        total_pages = res.get("pagination", {}).get("totalPages", 1)
-            
-                    all_p.extend(res["data"])
-                    progress_bar.progress(page / total_pages)
-            
-                    if page >= total_pages:
-                        break
-                    page += 1
-        
-                progress_bar.empty()
-                
-                # تحديث بيانات الفروع
-                st.session_state["branches"] = get_branches_list()
-                branches = st.session_state["branches"]
-                
-                # جلب العروض النشطة
-                offers_res = safe_api_request("GET", "https://api.salla.dev/admin/v2/specialoffers", headers)
-                active_offers = offers_res.get("data", []) if offers_res else []
-                offer_ids = set()
-                for offer in active_offers:
-                    if offer.get("status") == "active":
-                        for op in offer.get("buy", {}).get("products", []): 
-                            offer_ids.add(str(op.get("id", op) if isinstance(op, dict) else op))
-                        for op in offer.get("get", {}).get("products", []): 
-                            offer_ids.add(str(op.get("id", op) if isinstance(op, dict) else op))
-                st.session_state["offer_product_ids"] = offer_ids
-
-                # جلب المنتجات بالترقيم
-                all_p = []
-                page = 1
-                while True:
-                    res = safe_api_request("GET", f"https://api.salla.dev/admin/v2/products?per_page=100&page={page}", headers)
-                    if not res or not res.get("data"): break
-                    all_p.extend(res["data"])
-                    if page >= res.get("pagination", {}).get("totalPages", 1): break
-                    page += 1
-                st.session_state["all_products"] = all_p
-                st.session_state["all_products_fetched"] = True
-                st.session_state["last_sync_time"] = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-                st.success(f"✅ تم سحب {len(all_p)} منتج بنجاح!")
-                st.rerun()
+            # ✅ مسح الكاش القديم وجلب جديد
+            st.cache_data.clear()
+            st.session_state["all_products_fetched"] = False
+            st.rerun()
+    
+    # ✅ استخدام الكاش لجلب المنتجات
+    if not st.session_state.get("all_products_fetched", False):
+        with st.spinner("⏳ جاري تحميل المنتجات..."):
+            all_products = fetch_all_products(headers)
+            st.session_state["all_products"] = all_products
+            st.session_state["all_products_fetched"] = True
+            st.session_state["last_sync_time"] = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+            st.success(f"✅ تم تحميل {len(all_products)} منتج")
+            st.rerun()
 
     # ✅ عرض حالة المنتجات
     if st.session_state["all_products_fetched"]:
