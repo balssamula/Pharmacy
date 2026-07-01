@@ -601,6 +601,7 @@ def render_products_page():
                 st.markdown(f"🔗 [🌐 عرض المنتج في المتجر]({p_url})")
             
             with c_pricing:
+                # عرض السعر الحالي
                 if has_discount:
                     st.markdown(f"""
                         <div style="background:#fff3cd; padding:10px; border-radius:8px; border-right:5px solid #ffc107;">
@@ -617,137 +618,122 @@ def render_products_page():
                             <b style="color:#2d3748; font-size:14px;">سعر ثابت: {base_price:,.2f} SAR</b>
                         </div>
                     """, unsafe_allow_html=True)
+                
+                # ✅ نافذة تحديث الأسعار
+                with st.expander("💰 تحديث الأسعار", expanded=False):
+                    # ✅ جلب السعر الأصلي الحقيقي من المنتج في session_state
+                    current_product = None
+                    for p in st.session_state.get("all_products", []):
+                        if str(p.get('id')) == p_id:
+                            current_product = p
+                            break
                     
-                # ✅ إضافة زر تحديث الأسعار
-                with st.popover("تحديث الأسعار", icon="💰"):
-                    # ✅ تعريف المتغيرات أولاً
-                    st.markdown("**تحديث السعر الأصلي:**")
+                    # ✅ استخدام السعر الأصلي الحقيقي من المنتج
+                    real_base_price = get_flat_price(current_product.get('price', 0)) if current_product else base_price
+                    real_sale_price = get_flat_price(current_product.get('sale_price', 0)) if current_product else display_sale_price
+                    
+                    # ✅ عرض السعر الحقيقي الحالي
+                    st.info(f"💰 السعر الأصلي الحالي: **{real_base_price:.2f} SAR** | السعر المخفض الحالي: **{real_sale_price:.2f} SAR**")
+                    
+                    # السعر الأصلي
                     new_price = st.number_input(
-                        "السعر الجديد (SAR)", 
+                        "السعر الأصلي الجديد (SAR)", 
                         min_value=0.0, 
-                        value=float(base_price),
+                        value=float(real_base_price),
                         step=0.5,
                         key=f"new_price_{p_id}_{idx}"
                     )
                     
-                    st.markdown("---")
-                    st.markdown("**تحديث السعر المخفض:**")
+                    # السعر المخفض
                     new_sale_price = st.number_input(
-                        "السعر المخفض الجديد (SAR)", 
+                        "السعر المخفض الجديد (SAR) (اترك 0 للإزالة)", 
                         min_value=0.0, 
-                        value=float(display_sale_price) if has_discount else 0.0,
+                        value=float(real_sale_price) if real_sale_price > 0 else 0.0,
                         step=0.5,
                         key=f"new_sale_price_{p_id}_{idx}"
                     )
                     
+                    # ✅ تواريخ التخفيض - استخدام القيم الموجودة فقط
                     col_date1, col_date2 = st.columns(2)
                     with col_date1:
-                        try:
-                            default_start = datetime.strptime(sale_start_date, "%Y-%m-%d") if sale_start_date != "غير محدد" else datetime.now()
-                        except:
-                            default_start = datetime.now()
-                        sale_start_date_input = st.date_input(
+                        # ✅ استخدام التاريخ الموجود أو تركه فارغاً
+                        if sale_start_date != "غير محدد" and sale_start_date:
+                            try:
+                                default_start = datetime.strptime(sale_start_date, "%Y-%m-%d")
+                            except:
+                                default_start = None
+                        else:
+                            default_start = None
+                        
+                        sale_start_input = st.date_input(
                             "بداية التخفيض",
                             value=default_start,
-                            key=f"sale_start_{p_id}_{idx}"
+                            key=f"sale_start_{p_id}_{idx}",
+                            help="اترك فارغاً إذا لم يكن هناك تاريخ بداية"
                         )
                     
                     with col_date2:
-                        try:
-                            default_end = datetime.strptime(sale_end_date, "%Y-%m-%d") if sale_end_date != "غير محدد" else datetime.now()
-                        except:
-                            default_end = datetime.now()
-                        sale_end_date_input = st.date_input(
+                        if sale_end_date != "غير محدد" and sale_end_date:
+                            try:
+                                default_end = datetime.strptime(sale_end_date, "%Y-%m-%d")
+                            except:
+                                default_end = None
+                        else:
+                            default_end = None
+                        
+                        sale_end_input = st.date_input(
                             "نهاية التخفيض",
                             value=default_end,
-                            key=f"sale_end_{p_id}_{idx}"
+                            key=f"sale_end_{p_id}_{idx}",
+                            help="اترك فارغاً إذا لم يكن هناك تاريخ نهاية"
                         )
                     
-                    col_update1, col_update2 = st.columns(2)
-                    with col_update1:
+                    # أزرار التحديث
+                    col_btn1, col_btn2 = st.columns(2)
+                    with col_btn1:
                         if st.button("💾 تحديث السعر الأصلي", key=f"update_price_{p_id}_{idx}", use_container_width=True):
-                            with st.spinner("جاري تحديث السعر..."):
-                                # ✅ التحقق من صحة السعر
-                                if new_price <= 0:
-                                    st.error("⚠️ السعر يجب أن يكون أكبر من صفر")
-                                elif has_discount and new_price <= display_sale_price:
-                                    st.error(f"⚠️ السعر الأصلي ({new_price}) يجب أن يكون أكبر من السعر المخفض ({display_sale_price})")
-                                else:
+                            if new_price <= 0:
+                                st.error("⚠️ السعر يجب أن يكون أكبر من صفر")
+                            elif new_sale_price > 0 and new_price <= new_sale_price:
+                                st.error(f"⚠️ السعر الأصلي ({new_price}) يجب أن يكون أكبر من السعر المخفض ({new_sale_price})")
+                            else:
+                                with st.spinner("جاري التحديث..."):
                                     if update_product_price(int(p_id), new_price):
                                         st.success("✅ تم تحديث السعر الأصلي!")
-                                        # ✅ تحديث المتغيرات المحلية دون إعادة تحميل
-                                        base_price = new_price
                                         st.rerun()
                                     else:
                                         st.error("❌ فشل تحديث السعر")
                     
-                    with col_update2:
+                    with col_btn2:
                         if st.button("💾 تحديث السعر المخفض", key=f"update_sale_{p_id}_{idx}", use_container_width=True):
-                            with st.spinner("جاري تحديث السعر المخفض..."):
-                                # ✅ التحقق من صحة السعر المخفض
-                                if new_sale_price > 0:
-                                    if new_sale_price >= base_price:
-                                        st.error(f"⚠️ السعر المخفض ({new_sale_price}) يجب أن يكون أقل من السعر الأصلي ({base_price})")
-                                    else:
+                            # ✅ استخدام السعر الأصلي الحقيقي للتحقق
+                            if new_sale_price > 0:
+                                if new_sale_price >= new_price:
+                                    st.error(f"⚠️ السعر المخفض ({new_sale_price}) يجب أن يكون أقل من السعر الأصلي ({new_price})")
+                                else:
+                                    with st.spinner("جاري التحديث..."):
+                                        # ✅ إرسال التواريخ فقط إذا تم إدخالها
+                                        start_date_str = sale_start_input.strftime("%Y-%m-%d") if sale_start_input else None
+                                        end_date_str = sale_end_input.strftime("%Y-%m-%d") if sale_end_input else None
+                                        
                                         if update_product_sale_price(
                                             int(p_id), 
                                             new_sale_price,
-                                            sale_start_date_input.strftime("%Y-%m-%d") if new_sale_price > 0 else None,
-                                            sale_end_date_input.strftime("%Y-%m-%d") if new_sale_price > 0 else None
+                                            start_date_str,
+                                            end_date_str
                                         ):
                                             st.success("✅ تم تحديث السعر المخفض!")
-                                            display_sale_price = new_sale_price
                                             st.rerun()
                                         else:
                                             st.error("❌ فشل تحديث السعر المخفض")
-                                else:
-                                    # إزالة التخفيض
+                            else:
+                                # إزالة التخفيض
+                                with st.spinner("جاري إزالة التخفيض..."):
                                     if update_product_sale_price(int(p_id), 0):
                                         st.success("✅ تم إزالة التخفيض!")
                                         st.rerun()
                                     else:
                                         st.error("❌ فشل إزالة التخفيض")
-                    
-                    with col_update2:
-                        if st.button("💾 تحديث السعر المخفض", key=f"update_sale_{p_id}_{idx}", use_container_width=True):
-                            with st.spinner("جاري تحديث السعر المخفض..."):
-                                # ✅ التحقق من صحة السعر المخفض
-                                if new_sale_price > 0:
-                                    if new_sale_price >= base_price:
-                                        st.error(f"⚠️ السعر المخفض ({new_sale_price}) يجب أن يكون أقل من السعر الأصلي ({base_price})")
-                                    else:
-                                        if update_product_sale_price(
-                                            int(p_id), 
-                                            new_sale_price,
-                                            sale_start_date.strftime("%Y-%m-%d") if new_sale_price > 0 else None,
-                                            sale_end_date.strftime("%Y-%m-%d") if new_sale_price > 0 else None
-                                        ):
-                                            st.success("✅ تم تحديث السعر المخفض!")
-                                            display_sale_price = new_sale_price
-                                            st.rerun()
-                                        else:
-                                            st.error("❌ فشل تحديث السعر المخفض")
-                                else:
-                                    # إزالة التخفيض
-                                    if update_product_sale_price(int(p_id), 0):
-                                        st.success("✅ تم إزالة التخفيض!")
-                                        st.rerun()
-                                    else:
-                                        st.error("❌ فشل إزالة التخفيض")
-                    
-                    col_date1, col_date2 = st.columns(2)
-                    with col_date1:
-                        sale_start_date = st.date_input(
-                            "بداية التخفيض",
-                            value=datetime.strptime(sale_start_date, "%Y-%m-%d") if sale_start_date != "غير محدد" else datetime.now(),
-                            key=f"sale_start_{p_id}_{idx}"
-                        )
-                    with col_date2:
-                        sale_end_date = st.date_input(
-                            "نهاية التخفيض",
-                            value=datetime.strptime(sale_end_date, "%Y-%m-%d") if sale_end_date != "غير محدد" else datetime.now(),
-                            key=f"sale_end_{p_id}_{idx}"
-                        )
                                     
             with c_action:
                 st.markdown("<br>", unsafe_allow_html=True)
