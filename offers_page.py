@@ -162,7 +162,6 @@ def render_offers_page():
 
     with col_bulk4:
         if st.button("🚀 تفعيل تطبيق العرض مع كوبون التخفيض على جميع العروض", type="primary", use_container_width=True):
-        if st.button("🚀 تفعيل تطبيق العرض مع كوبون التخفيض على جميع العروض", type="primary", use_container_width=True):
             headers = get_headers()
             with st.spinner("🔄 جاري قراءة وتحديث كافة العروض النشطة..."):
                 offers_res = safe_api_request("GET", "https://api.salla.dev/admin/v2/specialoffers", headers)
