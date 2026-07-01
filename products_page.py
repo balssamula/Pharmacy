@@ -794,3 +794,16 @@ def render_products_page():
                                         st.rerun()
                             else:
                                 st.warning("الرجاء إدخال كميات أكبر من صفر للتحديث.")
+
+def update_single_product_in_session(product_id: int, updated_data: Dict):
+    """
+    تحديث بيانات منتج واحد في session_state دون إعادة تحميل الكل
+    """
+    all_products = st.session_state.get("all_products", [])
+    for i, p in enumerate(all_products):
+        if str(p.get('id')) == str(product_id):
+            # تحديث الحقول المطلوبة فقط
+            for key, value in updated_data.items():
+                all_products[i][key] = value
+            break
+    st.session_state["all_products"] = all_products
