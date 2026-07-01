@@ -11,7 +11,8 @@ from utils import (
     export_products_to_excel, attach_product_image_api, update_product_promotions_secure,
     update_product_tax_secure, get_branches_list, generate_quantities_template, 
     process_quantities_import, create_products_template, fill_salla_template,
-    generate_salla_new_products_file
+    generate_salla_new_products_file, delete_product, update_product_price, 
+    update_product_sale_price, update_product_prices_bulk
 )
 
 TAX_EXEMPTION_CAUSES = ["الخدمات المالية", "عقد تأمين على الحياة", "التوريدات العقارية المعفاة", "صادرات السلع من المملكة", "صادرات الخدمات من المملكة", "النقل الدولي للسلع", "النقل الدولي للركاب", "توريد وسائل النقل", "الأدوية والمعدات الطبية"]
@@ -337,13 +338,32 @@ def render_products_page():
                 st.error(f"❌ خطأ في قراءة الملف: {str(e)}")
 
     # ==========================================
-    # ✅ 2. الفلاتر والبحث في المنتجات
+    # ✅ 2. الفلاتر والبحث في المنتجات (تم التعديل لجلب جميع المنتجات)
     # ==========================================
     st.markdown("### 🔍 أدوات التصفية والبحث في المنتجات")
     
-    with st.spinner("🔄 جاري تحميل المنتجات..."):
-        prod_res = safe_api_request("GET", "https://api.salla.dev/admin/v2/products?per_page=100", headers)
-        all_products = prod_res.get("data", []) if prod_res else []
+    # ✅ التعديل: جلب جميع المنتجات مثل زر المزامنة
+    with st.spinner("🔄 جاري تحميل جميع المنتجات..."):
+        all_products_fetched = []
+        page = 1
+        while True:
+            res = safe_api_request("GET", f"https://api.salla.dev/admin/v2/products?per_page=100&page={page}", headers)
+            if not res or not res.get("data"):
+                break
+            all_products_fetched.extend(res["data"])
+            if page >= res.get("pagination", {}).get("totalPages", 1):
+                break
+            page += 1
+        
+        # تخزين في session_state للاستخدام لاحقاً
+        if all_products_fetched:
+            st.session_state["all_products"] = all_products_fetched
+            all_products = all_products_fetched
+        else:
+            all_products = st.session_state.get("all_products", [])
+    
+    # عرض عدد المنتجات الفعلي
+    st.info(f"📊 إجمالي عدد المنتجات في المتجر: {len(all_products)}")
     
     c_search, _ = st.columns([3, 1])
     with c_search:
@@ -541,6 +561,65 @@ def render_products_page():
                         </div>
                     """, unsafe_allow_html=True)
                     
+                # ✅ إضافة زر تحديث الأسعار
+                with st.popover("💰 تحديث الأسعار", icon="💰"):
+                    st.markdown("**تحديث السعر الأصلي:**")
+                    new_price = st.number_input(
+                        "السعر الجديد (SAR)", 
+                        min_value=0.0, 
+                        value=float(base_price),
+                        step=0.5,
+                        key=f"new_price_{p_id}_{idx}"
+                    )
+                    
+                    st.markdown("---")
+                    st.markdown("**تحديث السعر المخفض:**")
+                    new_sale_price = st.number_input(
+                        "السعر المخفض الجديد (SAR)", 
+                        min_value=0.0, 
+                        value=float(display_sale_price) if has_discount else 0.0,
+                        step=0.5,
+                        key=f"new_sale_price_{p_id}_{idx}"
+                    )
+                    
+                    col_date1, col_date2 = st.columns(2)
+                    with col_date1:
+                        sale_start_date = st.date_input(
+                            "بداية التخفيض",
+                            value=datetime.strptime(sale_start_date, "%Y-%m-%d") if sale_start_date != "غير محدد" else datetime.now(),
+                            key=f"sale_start_{p_id}_{idx}"
+                        )
+                    with col_date2:
+                        sale_end_date = st.date_input(
+                            "نهاية التخفيض",
+                            value=datetime.strptime(sale_end_date, "%Y-%m-%d") if sale_end_date != "غير محدد" else datetime.now(),
+                            key=f"sale_end_{p_id}_{idx}"
+                        )
+                    
+                    col_update1, col_update2 = st.columns(2)
+                    with col_update1:
+                        if st.button("💾 تحديث السعر الأصلي", key=f"update_price_{p_id}_{idx}", use_container_width=True):
+                            with st.spinner("جاري تحديث السعر..."):
+                                if update_product_price(int(p_id), new_price):
+                                    st.success("✅ تم تحديث السعر الأصلي!")
+                                    st.rerun()
+                                else:
+                                    st.error("❌ فشل تحديث السعر")
+                    
+                    with col_update2:
+                        if st.button("💾 تحديث السعر المخفض", key=f"update_sale_{p_id}_{idx}", use_container_width=True):
+                            with st.spinner("جاري تحديث السعر المخفض..."):
+                                if update_product_sale_price(
+                                    int(p_id), 
+                                    new_sale_price,
+                                    sale_start_date.strftime("%Y-%m-%d") if new_sale_price > 0 else None,
+                                    sale_end_date.strftime("%Y-%m-%d") if new_sale_price > 0 else None
+                                ):
+                                    st.success("✅ تم تحديث السعر المخفض!")
+                                    st.rerun()
+                                else:
+                                    st.error("❌ فشل تحديث السعر المخفض")
+                                    
             with c_action:
                 st.markdown("<br>", unsafe_allow_html=True)
                 target_st = "hidden" if status == "sale" else "sale"
@@ -551,6 +630,27 @@ def render_products_page():
                             st.success("تم التحديث!")
                             st.rerun()
                             
+                # ✅ إضافة زر حذف المنتج
+                with st.popover("🗑️ حذف المنتج", icon="🗑️"):
+                    st.warning("⚠️ تحذير: حذف المنتج نهائي ولا يمكن استرجاعه!")
+                    st.write(f"**المنتج:** {p_name}")
+                    st.write(f"**المعرف:** `{p_id}`")
+                    
+                    confirm_delete = st.checkbox("☑️ أوافق على حذف هذا المنتج نهائياً", key=f"confirm_delete_{p_id}_{idx}")
+                    
+                    if st.button("🗑️ حذف المنتج نهائياً", key=f"delete_{p_id}_{idx}", type="primary", disabled=not confirm_delete, use_container_width=True):
+                        with st.spinner("جاري حذف المنتج..."):
+                            if delete_product(int(p_id)):
+                                st.success("✅ تم حذف المنتج بنجاح!")
+                                # إزالة المنتج من القائمة المعروضة
+                                if p in filtered_products:
+                                    filtered_products.remove(p)
+                                if p in all_products:
+                                    all_products.remove(p)
+                                st.rerun()
+                            else:
+                                st.error("❌ فشل حذف المنتج")
+                                
                 with st.popover("✏️ تعديل العناوين"):
                     new_promo = st.text_input("العنوان الترويجي:", value=(p_promotion if p_promotion != "لا يوجد عنوان ترويجي" else ""), key=f"promo_in_{p_id}_{idx}")
                     new_sub = st.text_input("العنوان الفرعي:", value=(p_sub_title if p_sub_title != "لا يوجد عنوان فرعي" else ""), key=f"sub_in_{p_id}_{idx}")
@@ -607,5 +707,3 @@ def render_products_page():
                                         st.rerun()
                             else:
                                 st.warning("الرجاء إدخال كميات أكبر من صفر للتحديث.")
-
-            st.markdown("</div>", unsafe_allow_html=True)
