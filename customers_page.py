@@ -7,7 +7,11 @@ from utils import (
 )
 
 def render_customers_page():
-    st.markdown("<h2 style='color:#0f1c2e;'>👥 مركز إدارة وتصفية العملاء والمجموعات</h2>", unsafe_allow_html=True)
+    st.markdown("""
+    <div style="background: linear-gradient(135deg, #0F1C2E 0%, #00EBCF 100%); padding: 15px 25px; border-radius: 12px; color: white; margin-bottom: 20px; box-shadow: 0 4px 6px rgba(0,0,0,0.1);">
+        <h2 style="color: white; margin: 0;">👥 مركز إدارة العملاء والمجموعات</h2>
+    </div>
+    """, unsafe_allow_html=True)
     
     headers = get_headers()
     if not headers: return
