@@ -397,46 +397,7 @@ def render_products_page():
     st.info(f"📊 عدد المنتجات المحملة في الذاكرة: {len(all_products)} منتج")
     
     # ✅ التعديل: جلب جميع المنتجات مثل زر المزامنة
-    with st.spinner("🔄 جاري تحميل جميع المنتجات..."):
-        progress_bar = st.progress(0)
-        all_p = []
-        page = 1
-        total_pages = None
-        
-        while True:
-            res = safe_api_request("GET", f"https://api.salla.dev/admin/v2/products?per_page=100&page={page}", headers)
-            if not res or not res.get("data"):
-                break
-            
-            if total_pages is None:
-                total_pages = res.get("pagination", {}).get("totalPages", 1)
-            
-            all_p.extend(res["data"])
-            progress_bar.progress(page / total_pages)
-            
-            if page >= total_pages:
-                break
-            page += 1
-        
-        progress_bar.empty()
-        
-        all_products_fetched = []
-        page = 1
-        while True:
-            res = safe_api_request("GET", f"https://api.salla.dev/admin/v2/products?per_page=100&page={page}", headers)
-            if not res or not res.get("data"):
-                break
-            all_products_fetched.extend(res["data"])
-            if page >= res.get("pagination", {}).get("totalPages", 1):
-                break
-            page += 1
-        
-        # تخزين في session_state للاستخدام لاحقاً
-        if all_products_fetched:
-            st.session_state["all_products"] = all_products_fetched
-            all_products = all_products_fetched
-        else:
-            all_products = st.session_state.get("all_products", [])
+
 
     # ✅ إضافة خيارات الأداء
     with st.expander("⚙️ إعدادات التحميل والأداء", expanded=False):
