@@ -678,30 +678,6 @@ def render_products_page():
                             value=datetime.strptime(sale_end_date, "%Y-%m-%d") if sale_end_date != "غير محدد" else datetime.now(),
                             key=f"sale_end_{p_id}_{idx}"
                         )
-                    
-                    col_update1, col_update2 = st.columns(2)
-                    with col_update1:
-                        if st.button("💾 تحديث السعر الأصلي", key=f"update_price_{p_id}_{idx}", use_container_width=True):
-                            with st.spinner("جاري تحديث السعر..."):
-                                if update_product_price(int(p_id), new_price):
-                                    st.success("✅ تم تحديث السعر الأصلي!")
-                                    st.rerun()
-                                else:
-                                    st.error("❌ فشل تحديث السعر")
-                    
-                    with col_update2:
-                        if st.button("💾 تحديث السعر المخفض", key=f"update_sale_{p_id}_{idx}", use_container_width=True):
-                            with st.spinner("جاري تحديث السعر المخفض..."):
-                                if update_product_sale_price(
-                                    int(p_id), 
-                                    new_sale_price,
-                                    sale_start_date.strftime("%Y-%m-%d") if new_sale_price > 0 else None,
-                                    sale_end_date.strftime("%Y-%m-%d") if new_sale_price > 0 else None
-                                ):
-                                    st.success("✅ تم تحديث السعر المخفض!")
-                                    st.rerun()
-                                else:
-                                    st.error("❌ فشل تحديث السعر المخفض")
                                     
             with c_action:
                 st.markdown("<br>", unsafe_allow_html=True)
