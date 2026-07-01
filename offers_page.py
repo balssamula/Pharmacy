@@ -85,7 +85,7 @@ def render_offers_page():
                     st.success(f"✅ تم إيقاف {success_count} عرض بنجاح من أصل {len(active_offers)}")
                     if success_count > 0: st.rerun()
     
-with col_bulk2:
+    with col_bulk2:
         with st.popover("📅 تمديد/إيقاف العروض المنتهية"):
             st.markdown("إدارة العروض التي تنتهي في تاريخ محدد")
             st.markdown("**📅 تاريخ انتهاء العرض الحالي (للفلترة):**")
