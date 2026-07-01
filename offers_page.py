@@ -162,6 +162,7 @@ def render_offers_page():
 
     with col_bulk4:
         if st.button("🚀 تفعيل تطبيق العرض مع كوبون التخفيض على جميع العروض", type="primary", use_container_width=True):
+        if st.button("🚀 تفعيل تطبيق العرض مع كوبون التخفيض على جميع العروض", type="primary", use_container_width=True):
             headers = get_headers()
             with st.spinner("🔄 جاري قراءة وتحديث كافة العروض النشطة..."):
                 offers_res = safe_api_request("GET", "https://api.salla.dev/admin/v2/specialoffers", headers)
@@ -194,15 +195,17 @@ def render_offers_page():
                     if offer.get("customer_groups"):
                         payload["customer_groups"] = [g.get("id", g) if isinstance(g, dict) else g for g in offer["customer_groups"]]
                     
-                    # ✅ الحل الجذري لخطأ 422: ضمان وجود products كـ مصفوفة دائماً
+                    # ✅ التعديل الجذري: لا نرسل حقل products أبداً إلا إذا كان يحتوي على منتجات فعلية
                     if offer.get("buy"):
                         buy = offer["buy"]
                         b_type = buy.get("type", {}).get("id") if isinstance(buy.get("type"), dict) else buy.get("type")
                         payload["buy"] = {
                             "type": b_type or "quantity", 
-                            "quantity": int(buy.get("quantity", 1)),
-                            "products": [p.get("id", p) if isinstance(p, dict) else p for p in buy.get("products", [])]
+                            "quantity": int(buy.get("quantity", 1))
                         }
+                        b_prods = [p.get("id", p) if isinstance(p, dict) else p for p in buy.get("products", [])]
+                        if b_prods:  # يتم الإرسال فقط إذا لم تكن المصفوفة فارغة
+                            payload["buy"]["products"] = b_prods
                         
                     if offer.get("get"):
                         get_obj = offer["get"]
@@ -211,11 +214,14 @@ def render_offers_page():
                         payload["get"] = {
                             "type": g_type or "quantity",
                             "quantity": int(get_obj.get("quantity", 1)),
-                            "discount_type": g_disc_type or "percentage",
-                            "products": [p.get("id", p) if isinstance(p, dict) else p for p in get_obj.get("products", [])]
+                            "discount_type": g_disc_type or "percentage"
                         }
                         if get_obj.get("discount_amount") is not None: 
                             payload["get"]["discount_amount"] = float(get_obj["discount_amount"])
+                        
+                        g_prods = [p.get("id", p) if isinstance(p, dict) else p for p in get_obj.get("products", [])]
+                        if g_prods:  # يتم الإرسال فقط إذا لم تكن المصفوفة فارغة
+                            payload["get"]["products"] = g_prods
 
                     res = safe_api_request("PUT", f"https://api.salla.dev/admin/v2/specialoffers/{offer_id}", headers, json=payload)
                     if res:
