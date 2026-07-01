@@ -1,6 +1,7 @@
 import streamlit as st
 import pandas as pd
 import requests
+import pickle
 import io
 import os
 from datetime import datetime
@@ -17,6 +18,17 @@ from utils import (
 
 TAX_EXEMPTION_CAUSES = ["الخدمات المالية", "عقد تأمين على الحياة", "التوريدات العقارية المعفاة", "صادرات السلع من المملكة", "صادرات الخدمات من المملكة", "النقل الدولي للسلع", "النقل الدولي للركاب", "توريد وسائل النقل", "الأدوية والمعدات الطبية"]
 
+def save_products_to_cache(products):
+    with open("products_cache.pkl", "wb") as f:
+        pickle.dump(products, f)
+
+def load_products_from_cache():
+    try:
+        with open("products_cache.pkl", "rb") as f:
+            return pickle.load(f)
+    except:
+        return []
+        
 def render_products_page():
     # ترويسة جمالية لصفحة المنتجات
     st.markdown("""
@@ -30,9 +42,11 @@ def render_products_page():
 
     # ✅ 1. إصلاح خطأ المتغيرات: تعريف كل المتغيرات المفقودة في الذاكرة
     if "all_products" not in st.session_state: st.session_state["all_products"] = []
+    if "all_products_fetched" not in st.session_state: st.session_state["all_products_fetched"] = False
     if "prod_page" not in st.session_state: st.session_state["prod_page"] = 1
     if "offer_product_ids" not in st.session_state: st.session_state["offer_product_ids"] = set()
     if "branches" not in st.session_state: st.session_state["branches"] = get_branches_list()
+    if "last_sync_time" not in st.session_state: st.session_state["last_sync_time"] = None
     
     # تعريف المتغيرات المحلية لتصبح مقروءة في كامل الصفحة
     all_products = st.session_state["all_products"]
@@ -43,6 +57,27 @@ def render_products_page():
     with c_btn:
         if st.button("🔄 مزامنة وجلب كافة المنتجات (إلزامي للمطابقة والقوالب)", use_container_width=True, type="primary"):
             with st.spinner("⏳ جاري سحب كافة المنتجات والعروض..."):
+                progress_bar = st.progress(0)
+                all_p = []
+                page = 1
+                total_pages = None
+        
+                while True:
+                    res = safe_api_request("GET", f"https://api.salla.dev/admin/v2/products?per_page=100&page={page}", headers)
+                    if not res or not res.get("data"):
+                        break
+            
+                    if total_pages is None:
+                        total_pages = res.get("pagination", {}).get("totalPages", 1)
+            
+                    all_p.extend(res["data"])
+                    progress_bar.progress(page / total_pages)
+            
+                    if page >= total_pages:
+                        break
+                    page += 1
+        
+                progress_bar.empty()
                 
                 # تحديث بيانات الفروع
                 st.session_state["branches"] = get_branches_list()
@@ -70,12 +105,21 @@ def render_products_page():
                     if page >= res.get("pagination", {}).get("totalPages", 1): break
                     page += 1
                 st.session_state["all_products"] = all_p
+                st.session_state["all_products_fetched"] = True
+                st.session_state["last_sync_time"] = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
                 st.success(f"✅ تم سحب {len(all_p)} منتج بنجاح!")
                 st.rerun()
 
-    # ⚠️ رسالة تنبيه للمستخدم
-    if not all_products:
-        st.warning("⚠️ يرجى الضغط على زر 'مزامنة وجلب كافة المنتجات' أولاً ليتم تحميل متجرك في النظام وإتاحة تصدير القوالب والمطابقة.")
+    # ✅ عرض حالة المنتجات
+    if st.session_state["all_products_fetched"]:
+        col_info1, col_info2 = st.columns(2)
+        with col_info1:
+            st.success(f"✅ تم تحميل {len(st.session_state['all_products'])} منتج في الذاكرة")
+        with col_info2:
+            if st.session_state["last_sync_time"]:
+                st.info(f"🕐 آخر مزامنة: {st.session_state['last_sync_time']}")
+    else:
+        st.warning("⚠️ يرجى الضغط على زر 'مزامنة وجلب كافة المنتجات' أولاً ليتم تحميل متجرك في النظام.")
 
     # =========================================================================
     # ✅ 1. إعدادات ربط التطبيقات الترويجية والذكية وإدارة الفروع
@@ -342,8 +386,40 @@ def render_products_page():
     # ==========================================
     st.markdown("### 🔍 أدوات التصفية والبحث في المنتجات")
     
+    # ✅ استخدام المنتجات المخزنة في Session State
+    all_products = st.session_state.get("all_products", [])
+    
+    if not all_products:
+        st.warning("⚠️ لم يتم تحميل المنتجات بعد. الرجاء الضغط على زر المزامنة أولاً.")
+        return
+    
+    # عرض عدد المنتجات المحملة
+    st.info(f"📊 عدد المنتجات المحملة في الذاكرة: {len(all_products)} منتج")
+    
     # ✅ التعديل: جلب جميع المنتجات مثل زر المزامنة
     with st.spinner("🔄 جاري تحميل جميع المنتجات..."):
+        progress_bar = st.progress(0)
+        all_p = []
+        page = 1
+        total_pages = None
+        
+        while True:
+            res = safe_api_request("GET", f"https://api.salla.dev/admin/v2/products?per_page=100&page={page}", headers)
+            if not res or not res.get("data"):
+                break
+            
+            if total_pages is None:
+                total_pages = res.get("pagination", {}).get("totalPages", 1)
+            
+            all_p.extend(res["data"])
+            progress_bar.progress(page / total_pages)
+            
+            if page >= total_pages:
+                break
+            page += 1
+        
+        progress_bar.empty()
+        
         all_products_fetched = []
         page = 1
         while True:
@@ -361,7 +437,20 @@ def render_products_page():
             all_products = all_products_fetched
         else:
             all_products = st.session_state.get("all_products", [])
-    
+
+    # ✅ إضافة خيار تحديث تلقائي
+    with st.expander("⚙️ إعدادات التحميل", expanded=False):
+        st.info("""
+        **ملاحظات حول أداء التطبيق:**
+        - يتم تحميل جميع المنتجات في الذاكرة مرة واحدة فقط عند الضغط على زر المزامنة
+        - عمليات البحث والفلترة تعمل على البيانات المخزنة محلياً بدون طلب API إضافي
+        - إذا قمت بإضافة أو تعديل منتجات في المتجر، اضغط على زر المزامنة لتحديث البيانات
+        """)
+        
+        if st.button("🔄 إعادة تحميل المنتجات من المتجر", use_container_width=True):
+            st.session_state["all_products_fetched"] = False
+            st.rerun()
+            
     # عرض عدد المنتجات الفعلي
     st.info(f"📊 إجمالي عدد المنتجات في المتجر: {len(all_products)}")
     
@@ -436,12 +525,10 @@ def render_products_page():
     # ==========================================
     # ✅ 3. عرض المنتجات
     # ==========================================
-    st.markdown(f"**📊 عدد المنتجات المطابقة للبحث والفلترة:** {len(filtered_products)}")
 
-    # ==========================================
     # ✅ نظام الترقيم السريع (Pagination)
-    # ==========================================
-    items_per_page = 15 # عدد المنتجات في كل صفحة
+
+    items_per_page = 20 # عدد المنتجات في كل صفحة
     total_pages = max(1, (len(filtered_products) + items_per_page - 1) // items_per_page)
     
     if st.session_state["prod_page"] > total_pages: 
