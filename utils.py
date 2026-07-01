@@ -901,26 +901,27 @@ def update_product_sale_price(product_id: int, sale_price: float, sale_start: st
         st.error(f"⚠️ السعر المخفض ({sale_price}) يجب أن يكون أقل من السعر الأصلي ({current_price})")
         return False
     
-    # تحديث السعر المخفض مع الحفاظ على باقي البيانات
+    # بناء الـ payload
     payload = {
         "name": p_data.get('name'),
         "price": current_price,
         "status": p_data.get('status', 'sale')
     }
     
-    # إضافة السعر المخفض
+    # ✅ إضافة السعر المخفض أو إزالته
     if sale_price > 0 and sale_price < current_price:
         payload['sale_price'] = sale_price
         
-        # إضافة التواريخ إذا تم توفيرها
+        # ✅ إضافة التواريخ فقط إذا تم توفيرها (وليس None)
         if sale_start:
             payload['sale_start'] = sale_start
         if sale_end:
             payload['sale_end'] = sale_end
     else:
-        # إذا كان السعر المخفض 0 أو أكبر من السعر الأصلي، نزيل التخفيض
+        # إزالة التخفيض
         payload['sale_price'] = None
     
+    # إرسال الطلب
     res = safe_api_request("PUT", f"https://api.salla.dev/admin/v2/products/{product_id}", headers, json=payload)
     
     if res:
@@ -930,12 +931,14 @@ def update_product_sale_price(product_id: int, sale_price: float, sale_start: st
             if str(p.get('id')) == str(product_id):
                 if sale_price > 0 and sale_price < current_price:
                     all_products[i]['sale_price'] = {"amount": sale_price, "currency": "SAR"}
+                    if sale_start:
+                        all_products[i]['sale_start'] = sale_start
+                    if sale_end:
+                        all_products[i]['sale_end'] = sale_end
                 else:
                     all_products[i]['sale_price'] = {"amount": 0, "currency": "SAR"}
-                if sale_start:
-                    all_products[i]['sale_start'] = sale_start
-                if sale_end:
-                    all_products[i]['sale_end'] = sale_end
+                    all_products[i]['sale_start'] = None
+                    all_products[i]['sale_end'] = None
                 break
         st.session_state["all_products"] = all_products
     
