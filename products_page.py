@@ -649,25 +649,51 @@ def render_products_page():
                     """, unsafe_allow_html=True)
                     
                 # ✅ إضافة زر تحديث الأسعار
-                with st.popover("💰 تحديث الأسعار", icon="💰"):
-                    st.markdown("**تحديث السعر الأصلي:**")
-                    new_price = st.number_input(
-                        "السعر الجديد (SAR)", 
-                        min_value=0.0, 
-                        value=float(base_price),
-                        step=0.5,
-                        key=f"new_price_{p_id}_{idx}"
-                    )
+                with st.popover("تحديث الأسعار", icon="💰"):
+                    col_update1, col_update2 = st.columns(2)
+                    with col_update1:
+                        if st.button("💾 تحديث السعر الأصلي", key=f"update_price_{p_id}_{idx}", use_container_width=True):
+                            with st.spinner("جاري تحديث السعر..."):
+                                # ✅ التحقق من صحة السعر
+                                if new_price <= 0:
+                                    st.error("⚠️ السعر يجب أن يكون أكبر من صفر")
+                                elif has_discount and new_price <= display_sale_price:
+                                    st.error(f"⚠️ السعر الأصلي ({new_price}) يجب أن يكون أكبر من السعر المخفض ({display_sale_price})")
+                                else:
+                                    if update_product_price(int(p_id), new_price):
+                                        st.success("✅ تم تحديث السعر الأصلي!")
+                                        # ✅ تحديث المتغيرات المحلية دون إعادة تحميل
+                                        base_price = new_price
+                                        st.rerun()
+                                    else:
+                                        st.error("❌ فشل تحديث السعر")
                     
-                    st.markdown("---")
-                    st.markdown("**تحديث السعر المخفض:**")
-                    new_sale_price = st.number_input(
-                        "السعر المخفض الجديد (SAR)", 
-                        min_value=0.0, 
-                        value=float(display_sale_price) if has_discount else 0.0,
-                        step=0.5,
-                        key=f"new_sale_price_{p_id}_{idx}"
-                    )
+                    with col_update2:
+                        if st.button("💾 تحديث السعر المخفض", key=f"update_sale_{p_id}_{idx}", use_container_width=True):
+                            with st.spinner("جاري تحديث السعر المخفض..."):
+                                # ✅ التحقق من صحة السعر المخفض
+                                if new_sale_price > 0:
+                                    if new_sale_price >= base_price:
+                                        st.error(f"⚠️ السعر المخفض ({new_sale_price}) يجب أن يكون أقل من السعر الأصلي ({base_price})")
+                                    else:
+                                        if update_product_sale_price(
+                                            int(p_id), 
+                                            new_sale_price,
+                                            sale_start_date.strftime("%Y-%m-%d") if new_sale_price > 0 else None,
+                                            sale_end_date.strftime("%Y-%m-%d") if new_sale_price > 0 else None
+                                        ):
+                                            st.success("✅ تم تحديث السعر المخفض!")
+                                            display_sale_price = new_sale_price
+                                            st.rerun()
+                                        else:
+                                            st.error("❌ فشل تحديث السعر المخفض")
+                                else:
+                                    # إزالة التخفيض
+                                    if update_product_sale_price(int(p_id), 0):
+                                        st.success("✅ تم إزالة التخفيض!")
+                                        st.rerun()
+                                    else:
+                                        st.error("❌ فشل إزالة التخفيض")
                     
                     col_date1, col_date2 = st.columns(2)
                     with col_date1:
@@ -718,7 +744,7 @@ def render_products_page():
                             st.rerun()
                             
                 # ✅ إضافة زر حذف المنتج
-                with st.popover("🗑️ حذف المنتج", icon="🗑️"):
+                with st.popover("حذف المنتج", icon="🗑️", type="primary"):
                     st.warning("⚠️ تحذير: حذف المنتج نهائي ولا يمكن استرجاعه!")
                     st.write(f"**المنتج:** {p_name}")
                     st.write(f"**المعرف:** `{p_id}`")
