@@ -17,56 +17,41 @@ from utils import (
 TAX_EXEMPTION_CAUSES = ["الخدمات المالية", "عقد تأمين على الحياة", "التوريدات العقارية المعفاة", "صادرات السلع من المملكة", "صادرات الخدمات من المملكة", "النقل الدولي للسلع", "النقل الدولي للركاب", "توريد وسائل النقل", "الأدوية والمعدات الطبية"]
 
 def render_products_page():
+    # ترويسة جمالية لصفحة المنتجات
+    st.markdown("""
+    <div style="background: linear-gradient(135deg, #0F1C2E 0%, #00EBCF 100%); padding: 15px 25px; border-radius: 12px; color: white; margin-bottom: 20px; box-shadow: 0 4px 6px rgba(0,0,0,0.1);">
+        <h2 style="color: white; margin: 0;">📦 مركز إدارة المنتجات الذكي والمتقدم</h2>
+    </div>
+    """, unsafe_allow_html=True)
+    
     headers = get_headers()
     if not headers: return
 
-    # ==========================================
-    # 0. إدارة الذاكرة المؤقتة (Caching) لسرعة صاروخية
-    # ==========================================
-    if "all_products" not in st.session_state:
-        st.session_state["all_products"] = []
-    if "branches" not in st.session_state:
-        st.session_state["branches"] = get_branches_list()
-    if "offer_product_ids" not in st.session_state:
-        st.session_state["offer_product_ids"] = set()
-
-    # تصميم ترويسة الصفحة مع زر التحديث المنفصل
+    # جلب المنتجات في الخلفية (الذاكرة المؤقتة)
+    if "all_products" not in st.session_state: st.session_state["all_products"] = []
+    if "prod_page" not in st.session_state: st.session_state["prod_page"] = 1
+    
     c_title, c_btn = st.columns([3, 1])
-    with c_title:
-        st.markdown("<h2 style='color:#0f1c2e;'>📦 مركز إدارة المنتجات الذكي والمتقدم</h2>", unsafe_allow_html=True)
     with c_btn:
-        if st.button("🔄 مزامنة وجلب كافة المنتجات", use_container_width=True, type="primary"):
-            with st.spinner("⏳ جاري سحب كافة المنتجات من متجرك (قد يستغرق بعض الوقت)..."):
-                # جلب العروض النشطة
-                offers_res = safe_api_request("GET", "https://api.salla.dev/admin/v2/specialoffers", headers)
-                active_offers = offers_res.get("data", []) if offers_res else []
-                offer_ids = set()
-                for offer in active_offers:
-                    if offer.get("status") == "active":
-                        for p in offer.get("buy", {}).get("products", []): offer_ids.add(str(p.get("id", p) if isinstance(p, dict) else p))
-                        for p in offer.get("get", {}).get("products", []): offer_ids.add(str(p.get("id", p) if isinstance(p, dict) else p))
-                st.session_state["offer_product_ids"] = offer_ids
-
-                # جلب كافة المنتجات بنظام الترقيم
+        if st.button("🔄 مزامنة وجلب كافة المنتجات (إلزامي للمطابقة والقوالب)", use_container_width=True, type="primary"):
+            with st.spinner("⏳ جاري سحب كافة المنتجات..."):
                 all_p = []
                 page = 1
                 while True:
-                    url = f"https://api.salla.dev/admin/v2/products?per_page=100&page={page}"
-                    res = safe_api_request("GET", url, headers)
+                    res = safe_api_request("GET", f"https://api.salla.dev/admin/v2/products?per_page=100&page={page}", headers)
                     if not res or not res.get("data"): break
                     all_p.extend(res["data"])
-                    
-                    total_pages = res.get("pagination", {}).get("totalPages", 1)
-                    if page >= total_pages: break
+                    if page >= res.get("pagination", {}).get("totalPages", 1): break
                     page += 1
-                
                 st.session_state["all_products"] = all_p
-                st.success(f"✅ تم جلب {len(all_p)} منتج بنجاح!")
+                st.success(f"✅ تم سحب {len(all_p)} منتج بنجاح!")
+                st.rerun()
 
-    # المتغيرات الأساسية المتاحة الآن فوريًا للصفحة
     all_products = st.session_state["all_products"]
-    branches = st.session_state["branches"]
-    offer_product_ids = st.session_state["offer_product_ids"]
+    
+    # ⚠️ رسالة تنبيه للمستخدم إذا لم يقم بالمزامنة
+    if not all_products:
+        st.warning("⚠️ يرجى الضغط على زر 'مزامنة وجلب كافة المنتجات' أولاً ليتم تحميل متجرك في النظام وإتاحة تصدير القوالب والمطابقة.")
 
     # =========================================================================
     # ✅ 1. إعدادات ربط التطبيقات الترويجية والذكية وإدارة الفروع
@@ -178,75 +163,58 @@ def render_products_page():
     # ==========================================
     # ✅ مطابقة منتجات سلة مع النظام
     # ==========================================
-    with st.expander("🔄 مطابقة منتجات سلة مع النظام", expanded=False):
-        st.markdown("#### 🔄 مطابقة منتجات سلة مع النظام")
-        st.info("""
-        📋 **تعليمات المطابقة:**
-        - قم برفع ملف Excel يحتوي على شيتين: `salla` و `system`
-        - كل شيت يحتوي على 4 أعمدة: رقم المنتج، اسم المنتج، سعر المنتج، خاضع للضريبة؟
-        - سيتم عرض المنتجات الموجودة في النظام (system) وغير الموجودة في سلة (salla)
-        - يمكنك اختيار المنتجات لرفعها مباشرة كمنتجات جديدة
-        """)
-    
-        uploaded_matching_file = st.file_uploader(
-            "📂 رفع ملف المطابقة (XLSX):",
-            type=["xlsx"],
-            key="matching_file_uploader"
-        )
+with st.expander("🔄 مطابقة منتجات سلة مع النظام", expanded=False):
+        st.info("📋 قم برفع ملف يحتوي على شيت salla و system. سيتم استبعاد التصنيفات المحددة من العمود الخامس (إن وجدت).")
+        
+        # حقل إدخال التصنيفات المستبعدة
+        exclude_cats_str = st.text_input("🚫 تصنيفات للاستبعاد من المطابقة (افصل بينها بفاصلة):", placeholder="مثال: اكسسوارات, هدايا")
+        
+        uploaded_matching_file = st.file_uploader("📂 رفع ملف المطابقة (XLSX):", type=["xlsx"], key="matching_file_uploader")
     
         if uploaded_matching_file:
             try:
-                # ✅ قراءة ملف Excel
                 excel_file = pd.ExcelFile(uploaded_matching_file)
-            
-                # ✅ التحقق من وجود الشيتين
-                if 'salla' not in excel_file.sheet_names:
-                    st.error("❌ الشيت 'salla' غير موجود في الملف")
-                elif 'system' not in excel_file.sheet_names:
-                    st.error("❌ الشيت 'system' غير موجود في الملف")
+                if 'salla' not in excel_file.sheet_names or 'system' not in excel_file.sheet_names:
+                    st.error("❌ الشيت 'salla' أو 'system' غير موجود في الملف")
                 else:
-                    # ✅ قراءة الشيتين
                     df_salla = pd.read_excel(uploaded_matching_file, sheet_name='salla')
                     df_system = pd.read_excel(uploaded_matching_file, sheet_name='system')
+                    
+                    # ✅ استبعاد التصنيفات من العمود الخامس (Index 4)
+                    if exclude_cats_str and len(df_system.columns) >= 5:
+                        exclude_cats = [c.strip().lower() for c in exclude_cats_str.split(",") if c.strip()]
+                        if exclude_cats:
+                            cat_col = df_system.columns[4]
+                            # فلترة واستبعاد
+                            df_system = df_system[~df_system[cat_col].astype(str).str.lower().str.strip().isin(exclude_cats)]
+                            st.success(f"تم استبعاد المنتجات التابعة للتصنيفات: {', '.join(exclude_cats)}")
                 
-                    # ✅ عرض البيانات
-                    st.markdown("**📊 بيانات سلة (Salla):**")
-                    st.dataframe(df_salla, use_container_width=True)
-                    st.caption(f"عدد المنتجات في سلة: {len(df_salla)}")
-                
-                    st.markdown("**📊 بيانات النظام (System):**")
-                    st.dataframe(df_system, use_container_width=True)
-                    st.caption(f"عدد المنتجات في النظام: {len(df_system)}")
-                
-                    # ✅ التحقق من الأعمدة المطلوبة
-                    required_cols = ['رقم المنتج', 'اسم المنتج', 'سعر المنتج', 'خاضع للضريبة؟']
-                    salla_missing = [col for col in required_cols if col not in df_salla.columns]
-                    system_missing = [col for col in required_cols if col not in df_system.columns]
-                
-                    if salla_missing:
-                        st.warning(f"⚠️ الأعمدة المفقودة في شيت salla: {', '.join(salla_missing)}")
-                    if system_missing:
-                        st.warning(f"⚠️ الأعمدة المفقودة في شيت system: {', '.join(system_missing)}")
-                
-                    if not salla_missing and not system_missing:
-                        # ✅ استخراج أرقام المنتجات من سلة
+                    # ✅ إذا كان شيت سلة فارغاً، اعتمد على منتجات المتجر المحملة بالخلفية
+                    if df_salla.empty or len(df_salla) == 0:
+                        st.warning("⚠️ شيت salla فارغ! سيتم الاعتماد على منتجات المتجر التي تم جلبها للمطابقة.")
+                        salla_ids = set()
+                        for p in all_products:
+                            salla_ids.add(str(p.get("sku", "")))
+                            salla_ids.add(str(p.get("id", "")))
+                    else:
                         salla_ids = set(df_salla['رقم المنتج'].astype(str).tolist())
                     
-                        # ✅ تحديد المنتجات الموجودة في النظام وليس في سلة
-                        new_products = []
-                        for idx, row in df_system.iterrows():
-                            product_id = str(row['رقم المنتج'])
-                            if product_id not in salla_ids:
-                                new_products.append({
-                                    'رقم المنتج': product_id,
-                                    'اسم المنتج': row['اسم المنتج'],
-                                    'سعر المنتج': row['سعر المنتج'],
-                                    'خاضع للضريبة': row['خاضع للضريبة؟']
-                                })
+                    # تحديد المنتجات الجديدة
+                    new_products = []
+                    for idx, row in df_system.iterrows():
+                        product_id = str(row['رقم المنتج'])
+                        if product_id not in salla_ids:
+                            new_products.append({
+                                'رقم المنتج': product_id,
+                                'اسم المنتج': row['اسم المنتج'],
+                                'سعر المنتج': row['سعر المنتج'],
+                                'خاضع للضريبة': row.get('خاضع للضريبة؟', 'نعم')
+                            })
                     
-                        if new_products:
-                            st.success(f"✅ تم العثور على {len(new_products)} منتج جديد غير موجود في سلة")
-                        
+                    if new_products:
+                        st.success(f"✅ تم العثور على {len(new_products)} منتج جديد غير موجود في سلة")
+                        st.dataframe(pd.DataFrame(new_products), use_container_width=True)
+                                                
                             # ✅ عرض المنتجات الجديدة
                             df_new = pd.DataFrame(new_products)
                             st.dataframe(df_new, use_container_width=True)
@@ -426,7 +394,38 @@ def render_products_page():
     # ==========================================
     # ✅ 3. عرض المنتجات
     # ==========================================
-    for idx, p in enumerate(filtered_products):
+    st.markdown(f"**📊 عدد المنتجات المطابقة للبحث والفلترة:** {len(filtered_products)}")
+
+    # ==========================================
+    # ✅ نظام الترقيم السريع (Pagination)
+    # ==========================================
+    items_per_page = 15 # عدد المنتجات في كل صفحة
+    total_pages = max(1, (len(filtered_products) + items_per_page - 1) // items_per_page)
+    
+    if st.session_state["prod_page"] > total_pages: 
+        st.session_state["prod_page"] = total_pages
+        
+    start_idx = (st.session_state["prod_page"] - 1) * items_per_page
+    end_idx = start_idx + items_per_page
+    displayed_products = filtered_products[start_idx:end_idx]
+
+    # أزرار التنقل بين الصفحات
+    st.markdown("---")
+    col_prev, col_page, col_next = st.columns([1, 2, 1])
+    with col_prev:
+        if st.button("⬅️ الصفحة السابقة", disabled=(st.session_state["prod_page"] == 1), use_container_width=True):
+            st.session_state["prod_page"] -= 1
+            st.rerun()
+    with col_page:
+        st.markdown(f"<h4 style='text-align:center; color:#0f1c2e;'>📄 صفحة {st.session_state['prod_page']} من {total_pages}</h4>", unsafe_allow_html=True)
+    with col_next:
+        if st.button("الصفحة التالية ➡️", disabled=(st.session_state["prod_page"] == total_pages), use_container_width=True):
+            st.session_state["prod_page"] += 1
+            st.rerun()
+    st.markdown("---")
+
+    # حلقة العرض تستخدم displayed_products بدلاً من filtered_products
+    for idx, p in enumerate(displayed_products):
         p_id = str(p.get('id', 'N/A'))
         p_name = p.get('name', 'منتج بدون اسم')
         p_sku = p.get('sku', 'لا يوجد')
