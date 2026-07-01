@@ -213,104 +213,103 @@ def render_products_page():
                     
                     if new_products:
                         st.success(f"✅ تم العثور على {len(new_products)} منتج جديد غير موجود في سلة")
-                        st.dataframe(pd.DataFrame(new_products), use_container_width=True)
-                                                
-                            # ✅ عرض المنتجات الجديدة
-                            df_new = pd.DataFrame(new_products)
-                            st.dataframe(df_new, use_container_width=True)
                         
-                            # ✅ اختيار المنتجات للرفع
-                            st.markdown("#### ☑️ اختر المنتجات لإضافتها إلى سلة")
-                        
-                            # ✅ إضافة أزرار اختيار الكل/إلغاء الكل
-                            col_select_all, col_deselect_all = st.columns(2)
-                            with col_select_all:
-                                if st.button("☑️ اختيار الكل", key="select_all_matching", use_container_width=True):
-                                    for idx in range(len(new_products)):
-                                        st.session_state[f"select_product_{idx}"] = True
-                                    st.rerun()
+                        # ✅ عرض المنتجات الجديدة
+                        df_new = pd.DataFrame(new_products)
+                        st.dataframe(df_new, use_container_width=True)
+                    
+                        # ✅ اختيار المنتجات للرفع
+                        st.markdown("#### ☑️ اختر المنتجات لإضافتها إلى سلة")
+                    
+                        # ✅ إضافة أزرار اختيار الكل/إلغاء الكل
+                        col_select_all, col_deselect_all = st.columns(2)
+                        with col_select_all:
+                            if st.button("☑️ اختيار الكل", key="select_all_matching", use_container_width=True):
+                                for idx in range(len(new_products)):
+                                    st.session_state[f"select_product_{idx}"] = True
+                                st.rerun()
 
-                            with col_deselect_all:
-                                if st.button("⬜ إلغاء الكل", key="deselect_all_matching", use_container_width=True):
-                                    for idx in range(len(new_products)):
-                                        st.session_state[f"select_product_{idx}"] = False
-                                    st.rerun()
+                        with col_deselect_all:
+                            if st.button("⬜ إلغاء الكل", key="deselect_all_matching", use_container_width=True):
+                                for idx in range(len(new_products)):
+                                    st.session_state[f"select_product_{idx}"] = False
+                                st.rerun()
 
-                            # ✅ عرض خانات الاختيار لكل منتج
-                            selected_indices = []
-                            for idx, product in enumerate(new_products):
-                                key = f"select_product_{idx}"
-    
-                                # ✅ التحقق من وجود المفتاح في session_state
-                                if key not in st.session_state:
-                                    st.session_state[key] = True  # افتراضي: محدد
-    
-                                # ✅ استخدام القيمة من session_state
-                                checked = st.checkbox(
-                                    f"🆔 {product['رقم المنتج']} - {product['اسم المنتج']} (السعر: {product['سعر المنتج']} SAR)",
-                                    value=st.session_state[key],
-                                    key=key  # ✅ استخدام نفس المفتاح
-                                )
-    
-                                # ✅ تحديث session_state إذا تغيرت القيمة
-                                if checked != st.session_state[key]:
-                                    st.session_state[key] = checked
-    
-                                if checked:
-                                    selected_indices.append(idx)
-                        
-                            # =========================================================
-                            # ✅ التحديث الجديد: رفع المنتجات دفعة واحدة عبر القالب الأصلي
-                            # =========================================================
-                            if st.button(f"🚀 رفع {len(selected_indices)} منتج مختار (عبر قالب سلة)", type="primary", use_container_width=True):
-                                if not selected_indices:
-                                    st.warning("⚠️ الرجاء اختيار منتج واحد على الأقل للرفع")
-                                else:
-                                    with st.spinner(f"🔄 جاري تحضير القالب ورفع {len(selected_indices)} منتج لمتجرك..."):
-                                        import requests
+                        # ✅ عرض خانات الاختيار لكل منتج
+                        selected_indices = []
+                        for idx, product in enumerate(new_products):
+                            key = f"select_product_{idx}"
+
+                            # ✅ التحقق من وجود المفتاح في session_state
+                            if key not in st.session_state:
+                                st.session_state[key] = True  # افتراضي: محدد
+
+                            # ✅ استخدام القيمة من session_state
+                            checked = st.checkbox(
+                                f"🆔 {product['رقم المنتج']} - {product['اسم المنتج']} (السعر: {product['سعر المنتج']} SAR)",
+                                value=st.session_state[key],
+                                key=key  # ✅ استخدام نفس المفتاح
+                            )
+
+                            # ✅ تحديث session_state إذا تغيرت القيمة
+                            if checked != st.session_state[key]:
+                                st.session_state[key] = checked
+
+                            if checked:
+                                selected_indices.append(idx)
+                    
+                        # =========================================================
+                        # ✅ التحديث الجديد: رفع المنتجات دفعة واحدة عبر القالب الأصلي
+                        # =========================================================
+                        if st.button(f"🚀 رفع {len(selected_indices)} منتج مختار (عبر قالب سلة)", type="primary", use_container_width=True):
+                            if not selected_indices:
+                                st.warning("⚠️ الرجاء اختيار منتج واحد على الأقل للرفع")
+                            else:
+                                with st.spinner(f"🔄 جاري تحضير القالب ورفع {len(selected_indices)} منتج لمتجرك..."):
+                                    import requests
+                                    
+                                    products_for_template = []
+                                    for idx in selected_indices:
+                                        product = new_products[idx]
+                                        is_taxable = str(product['خاضع للضريبة']).strip().lower() in ['نعم', 'true', '1', 'yes']
                                         
-                                        products_for_template = []
-                                        for idx in selected_indices:
-                                            product = new_products[idx]
-                                            is_taxable = str(product['خاضع للضريبة']).strip().lower() in ['نعم', 'true', '1', 'yes']
-                                            
-                                            products_for_template.append({
-                                                "name": str(product['اسم المنتج']),
-                                                "price": float(product['سعر المنتج']) if product['سعر المنتج'] else 0,
-                                                "sku": str(product['رقم المنتج']),
-                                                "with_tax": is_taxable,
-                                                "tax_exemption_cause": "" if is_taxable else "الأدوية والمعدات الطبية"
-                                            })
+                                        products_for_template.append({
+                                            "name": str(product['اسم المنتج']),
+                                            "price": float(product['سعر المنتج']) if product['سعر المنتج'] else 0,
+                                            "sku": str(product['رقم المنتج']),
+                                            "with_tax": is_taxable,
+                                            "tax_exemption_cause": "" if is_taxable else "الأدوية والمعدات الطبية"
+                                        })
+                                    
+                                    # ✅ استخدام مولد القالب الخاص بالمنتجات الجديدة (بدون الاعتماد على ملف خارجي)
+                                    template_bytes = generate_salla_new_products_file(products_for_template)
+                                    
+                                    if template_bytes:
+                                        files = {'file': ('Salla_New_Products.xlsx', template_bytes, 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')}
+                                        # نوع العملية منتجات جديدة كلياً
+                                        data = {'type': 'products'} 
                                         
-                                        # ✅ استخدام مولد القالب الخاص بالمنتجات الجديدة (بدون الاعتماد على ملف خارجي)
-                                        template_bytes = generate_salla_new_products_file(products_for_template)
+                                        upload_headers = headers.copy()
+                                        if "Content-Type" in upload_headers:
+                                            del upload_headers["Content-Type"]
+                                            
+                                        res = requests.post(
+                                            "https://api.salla.dev/admin/v2/products/import",
+                                            headers=upload_headers,
+                                            files=files,
+                                            data=data
+                                        )
                                         
-                                        if template_bytes:
-                                            files = {'file': ('Salla_New_Products.xlsx', template_bytes, 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')}
-                                            # نوع العملية منتجات جديدة كلياً
-                                            data = {'type': 'products'} 
-                                            
-                                            upload_headers = headers.copy()
-                                            if "Content-Type" in upload_headers:
-                                                del upload_headers["Content-Type"]
-                                                
-                                            res = requests.post(
-                                                "https://api.salla.dev/admin/v2/products/import",
-                                                headers=upload_headers,
-                                                files=files,
-                                                data=data
-                                            )
-                                            
-                                            if res.status_code < 400:
-                                                st.success(f"✅ تم رفع الملف بنجاح! ستقوم سلة بمعالجة وإضافة {len(selected_indices)} منتج جديد.")
-                                            else:
-                                                try: err_msg = res.json()
-                                                except: err_msg = res.text
-                                                st.error(f"❌ فشل الرفع: {err_msg}")
+                                        if res.status_code < 400:
+                                            st.success(f"✅ تم رفع الملف بنجاح! ستقوم سلة بمعالجة وإضافة {len(selected_indices)} منتج جديد.")
                                         else:
-                                            st.error("❌ فشل توليد قالب سلة. يرجى التأكد من وجود الملف الأصلي 'Salla_Products_Template.xlsx' في المجلد.")
-                        else:
-                            st.info("ℹ️ جميع منتجات النظام موجودة بالفعل في سلة")
+                                            try: err_msg = res.json()
+                                            except: err_msg = res.text
+                                            st.error(f"❌ فشل الرفع: {err_msg}")
+                                    else:
+                                        st.error("❌ فشل توليد قالب سلة. يرجى التأكد من وجود الملف الأصلي 'Salla_Products_Template.xlsx' في المجلد.")
+                    else:
+                        st.info("ℹ️ جميع منتجات النظام موجودة بالفعل في سلة")
             except Exception as e:
                 st.error(f"❌ خطأ في قراءة الملف: {str(e)}")
 
