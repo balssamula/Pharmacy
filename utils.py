@@ -832,3 +832,114 @@ def generate_salla_new_products_file(products: List[Dict]) -> bytes:
     except Exception as e:
         st.error(f"❌ خطأ في إنشاء قالب المنتجات الجديدة: {str(e)}")
         return b""
+
+# ==========================================
+# 💰 دوال تحديث الأسعار وحذف المنتجات
+# ==========================================
+
+def delete_product(product_id: int) -> bool:
+    """
+    حذف منتج من المتجر باستخدام المعرف الخاص به
+    """
+    headers = get_headers()
+    if not headers:
+        return False
+    
+    url = f"https://api.salla.dev/admin/v2/products/{product_id}"
+    res = safe_api_request("DELETE", url, headers)
+    return res is not None
+
+def update_product_price(product_id: int, new_price: float) -> bool:
+    """
+    تحديث السعر الأصلي للمنتج
+    """
+    headers = get_headers()
+    if not headers:
+        return False
+    
+    # جلب بيانات المنتج الحالية أولاً
+    current_res = safe_api_request("GET", f"https://api.salla.dev/admin/v2/products/{product_id}", headers)
+    if not current_res or not current_res.get('data'):
+        return False
+    
+    p_data = current_res['data']
+    
+    # تحديث السعر مع الحفاظ على باقي البيانات
+    payload = {
+        "name": p_data.get('name'),
+        "price": new_price,
+        "status": p_data.get('status', 'sale')
+    }
+    
+    # الحفاظ على السعر المخفض إن وجد
+    sale_price = get_flat_price(p_data.get('sale_price', 0))
+    if sale_price > 0:
+        payload['sale_price'] = sale_price
+    
+    res = safe_api_request("PUT", f"https://api.salla.dev/admin/v2/products/{product_id}", headers, json=payload)
+    return res is not None
+
+def update_product_sale_price(product_id: int, sale_price: float, sale_start: str = None, sale_end: str = None) -> bool:
+    """
+    تحديث السعر المخفض للمنتج مع إمكانية تحديد تواريخ البداية والنهاية
+    """
+    headers = get_headers()
+    if not headers:
+        return False
+    
+    # جلب بيانات المنتج الحالية أولاً
+    current_res = safe_api_request("GET", f"https://api.salla.dev/admin/v2/products/{product_id}", headers)
+    if not current_res or not current_res.get('data'):
+        return False
+    
+    p_data = current_res['data']
+    
+    # تحديث السعر المخفض مع الحفاظ على باقي البيانات
+    payload = {
+        "name": p_data.get('name'),
+        "price": get_flat_price(p_data.get('price', 0)),
+        "status": p_data.get('status', 'sale')
+    }
+    
+    # إضافة السعر المخفض
+    if sale_price > 0:
+        payload['sale_price'] = sale_price
+        
+        # إضافة التواريخ إذا تم توفيرها
+        if sale_start:
+            payload['sale_start'] = sale_start
+        if sale_end:
+            payload['sale_end'] = sale_end
+    else:
+        # إذا كان السعر المخفض 0 أو أقل، نزيل التخفيض
+        payload['sale_price'] = None
+    
+    res = safe_api_request("PUT", f"https://api.salla.dev/admin/v2/products/{product_id}", headers, json=payload)
+    return res is not None
+
+def update_product_prices_bulk(product_ids: List[int], price: float = None, sale_price: float = None, sale_end: str = None) -> Dict:
+    """
+    تحديث أسعار مجموعة من المنتجات دفعة واحدة
+    """
+    results = {"success": [], "errors": []}
+    headers = get_headers()
+    if not headers:
+        return results
+    
+    for product_id in product_ids:
+        try:
+            if price is not None:
+                if update_product_price(product_id, price):
+                    results["success"].append(f"✅ تم تحديث سعر المنتج ID: {product_id}")
+                else:
+                    results["errors"].append(f"❌ فشل تحديث سعر المنتج ID: {product_id}")
+            
+            if sale_price is not None:
+                if update_product_sale_price(product_id, sale_price, sale_end=sale_end):
+                    results["success"].append(f"✅ تم تحديث السعر المخفض للمنتج ID: {product_id}")
+                else:
+                    results["errors"].append(f"❌ فشل تحديث السعر المخفض للمنتج ID: {product_id}")
+        except Exception as e:
+            results["errors"].append(f"❌ خطأ في المنتج ID {product_id}: {str(e)}")
+    
+    return results
