@@ -893,16 +893,23 @@ def update_product_sale_price(product_id: int, sale_price: float, sale_start: st
         return False
     
     p_data = current_res['data']
+    current_price = get_flat_price(p_data.get('price', 0))
+    current_sale_price = get_flat_price(p_data.get('sale_price', 0))
+    
+    # ✅ التحقق من صحة السعر المخفض (يجب أن يكون أقل من السعر الأصلي)
+    if sale_price > 0 and sale_price >= current_price:
+        st.error(f"⚠️ السعر المخفض ({sale_price}) يجب أن يكون أقل من السعر الأصلي ({current_price})")
+        return False
     
     # تحديث السعر المخفض مع الحفاظ على باقي البيانات
     payload = {
         "name": p_data.get('name'),
-        "price": get_flat_price(p_data.get('price', 0)),
+        "price": current_price,
         "status": p_data.get('status', 'sale')
     }
     
     # إضافة السعر المخفض
-    if sale_price > 0:
+    if sale_price > 0 and sale_price < current_price:
         payload['sale_price'] = sale_price
         
         # إضافة التواريخ إذا تم توفيرها
@@ -911,10 +918,79 @@ def update_product_sale_price(product_id: int, sale_price: float, sale_start: st
         if sale_end:
             payload['sale_end'] = sale_end
     else:
-        # إذا كان السعر المخفض 0 أو أقل، نزيل التخفيض
+        # إذا كان السعر المخفض 0 أو أكبر من السعر الأصلي، نزيل التخفيض
         payload['sale_price'] = None
     
     res = safe_api_request("PUT", f"https://api.salla.dev/admin/v2/products/{product_id}", headers, json=payload)
+    
+    if res:
+        # ✅ تحديث البيانات في session_state مباشرة
+        all_products = st.session_state.get("all_products", [])
+        for i, p in enumerate(all_products):
+            if str(p.get('id')) == str(product_id):
+                if sale_price > 0 and sale_price < current_price:
+                    all_products[i]['sale_price'] = {"amount": sale_price, "currency": "SAR"}
+                else:
+                    all_products[i]['sale_price'] = {"amount": 0, "currency": "SAR"}
+                if sale_start:
+                    all_products[i]['sale_start'] = sale_start
+                if sale_end:
+                    all_products[i]['sale_end'] = sale_end
+                break
+        st.session_state["all_products"] = all_products
+    
+    return res is not None
+
+def update_product_price(product_id: int, new_price: float) -> bool:
+    """
+    تحديث السعر الأصلي للمنتج مع التحقق من السعر المخفض
+    """
+    headers = get_headers()
+    if not headers:
+        return False
+    
+    # جلب بيانات المنتج الحالية أولاً
+    current_res = safe_api_request("GET", f"https://api.salla.dev/admin/v2/products/{product_id}", headers)
+    if not current_res or not current_res.get('data'):
+        return False
+    
+    p_data = current_res['data']
+    current_sale_price = get_flat_price(p_data.get('sale_price', 0))
+    
+    # ✅ التحقق: إذا كان السعر الجديد أقل من أو يساوي السعر المخفض
+    if current_sale_price > 0 and new_price <= current_sale_price:
+        st.error(f"⚠️ السعر الأصلي الجديد ({new_price}) يجب أن يكون أكبر من السعر المخفض ({current_sale_price})")
+        return False
+    
+    # تحديث السعر مع الحفاظ على باقي البيانات
+    payload = {
+        "name": p_data.get('name'),
+        "price": new_price,
+        "status": p_data.get('status', 'sale')
+    }
+    
+    # الحفاظ على السعر المخفض إن وجد
+    if current_sale_price > 0 and current_sale_price < new_price:
+        payload['sale_price'] = current_sale_price
+    elif current_sale_price > 0:
+        # إذا كان السعر المخفض أكبر من السعر الجديد، نزيل التخفيض
+        payload['sale_price'] = None
+    
+    res = safe_api_request("PUT", f"https://api.salla.dev/admin/v2/products/{product_id}", headers, json=payload)
+    
+    if res:
+        # ✅ تحديث البيانات في session_state مباشرة
+        all_products = st.session_state.get("all_products", [])
+        for i, p in enumerate(all_products):
+            if str(p.get('id')) == str(product_id):
+                all_products[i]['price'] = {"amount": new_price, "currency": "SAR"}
+                if current_sale_price > 0 and current_sale_price < new_price:
+                    all_products[i]['sale_price'] = {"amount": current_sale_price, "currency": "SAR"}
+                else:
+                    all_products[i]['sale_price'] = {"amount": 0, "currency": "SAR"}
+                break
+        st.session_state["all_products"] = all_products
+    
     return res is not None
 
 def update_product_prices_bulk(product_ids: List[int], price: float = None, sale_price: float = None, sale_end: str = None) -> Dict:
