@@ -27,14 +27,29 @@ def render_products_page():
     headers = get_headers()
     if not headers: return
 
-    # جلب المنتجات في الخلفية (الذاكرة المؤقتة)
+    # ✅ 1. إصلاح خطأ NameError: تعريف كافة المتغيرات في الذاكرة لتكون متاحة دائماً
     if "all_products" not in st.session_state: st.session_state["all_products"] = []
     if "prod_page" not in st.session_state: st.session_state["prod_page"] = 1
+    if "offer_product_ids" not in st.session_state: st.session_state["offer_product_ids"] = set() # <--- هذا هو السطر الذي كان مفقوداً
     
     c_title, c_btn = st.columns([3, 1])
     with c_btn:
         if st.button("🔄 مزامنة وجلب كافة المنتجات (إلزامي للمطابقة والقوالب)", use_container_width=True, type="primary"):
-            with st.spinner("⏳ جاري سحب كافة المنتجات..."):
+            with st.spinner("⏳ جاري سحب كافة المنتجات والعروض..."):
+                
+                # ✅ 2. جلب العروض النشطة لاستخراج المنتجات المشمولة فيها
+                offers_res = safe_api_request("GET", "https://api.salla.dev/admin/v2/specialoffers", headers)
+                active_offers = offers_res.get("data", []) if offers_res else []
+                offer_ids = set()
+                for offer in active_offers:
+                    if offer.get("status") == "active":
+                        for op in offer.get("buy", {}).get("products", []): 
+                            offer_ids.add(str(op.get("id", op) if isinstance(op, dict) else op))
+                        for op in offer.get("get", {}).get("products", []): 
+                            offer_ids.add(str(op.get("id", op) if isinstance(op, dict) else op))
+                st.session_state["offer_product_ids"] = offer_ids
+
+                # ✅ 3. جلب المنتجات بنظام الترقيم
                 all_p = []
                 page = 1
                 while True:
@@ -47,7 +62,9 @@ def render_products_page():
                 st.success(f"✅ تم سحب {len(all_p)} منتج بنجاح!")
                 st.rerun()
 
+    # سحب المتغيرات من الذاكرة لكي يراها الكود في الأسفل (عند السطر 461)
     all_products = st.session_state["all_products"]
+    offer_product_ids = st.session_state["offer_product_ids"] 
     
     # ⚠️ رسالة تنبيه للمستخدم إذا لم يقم بالمزامنة
     if not all_products:
