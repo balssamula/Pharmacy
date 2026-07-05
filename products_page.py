@@ -13,7 +13,8 @@ from utils import (
     update_product_tax_secure, get_branches_list, generate_quantities_template, 
     process_quantities_import, create_products_template, fill_salla_template,
     generate_salla_new_products_file, delete_product, update_product_price, 
-    update_product_sale_price, update_product_prices_bulk, get_group_products,
+    update_product_sale_price, update_product_prices_bulk, get_product_details, 
+    get_group_products, update_group_product_quantity, remove_product_from_group, 
     add_product_to_group
 )
 
@@ -436,6 +437,7 @@ def render_products_page():
     with f_col3: filter_has_promo = st.checkbox("منتجات لها عنوان ترويجي", key="f_promo")
     with f_col4: filter_discounted = st.checkbox("منتجات مخفضة", key="f_discount")
     with f_col5: filter_out_stock = st.checkbox("منتجات نفذت كميتها", key="f_out")
+    with f_col6: filter_group = st.checkbox("📦 مجموعات منتجات فقط", key="f_group")
 
     available_end_dates = set()
     for p in all_products:
@@ -463,7 +465,9 @@ def render_products_page():
         actual_promo_title = p.get('promotion_title') or (promo_obj.get('title') if isinstance(promo_obj, dict) else '')
         if filter_has_promo and not actual_promo_title: continue
         if filter_out_stock and p.get('quantity', 0) > 0: continue
-        
+        # ✅ فلتر مجموعات المنتجات
+        if filter_group and p.get('type') != 'group_products': continue
+            
         has_disc = False
         pr = get_flat_price(p.get('price', 0))
         reg = get_flat_price(p.get('regular_price', 0))
@@ -565,6 +569,12 @@ def render_products_page():
             offer_badge_html = ""
 
         st.markdown(f"<div style='background: linear-gradient(135deg, #243b55 0%, #141e30 100%); padding: 14px 20px; border-radius: 12px 12px 0px 0px; margin-top: 25px; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 10px; border-bottom: 3px solid #e67e22;'><span style='color: #ffffff; font-weight: bold; font-size: 15px;'>📦 {p_name}</span><div style='display: flex; gap: 8px; flex-wrap: wrap;'><span style='background: rgba(255,255,255,0.2); color: #fff; padding: 4px 12px; border-radius: 20px; font-size: 11px; font-weight:600;'>{disp_status}</span><span style='background: rgba(0, 235, 207, 0.2); color: #00EBCF; padding: 4px 12px; border-radius: 20px; font-size: 11px; font-weight:600;'>{tax_status_badge}</span>{offer_badge_html}</div></div>", unsafe_allow_html=True)
+
+        # قبل عرض المنتج، أضف أيقونة للمجموعات
+        product_type_icon = "📦" if p.get('type') == 'group_products' else "📄"
+        product_type_label = " (مجموعة منتجات)" if p.get('type') == 'group_products' else ""
+        
+        st.markdown(f"<div style='background: linear-gradient(135deg, #243b55 0%, #141e30 100%); padding: 14px 20px; border-radius: 12px 12px 0px 0px; margin-top: 25px; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 10px; border-bottom: 3px solid #e67e22;'><span style='color: #ffffff; font-weight: bold; font-size: 15px;'>{product_type_icon} {p_name}{product_type_label}</span><div style='display: flex; gap: 8px; flex-wrap: wrap;'><span style='background: rgba(255,255,255,0.2); color: #fff; padding: 4px 12px; border-radius: 20px; font-size: 11px; font-weight:600;'>{disp_status}</span><span style='background: rgba(0, 235, 207, 0.2); color: #00EBCF; padding: 4px 12px; border-radius: 20px; font-size: 11px; font-weight:600;'>{tax_status_badge}</span>{offer_badge_html}</div></div>", unsafe_allow_html=True)        
         
         with st.container(border=True):
             st.markdown("""<div style="background-color: #fafbfc; padding: 20px; border-radius: 0px 0px 12px 12px; border: 1px solid #e1e8ed; border-top: none; box-shadow: 0 4px 10px rgba(0,0,0,0.03); margin-bottom: 25px;">""", unsafe_allow_html=True)
