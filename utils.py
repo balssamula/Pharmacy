@@ -1022,3 +1022,144 @@ def update_product_prices_bulk(product_ids: List[int], price: float = None, sale
             results["errors"].append(f"❌ خطأ في المنتج ID {product_id}: {str(e)}")
     
     return results
+
+# ==========================================
+# 📦 دوال إدارة مجموعات المنتجات
+# ==========================================
+
+def get_product_details(product_id: int) -> Optional[Dict]:
+    """
+    جلب تفاصيل منتج محدد باستخدام المعرف
+    """
+    headers = get_headers()
+    if not headers:
+        return None
+    
+    res = safe_api_request("GET", f"https://api.salla.dev/admin/v2/products/{product_id}", headers)
+    if res and res.get('data'):
+        return res['data']
+    return None
+
+def get_group_products(product_id: int) -> List[Dict]:
+    """
+    جلب المنتجات التي داخل مجموعة منتجات
+    """
+    headers = get_headers()
+    if not headers:
+        return []
+    
+    # جلب تفاصيل المنتج
+    product = get_product_details(product_id)
+    if not product:
+        return []
+    
+    # التحقق من أن المنتج من نوع مجموعة منتجات
+    if product.get('type') != 'group_products':
+        return []
+    
+    # جلب الـ SKUs (المنتجات الفرعية)
+    skus = product.get('skus', [])
+    group_products = []
+    
+    for sku in skus:
+        # جلب تفاصيل المنتج الفرعي
+        sku_id = sku.get('id')
+        if sku_id:
+            sku_details = get_product_details(sku_id)
+            if sku_details:
+                group_products.append({
+                    'id': sku_details.get('id'),
+                    'name': sku_details.get('name'),
+                    'sku': sku_details.get('sku'),
+                    'price': get_flat_price(sku_details.get('price', 0)),
+                    'quantity': sku_details.get('quantity', 0),
+                    'sold_quantity': sku_details.get('sold_quantity', 0),
+                    'status': sku_details.get('status', 'sale'),
+                    'image': sku_details.get('thumbnail') or sku_details.get('main_image'),
+                    'url': sku_details.get('url')
+                })
+    
+    return group_products
+
+def update_group_product_quantity(group_product_id: int, new_quantity: int) -> bool:
+    """
+    تحديث كمية منتج داخل مجموعة منتجات
+    """
+    headers = get_headers()
+    if not headers:
+        return False
+    
+    # جلب تفاصيل المنتج الحالية
+    current_res = safe_api_request("GET", f"https://api.salla.dev/admin/v2/products/{group_product_id}", headers)
+    if not current_res or not current_res.get('data'):
+        return False
+    
+    p_data = current_res['data']
+    
+    # تحديث الكمية فقط
+    payload = {
+        "name": p_data.get('name'),
+        "price": get_flat_price(p_data.get('price', 0)),
+        "quantity": new_quantity,
+        "status": p_data.get('status', 'sale')
+    }
+    
+    # الحفاظ على السعر المخفض إن وجد
+    sale_price = get_flat_price(p_data.get('sale_price', 0))
+    if sale_price > 0:
+        payload['sale_price'] = sale_price
+    
+    res = safe_api_request("PUT", f"https://api.salla.dev/admin/v2/products/{group_product_id}", headers, json=payload)
+    return res is not None
+
+def remove_product_from_group(group_product_id: int) -> bool:
+    """
+    إزالة منتج من مجموعة منتجات (حذف المنتج الفرعي)
+    """
+    headers = get_headers()
+    if not headers:
+        return False
+    
+    # حذف المنتج الفرعي
+    res = safe_api_request("DELETE", f"https://api.salla.dev/admin/v2/products/{group_product_id}", headers)
+    return res is not None
+
+def add_product_to_group(parent_product_id: int, product_id: int) -> bool:
+    """
+    إضافة منتج إلى مجموعة منتجات
+    ملاحظة: هذه العملية تحتاج إلى تحديث الـ SKUs في المنتج الأب
+    """
+    headers = get_headers()
+    if not headers:
+        return False
+    
+    # جلب المنتج الأب
+    parent_product = get_product_details(parent_product_id)
+    if not parent_product:
+        return False
+    
+    # جلب المنتج المراد إضافته
+    child_product = get_product_details(product_id)
+    if not child_product:
+        return False
+    
+    # الحصول على الـ SKUs الحالية
+    current_skus = parent_product.get('skus', [])
+    
+    # إضافة SKU جديد
+    new_sku = {
+        "id": child_product.get('id'),
+        "sku": child_product.get('sku'),
+        "price": get_flat_price(child_product.get('price', 0))
+    }
+    
+    # تحديث المنتج الأب مع الـ SKUs الجديدة
+    payload = {
+        "name": parent_product.get('name'),
+        "price": get_flat_price(parent_product.get('price', 0)),
+        "status": parent_product.get('status', 'sale'),
+        "skus": current_skus + [new_sku]
+    }
+    
+    res = safe_api_request("PUT", f"https://api.salla.dev/admin/v2/products/{parent_product_id}", headers, json=payload)
+    return res is not None
