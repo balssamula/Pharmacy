@@ -744,7 +744,7 @@ def render_products_page():
                         if update_product_status(p_id, target_st):
                             st.success("تم التحديث!")
                             st.rerun()
-                            
+
                 # ✅ إضافة زر حذف المنتج
                 with st.popover("حذف المنتج", icon="🗑️", type="primary"):
                     st.warning("⚠️ تحذير: حذف المنتج نهائي ولا يمكن استرجاعه!")
@@ -822,6 +822,171 @@ def render_products_page():
                                         st.rerun()
                             else:
                                 st.warning("الرجاء إدخال كميات أكبر من صفر للتحديث.")
+
+            # ==========================================
+            # ✅ عرض المنتجات داخل مجموعة المنتجات
+            # ==========================================
+            # التحقق من أن المنتج من نوع مجموعة منتجات
+            if p.get('type') == 'group_products':
+                with st.expander(f"📦 منتجات داخل المجموعة ({p.get('name')})", expanded=False):
+                    st.markdown("#### 📋 المنتجات المضمنة في هذه المجموعة")
+                    
+                    # جلب المنتجات داخل المجموعة
+                    with st.spinner("جاري تحميل المنتجات داخل المجموعة..."):
+                        group_products = get_group_products(int(p_id))
+                    
+                    if group_products:
+                        st.info(f"📊 عدد المنتجات في المجموعة: {len(group_products)}")
+                        
+                        # عرض المنتجات في جدول
+                        for gp in group_products:
+                            gp_id = str(gp.get('id', 'N/A'))
+                            gp_name = gp.get('name', 'منتج بدون اسم')
+                            gp_sku = gp.get('sku', 'لا يوجد')
+                            gp_price = gp.get('price', 0)
+                            gp_quantity = gp.get('quantity', 0)
+                            gp_sold = gp.get('sold_quantity', 0)
+                            gp_status = gp.get('status', 'sale')
+                            gp_image = gp.get('image')
+                            
+                            # عرض كل منتج فرعي
+                            col_gp_img, col_gp_info, col_gp_qty, col_gp_actions = st.columns([1, 3, 2, 2])
+                            
+                            with col_gp_img:
+                                if gp_image:
+                                    st.image(gp_image, width=80)
+                                else:
+                                    st.markdown("🚫")
+                            
+                            with col_gp_info:
+                                st.markdown(f"**{gp_name}**")
+                                st.markdown(f"🆔 `{gp_id}` | 🔢 `{gp_sku}`")
+                                st.markdown(f"💰 السعر: **{gp_price:.2f} SAR**")
+                                st.markdown(f"📊 الحالة: {'🟢 معروض' if gp_status == 'sale' else '🔴 مخفي'}")
+                            
+                            with col_gp_qty:
+                                st.markdown(f"📦 المخزون: **{gp_quantity}**")
+                                st.markdown(f"📈 المبيعات: **{gp_sold}**")
+                                
+                                # ✅ تحديث كمية المنتج الفرعي
+                                new_qty = st.number_input(
+                                    f"تحديث الكمية",
+                                    min_value=0,
+                                    value=gp_quantity,
+                                    step=1,
+                                    key=f"gp_qty_{gp_id}_{idx}",
+                                    label_visibility="collapsed"
+                                )
+                                
+                                if st.button(f"💾 تحديث الكمية", key=f"gp_update_qty_{gp_id}_{idx}", use_container_width=True):
+                                    with st.spinner("جاري تحديث الكمية..."):
+                                        if update_group_product_quantity(int(gp_id), new_qty):
+                                            st.success("✅ تم تحديث الكمية بنجاح!")
+                                            st.rerun()
+                                        else:
+                                            st.error("❌ فشل تحديث الكمية")
+                            
+                            with col_gp_actions:
+                                # ✅ زر عرض المنتج
+                                if gp.get('url'):
+                                    st.markdown(f"[🔗 عرض المنتج]({gp.get('url')})")
+                                
+                                # ✅ زر إزالة من المجموعة
+                                if st.button(f"🗑️ إزالة من المجموعة", key=f"gp_remove_{gp_id}_{idx}", use_container_width=True):
+                                    if st.button(f"تأكيد إزالة {gp_name}", key=f"gp_confirm_remove_{gp_id}_{idx}"):
+                                        with st.spinner("جاري إزالة المنتج من المجموعة..."):
+                                            if remove_product_from_group(int(gp_id)):
+                                                st.success("✅ تم إزالة المنتج من المجموعة!")
+                                                st.rerun()
+                                            else:
+                                                st.error("❌ فشل إزالة المنتج")
+                            
+                            st.divider()
+                        
+                        # ✅ إضافة منتج جديد للمجموعة
+                        st.markdown("#### ➕ إضافة منتج جديد للمجموعة")
+                        
+                        # البحث عن منتج لإضافته
+                        search_product = st.text_input(
+                            "ابحث عن منتج لإضافته (SKU أو اسم)",
+                            key=f"gp_search_{p_id}_{idx}",
+                            placeholder="أدخل SKU أو اسم المنتج..."
+                        )
+                        
+                        if search_product:
+                            # البحث في المنتجات المحملة
+                            found_products = []
+                            for prod in st.session_state.get("all_products", []):
+                                if prod.get('id') != int(p_id):  # استبعاد المنتج الأب نفسه
+                                    prod_name = str(prod.get('name', '')).lower()
+                                    prod_sku = str(prod.get('sku', '')).lower()
+                                    search = search_product.lower()
+                                    if search in prod_name or search in prod_sku:
+                                        found_products.append(prod)
+                            
+                            if found_products:
+                                # عرض النتائج
+                                for prod in found_products[:5]:  # عرض 5 نتائج فقط
+                                    prod_id = prod.get('id')
+                                    prod_name = prod.get('name')
+                                    prod_sku = prod.get('sku')
+                                    
+                                    col_find1, col_find2 = st.columns([3, 1])
+                                    with col_find1:
+                                        st.markdown(f"**{prod_name}** | `{prod_sku}`")
+                                    with col_find2:
+                                        if st.button(f"➕ إضافة", key=f"gp_add_{prod_id}_{idx}"):
+                                            with st.spinner("جاري إضافة المنتج..."):
+                                                if add_product_to_group(int(p_id), prod_id):
+                                                    st.success("✅ تم إضافة المنتج بنجاح!")
+                                                    st.rerun()
+                                                else:
+                                                    st.error("❌ فشل إضافة المنتج")
+                            else:
+                                st.info("لا توجد منتجات مطابقة للبحث")
+                    else:
+                        st.info("ℹ️ لا توجد منتجات داخل هذه المجموعة")
+                        
+                        # عرض خيار إضافة منتج عندما تكون المجموعة فارغة
+                        st.markdown("#### ➕ إضافة أول منتج للمجموعة")
+                        search_product = st.text_input(
+                            "ابحث عن منتج لإضافته (SKU أو اسم)",
+                            key=f"gp_search_empty_{p_id}_{idx}",
+                            placeholder="أدخل SKU أو اسم المنتج..."
+                        )
+                        
+                        if search_product:
+                            found_products = []
+                            for prod in st.session_state.get("all_products", []):
+                                if prod.get('id') != int(p_id):
+                                    prod_name = str(prod.get('name', '')).lower()
+                                    prod_sku = str(prod.get('sku', '')).lower()
+                                    search = search_product.lower()
+                                    if search in prod_name or search in prod_sku:
+                                        found_products.append(prod)
+                            
+                            if found_products:
+                                for prod in found_products[:5]:
+                                    prod_id = prod.get('id')
+                                    prod_name = prod.get('name')
+                                    prod_sku = prod.get('sku')
+                                    
+                                    col_find1, col_find2 = st.columns([3, 1])
+                                    with col_find1:
+                                        st.markdown(f"**{prod_name}** | `{prod_sku}`")
+                                    with col_find2:
+                                        if st.button(f"➕ إضافة", key=f"gp_add_empty_{prod_id}_{idx}"):
+                                            with st.spinner("جاري إضافة المنتج..."):
+                                                if add_product_to_group(int(p_id), prod_id):
+                                                    st.success("✅ تم إضافة المنتج بنجاح!")
+                                                    st.rerun()
+                                                else:
+                                                    st.error("❌ فشل إضافة المنتج")
+                            else:
+                                st.info("لا توجد منتجات مطابقة للبحث")
+            # ==========================================
+            # ✅ نهاية عرض مجموعة المنتجات
+            # ==========================================
 
 def update_single_product_in_session(product_id: int, updated_data: Dict):
     """
