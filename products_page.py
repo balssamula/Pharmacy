@@ -13,7 +13,8 @@ from utils import (
     update_product_tax_secure, get_branches_list, generate_quantities_template, 
     process_quantities_import, create_products_template, fill_salla_template,
     generate_salla_new_products_file, delete_product, update_product_price, 
-    update_product_sale_price, update_product_prices_bulk, get_group_products
+    update_product_sale_price, update_product_prices_bulk, get_group_products,
+    add_product_to_group
 )
 
 TAX_EXEMPTION_CAUSES = ["الخدمات المالية", "عقد تأمين على الحياة", "التوريدات العقارية المعفاة", "صادرات السلع من المملكة", "صادرات الخدمات من المملكة", "النقل الدولي للسلع", "النقل الدولي للركاب", "توريد وسائل النقل", "الأدوية والمعدات الطبية"]
