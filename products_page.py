@@ -790,6 +790,38 @@ def render_products_page():
                             if update_product_tax_secure(p_id, is_taxed, selected_cause, headers):
                                 st.success("✅ تم تحديث حالة الضريبة بنجاح!")
                                 st.rerun()
+                
+                with st.popover("🏢 كميات الفروع"):
+                    if not branches:
+                        st.warning("لا توجد فروع مسجلة، أو فشل الجلب.")
+                    else:
+                        st.markdown("**أدخل الكمية الجديدة للفرع (سيتم استبدال الكمية الحالية):**")
+                        branch_updates = []
+                        for b in branches:
+                            new_q = st.number_input(f"تحديث الكمية في: {b['name']}", min_value=0, value=0, step=1, key=f"bq_{p_id}_{b['id']}_{idx}")
+                            if new_q > 0:
+                                branch_updates.append({
+                                    "identifer": p_sku, 
+                                    "identifer_type": "sku", 
+                                    "branch_id": b['id'], 
+                                    "quantity": new_q, 
+                                    "mode": "overwrite"
+                                })
+                        
+                        if st.button("💾 حفظ كميات الفروع (للقيم المضافة)", key=f"save_bq_{p_id}_{idx}", type="primary", use_container_width=True):
+                            if branch_updates:
+                                with st.spinner("جاري التوزيع في سلة..."):
+                                    res = safe_api_request(
+                                        "POST", 
+                                        "https://api.salla.dev/admin/v2/products/quantities/bulk", 
+                                        headers, 
+                                        json={"products": branch_updates}
+                                    )
+                                    if res:
+                                        st.success("✅ تم تحديث وتوزيع الكميات!")
+                                        st.rerun()
+                            else:
+                                st.warning("الرجاء إدخال كميات أكبر من صفر للتحديث.")
 
             # ==========================================
             # ✅ عرض المنتجات داخل مجموعة المنتجات
@@ -955,39 +987,6 @@ def render_products_page():
             # ==========================================
             # ✅ نهاية عرض مجموعة المنتجات
             # ==========================================
-                
-                with st.popover("🏢 كميات الفروع"):
-                    if not branches:
-                        st.warning("لا توجد فروع مسجلة، أو فشل الجلب.")
-                    else:
-                        st.markdown("**أدخل الكمية الجديدة للفرع (سيتم استبدال الكمية الحالية):**")
-                        branch_updates = []
-                        for b in branches:
-                            new_q = st.number_input(f"تحديث الكمية في: {b['name']}", min_value=0, value=0, step=1, key=f"bq_{p_id}_{b['id']}_{idx}")
-                            if new_q > 0:
-                                branch_updates.append({
-                                    "identifer": p_sku, 
-                                    "identifer_type": "sku", 
-                                    "branch_id": b['id'], 
-                                    "quantity": new_q, 
-                                    "mode": "overwrite"
-                                })
-                        
-                        if st.button("💾 حفظ كميات الفروع (للقيم المضافة)", key=f"save_bq_{p_id}_{idx}", type="primary", use_container_width=True):
-                            if branch_updates:
-                                with st.spinner("جاري التوزيع في سلة..."):
-                                    res = safe_api_request(
-                                        "POST", 
-                                        "https://api.salla.dev/admin/v2/products/quantities/bulk", 
-                                        headers, 
-                                        json={"products": branch_updates}
-                                    )
-                                    if res:
-                                        st.success("✅ تم تحديث وتوزيع الكميات!")
-                                        st.rerun()
-                            else:
-                                st.warning("الرجاء إدخال كميات أكبر من صفر للتحديث.")
-
 
 def update_single_product_in_session(product_id: int, updated_data: Dict):
     """
