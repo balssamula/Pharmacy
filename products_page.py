@@ -570,7 +570,7 @@ def render_products_page():
 
         # قبل عرض المنتج، أضف أيقونة للمجموعات
         product_type_icon = "📦" if p.get('type') == 'group_products' else "📄"
-        product_type_label = "📦 || (مجموعة منتجات) " if p.get('type') == 'group_products' else ""
+        product_type_label = " || 📦 (مجموعة منتجات) " if p.get('type') == 'group_products' else ""
         
         st.markdown(f"<div style='background: linear-gradient(135deg, #243b55 0%, #141e30 100%); padding: 14px 20px; border-radius: 12px 12px 0px 0px; margin-top: 25px; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 10px; border-bottom: 3px solid #e67e22;'><span style='color: #ffffff; font-weight: bold; font-size: 15px;'>{product_type_icon} {p_name}{product_type_label}</span><div style='display: flex; gap: 8px; flex-wrap: wrap;'><span style='background: rgba(255,255,255,0.2); color: #fff; padding: 4px 12px; border-radius: 20px; font-size: 11px; font-weight:600;'>{disp_status}</span><span style='background: rgba(0, 235, 207, 0.2); color: #00EBCF; padding: 4px 12px; border-radius: 20px; font-size: 11px; font-weight:600;'>{tax_status_badge}</span>{offer_badge_html}</div></div>", unsafe_allow_html=True)        
         
