@@ -431,7 +431,7 @@ def render_products_page():
         search_query = st.text_input("ابحث عن منتج (اسم، SKU، ID):", placeholder="أدخل اسم المنتج، أو الرقم التعريفي...")
     
     st.markdown("#### 🎯 فلاتر سريعة:")
-    f_col1, f_col2, f_col3, f_col4, f_col5, f_col6 = st.columns(5)
+    f_col1, f_col2, f_col3, f_col4, f_col5, f_col6 = st.columns(6)
     with f_col1: filter_hidden = st.checkbox("المنتجات المخفية", key="f_hidden")
     with f_col2: filter_no_img = st.checkbox("منتجات بدون صورة", key="f_no_img")
     with f_col3: filter_has_promo = st.checkbox("منتجات لها عنوان ترويجي", key="f_promo")
