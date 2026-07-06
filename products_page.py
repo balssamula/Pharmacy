@@ -568,11 +568,41 @@ def render_products_page():
         else:
             offer_badge_html = ""
 
-        # قبل عرض المنتج، أضف أيقونة للمجموعات
-        product_type_icon = "📦" if p.get('type') == 'group_products' else "📄"
-        product_type_label = " || 📦 (مجموعة منتجات) " if p.get('type') == 'group_products' else ""
-        
-        st.markdown(f"<div style='background: linear-gradient(135deg, #243b55 0%, #141e30 100%); padding: 14px 20px; border-radius: 12px 12px 0px 0px; margin-top: 25px; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 10px; border-bottom: 3px solid #e67e22;'><span style='color: #ffffff; font-weight: bold; font-size: 15px;'>{product_type_icon} {p_name}{product_type_label}</span><div style='display: flex; gap: 8px; flex-wrap: wrap;'><span style='background: rgba(255,255,255,0.2); color: #fff; padding: 4px 12px; border-radius: 20px; font-size: 11px; font-weight:600;'>{disp_status}</span><span style='background: rgba(0, 235, 207, 0.2); color: #00EBCF; padding: 4px 12px; border-radius: 20px; font-size: 11px; font-weight:600;'>{tax_status_badge}</span>{offer_badge_html}</div></div>", unsafe_allow_html=True)        
+        # ✅ تحديد نوع المنتج وأيقونته
+        product_type = p.get('type', 'product')
+        if product_type == 'group_products':
+            type_icon = "📦"
+            type_badge = "<span style='background: linear-gradient(135deg, #6C2BD9 0%, #9B59B6 100%); color: white; padding: 4px 12px; border-radius: 20px; font-size: 11px; font-weight:600;'>📦 مجموعة منتجات</span>"
+        else:
+            type_icon = "📄"
+            type_badge = "<span style='background: rgba(52, 152, 219, 0.2); color: #3498db; padding: 4px 12px; border-radius: 20px; font-size: 11px; font-weight:600;'>📄 منتج عادي</span>"
+
+        st.markdown(f"""
+        <div style='background: linear-gradient(135deg, #243b55 0%, #141e30 100%); 
+            padding: 14px 20px; 
+            border-radius: 12px 12px 0px 0px; 
+            margin-top: 25px; 
+            display: flex; 
+            justify-content: space-between; 
+            align-items: center; 
+            flex-wrap: wrap; 
+            gap: 10px; 
+            border-bottom: 3px solid {("#9B59B6" if product_type == "group_products" else "#e67e22")};'>
+            <span style='color: #ffffff; font-weight: bold; font-size: 15px;'>
+                {type_icon} {p_name}
+            </span>
+            <div style='display: flex; gap: 8px; flex-wrap: wrap;'>
+                <span style='background: rgba(255,255,255,0.2); color: #fff; padding: 4px 12px; border-radius: 20px; font-size: 11px; font-weight:600;'>
+                    {disp_status}
+                </span>
+                <span style='background: rgba(0, 235, 207, 0.2); color: #00EBCF; padding: 4px 12px; border-radius: 20px; font-size: 11px; font-weight:600;'>
+                    {tax_status_badge}
+                </span>
+                {type_badge}
+                {offer_badge_html}
+            </div>
+        </div>
+        """, unsafe_allow_html=True)
         
         with st.container(border=True):
             st.markdown("""<div style="background-color: #fafbfc; padding: 20px; border-radius: 0px 0px 12px 12px; border: 1px solid #e1e8ed; border-top: none; box-shadow: 0 4px 10px rgba(0,0,0,0.03); margin-bottom: 25px;">""", unsafe_allow_html=True)
@@ -837,7 +867,21 @@ def render_products_page():
             # ==========================================
             # التحقق من أن المنتج من نوع مجموعة منتجات
             if p.get('type') == 'group_products':
-                with st.expander(f"📦 منتجات داخل المجموعة ({p.get('name')})", expanded=False):
+                # ✅ أيقونة مميزة لمجموعة المنتجات
+                st.markdown(f"""
+                <div style='background: linear-gradient(135deg, #6C2BD9 0%, #9B59B6 100%); 
+                    padding: 8px 16px; 
+                    border-radius: 20px; 
+                    display: inline-block; 
+                    margin-bottom: 10px;
+                    box-shadow: 0 2px 8px rgba(108, 43, 217, 0.3);'>
+                    <span style='color: white; font-weight: bold; font-size: 13px;'>
+                        📦 مجموعة منتجات - {p.get('name')}
+                    </span>
+                </div>
+                """, unsafe_allow_html=True)
+                
+                with st.expander(f"📋 عرض المنتجات داخل المجموعة ({len(get_group_products(int(p_id)))} منتج)", expanded=False):
                     st.markdown("#### 📋 المنتجات المضمنة في هذه المجموعة")
                     
                     # جلب المنتجات داخل المجموعة
@@ -847,8 +891,8 @@ def render_products_page():
                     if group_products:
                         st.info(f"📊 عدد المنتجات في المجموعة: {len(group_products)}")
                         
-                        # عرض المنتجات في جدول
-                        for gp in group_products:
+                        # ✅ عرض المنتجات في بطاقات منسقة
+                        for gp_idx, gp in enumerate(group_products):
                             gp_id = str(gp.get('id', 'N/A'))
                             gp_name = gp.get('name', 'منتج بدون اسم')
                             gp_sku = gp.get('sku', 'لا يوجد')
@@ -858,61 +902,96 @@ def render_products_page():
                             gp_status = gp.get('status', 'sale')
                             gp_image = gp.get('image')
                             
-                            # عرض كل منتج فرعي
-                            col_gp_img, col_gp_info, col_gp_qty, col_gp_actions = st.columns([1, 3, 2, 2])
+                            # ✅ حالة المنتج الفرعي
+                            gp_status_text = "🟢 معروض" if gp_status == 'sale' else "🔴 مخفي"
+                            gp_tax_text = "📗 خاضع للضريبة" if gp.get('with_tax', True) else "⚪ معفى"
                             
-                            with col_gp_img:
-                                if gp_image:
-                                    st.image(gp_image, width=80)
-                                else:
-                                    st.markdown("🚫")
+                            # ✅ عرض كل منتج فرعي في بطاقة منسقة
+                            st.markdown(f"""
+                            <div style='background: #f8f9fa; 
+                                border-radius: 10px; 
+                                padding: 15px; 
+                                margin-bottom: 12px; 
+                                border-right: 4px solid #6C2BD9;
+                                box-shadow: 0 2px 4px rgba(0,0,0,0.05);'>
+                                <div style='display: flex; align-items: center; gap: 15px; flex-wrap: wrap;'>
+                                    <div style='flex: 0 0 60px;'>
+                                        {f'<img src="{gp_image}" style="width: 60px; height: 60px; object-fit: cover; border-radius: 8px;">' if gp_image else '<div style="width: 60px; height: 60px; background: #e0e0e0; border-radius: 8px; display: flex; align-items: center; justify-content: center; font-size: 24px;">🚫</div>'}
+                                    </div>
+                                    <div style='flex: 1; min-width: 150px;'>
+                                        <div style='font-weight: bold; font-size: 16px; color: #1a1a2e;'>{gp_name}</div>
+                                        <div style='font-size: 12px; color: #666;'>
+                                            🆔 {gp_id} | 🔢 {gp_sku} | 💰 {gp_price:.2f} SAR
+                                        </div>
+                                        <div style='display: flex; gap: 8px; margin-top: 5px; flex-wrap: wrap;'>
+                                            <span style='background: {("#2ecc71" if gp_status == "sale" else "#e74c3c")}; 
+                                                color: white; 
+                                                padding: 2px 10px; 
+                                                border-radius: 12px; 
+                                                font-size: 10px; 
+                                                font-weight: 600;'>
+                                                {gp_status_text}
+                                            </span>
+                                            <span style='background: {("#3498db" if gp.get("with_tax", True) else "#f39c12")}; 
+                                                color: white; 
+                                                padding: 2px 10px; 
+                                                border-radius: 12px; 
+                                                font-size: 10px; 
+                                                font-weight: 600;'>
+                                                {gp_tax_text}
+                                            </span>
+                                        </div>
+                                    </div>
+                                    <div style='flex: 0 0 120px;'>
+                                        <div style='font-size: 13px;'>
+                                            📦 المخزون: <strong>{gp_quantity}</strong>
+                                        </div>
+                                        <div style='font-size: 13px;'>
+                                            📈 المبيعات: <strong>{gp_sold}</strong>
+                                        </div>
+                                    </div>
+                            """, unsafe_allow_html=True)
                             
-                            with col_gp_info:
-                                st.markdown(f"**{gp_name}**")
-                                st.markdown(f"🆔 `{gp_id}` | 🔢 `{gp_sku}`")
-                                st.markdown(f"💰 السعر: **{gp_price:.2f} SAR**")
-                                st.markdown(f"📊 الحالة: {'🟢 معروض' if gp_status == 'sale' else '🔴 مخفي'}")
+                            # ✅ أعمدة التحكم (في نفس البطاقة)
+                            col_gp_qty, col_gp_actions = st.columns([1, 1])
                             
                             with col_gp_qty:
-                                st.markdown(f"📦 المخزون: **{gp_quantity}**")
-                                st.markdown(f"📈 المبيعات: **{gp_sold}**")
-                                
-                                # ✅ تحديث كمية المنتج الفرعي
+                                # تحديث الكمية
                                 new_qty = st.number_input(
                                     f"تحديث الكمية",
                                     min_value=0,
                                     value=gp_quantity,
                                     step=1,
-                                    key=f"gp_qty_{gp_id}_{idx}",
+                                    key=f"gp_qty_{gp_id}_{idx}_{gp_idx}",
                                     label_visibility="collapsed"
                                 )
                                 
-                                if st.button(f"💾 تحديث الكمية", key=f"gp_update_qty_{gp_id}_{idx}", use_container_width=True):
+                                if st.button(f"💾 تحديث", key=f"gp_update_qty_{gp_id}_{idx}_{gp_idx}", use_container_width=True):
                                     with st.spinner("جاري تحديث الكمية..."):
                                         if update_group_product_quantity(int(gp_id), new_qty):
-                                            st.success("✅ تم تحديث الكمية بنجاح!")
+                                            st.success("✅ تم تحديث الكمية!")
                                             st.rerun()
                                         else:
                                             st.error("❌ فشل تحديث الكمية")
                             
                             with col_gp_actions:
-                                # ✅ زر عرض المنتج
+                                # عرض المنتج
                                 if gp.get('url'):
-                                    st.markdown(f"[🔗 عرض المنتج]({gp.get('url')})")
+                                    st.markdown(f"[🔗 عرض]({gp.get('url')})", unsafe_allow_html=True)
                                 
-                                # ✅ زر إزالة من المجموعة
-                                if st.button(f"🗑️ إزالة من المجموعة", key=f"gp_remove_{gp_id}_{idx}", use_container_width=True):
-                                    if st.button(f"تأكيد إزالة {gp_name}", key=f"gp_confirm_remove_{gp_id}_{idx}"):
-                                        with st.spinner("جاري إزالة المنتج من المجموعة..."):
-                                            if remove_product_from_group(int(gp_id)):
-                                                st.success("✅ تم إزالة المنتج من المجموعة!")
-                                                st.rerun()
-                                            else:
-                                                st.error("❌ فشل إزالة المنتج")
+                                # إزالة من المجموعة
+                                if st.button(f"🗑️ إزالة", key=f"gp_remove_{gp_id}_{idx}_{gp_idx}", use_container_width=True):
+                                    with st.spinner("جاري إزالة المنتج..."):
+                                        if remove_product_from_group(int(gp_id)):
+                                            st.success("✅ تم إزالة المنتج!")
+                                            st.rerun()
+                                        else:
+                                            st.error("❌ فشل الإزالة")
                             
-                            st.divider()
+                            st.markdown("</div></div>", unsafe_allow_html=True)
                         
                         # ✅ إضافة منتج جديد للمجموعة
+                        st.markdown("---")
                         st.markdown("#### ➕ إضافة منتج جديد للمجموعة")
                         
                         # البحث عن منتج لإضافته
@@ -934,8 +1013,7 @@ def render_products_page():
                                         found_products.append(prod)
                             
                             if found_products:
-                                # عرض النتائج
-                                for prod in found_products[:5]:  # عرض 5 نتائج فقط
+                                for prod in found_products[:5]:
                                     prod_id = prod.get('id')
                                     prod_name = prod.get('name')
                                     prod_sku = prod.get('sku')
@@ -947,7 +1025,7 @@ def render_products_page():
                                         if st.button(f"➕ إضافة", key=f"gp_add_{prod_id}_{idx}"):
                                             with st.spinner("جاري إضافة المنتج..."):
                                                 if add_product_to_group(int(p_id), prod_id):
-                                                    st.success("✅ تم إضافة المنتج بنجاح!")
+                                                    st.success("✅ تم إضافة المنتج!")
                                                     st.rerun()
                                                 else:
                                                     st.error("❌ فشل إضافة المنتج")
@@ -987,7 +1065,7 @@ def render_products_page():
                                         if st.button(f"➕ إضافة", key=f"gp_add_empty_{prod_id}_{idx}"):
                                             with st.spinner("جاري إضافة المنتج..."):
                                                 if add_product_to_group(int(p_id), prod_id):
-                                                    st.success("✅ تم إضافة المنتج بنجاح!")
+                                                    st.success("✅ تم إضافة المنتج!")
                                                     st.rerun()
                                                 else:
                                                     st.error("❌ فشل إضافة المنتج")
