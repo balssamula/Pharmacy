@@ -606,8 +606,9 @@ def render_products_page():
                             gp_status_text = "🟢 معروض" if gp_status == 'sale' else "🔴 مخفي"
                             gp_tax_text = "📗 خاضع" if gp.get('with_tax', True) else "⚪ معفى"
                             
+                            # ✅ الإصلاح الجذري: إغلاق جميع وسوم HTML (div) في نفس السطر لمنع انهيار الواجهة!
                             st.markdown(f"""
-                            <div style='background: #f8f9fa; border-radius: 10px; padding: 15px; margin-bottom: 12px; border-right: 4px solid #6C2BD9; box-shadow: 0 2px 4px rgba(0,0,0,0.05);'>
+                            <div style='background: #f8f9fa; border-radius: 10px; padding: 15px; margin-bottom: 10px; border-right: 4px solid #6C2BD9; box-shadow: 0 2px 4px rgba(0,0,0,0.05);'>
                                 <div style='display: flex; align-items: center; gap: 15px; flex-wrap: wrap;'>
                                     <div style='flex: 0 0 60px;'>
                                         {f'<img src="{gp_image}" style="width: 60px; height: 60px; object-fit: cover; border-radius: 8px;">' if gp_image else '<div style="width: 60px; height: 60px; background: #e0e0e0; border-radius: 8px; display: flex; align-items: center; justify-content: center; font-size: 24px;">🚫</div>'}
@@ -624,14 +625,16 @@ def render_products_page():
                                         <div style='font-size: 13px; color:#6C2BD9; font-weight:bold;'>📦 حبات بالمجموعة: {gp_bundle_qty}</div>
                                         <div style='font-size: 12px; color:#555;'>مخزون المستودع: {gp_stock}</div>
                                     </div>
+                                </div>
+                            </div>
                             """, unsafe_allow_html=True)
                             
+                            # عرض أزرار التحكم تحت البطاقة مباشرة
                             col_gp_qty, col_gp_actions = st.columns([1, 1])
                             with col_gp_qty:
                                 new_qty = st.number_input(f"تعديل الحبات", min_value=1, value=int(gp_bundle_qty), step=1, key=f"gp_qty_{gp_id}_{idx}_{gp_idx}", label_visibility="collapsed")
                                 if st.button(f"💾 تحديث", key=f"gp_update_qty_{gp_id}_{idx}_{gp_idx}", use_container_width=True):
                                     with st.spinner("تحديث..."):
-                                        # ✅ نمرر المعرف الأب والفرعي معاً
                                         if update_group_product_quantity(int(p_id), int(gp_id), new_qty):
                                             st.success("✅ تم التحديث!")
                                             st.rerun()
@@ -639,11 +642,12 @@ def render_products_page():
                                 if gp.get('url'): st.markdown(f"[🔗 عرض]({gp.get('url')})", unsafe_allow_html=True)
                                 if st.button(f"🗑️ إزالة", key=f"gp_remove_{gp_id}_{idx}_{gp_idx}", use_container_width=True):
                                     with st.spinner("إزالة آمنة..."):
-                                        # ✅ نمرر المعرف الأب والفرعي معاً للحذف الآمن
                                         if remove_product_from_group(int(p_id), int(gp_id)):
                                             st.success("✅ تم إزالة المنتج من المجموعة!")
                                             st.rerun()
-                            st.markdown("</div></div>", unsafe_allow_html=True)
+                                            
+                            # خط فاصل بين المنتجات
+                            st.markdown("<hr style='margin:15px 0; border:0; border-bottom:2px dashed #eee;'>", unsafe_allow_html=True)
                         
                     else:
                         st.info("ℹ️ لا توجد منتجات داخل هذه المجموعة")
