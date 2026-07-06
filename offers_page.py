@@ -510,6 +510,10 @@ def render_offers_page():
                 b_type_raw = buy_obj.get("type", "product")
                 if isinstance(b_type_raw, dict): b_type_raw = b_type_raw.get("id", "product")
                 st.text(f"مطبق على: {inv_type_map.get(b_type_raw, 'منتجات')}")
+                if buy_products or buy_categories:
+                    buy_text = parse_products_cleanly({'products': buy_products, 'categories': buy_categories})
+                else:
+                    buy_text = "جميع الأصناف المشمولة"
                 st.caption(f"الكمية المطلوبة: {buy_obj.get('quantity', 1)} قطعة")
             with col_y:
                 st.markdown("<b style='color:#0f1c2e;'>🎁 مجموعة المنح والهدية (Y) - [يحصل على]:</b>", unsafe_allow_html=True)
@@ -517,6 +521,10 @@ def render_offers_page():
                 g_type_raw = get_obj.get("type", "product")
                 if isinstance(g_type_raw, dict): g_type_raw = g_type_raw.get("id", "product")
                 st.text(f"مطبق على: {inv_type_map.get(g_type_raw, 'منتجات')}")
+                if get_products or get_categories:
+                    get_text = parse_products_cleanly({'products': get_products, 'categories': get_categories})
+                else:
+                    get_text = "جميع الأصناف المشمولة"
                 st.caption(f"كمية المنح/الخصم: {get_obj.get('quantity', 1)} قطعة")
                 if get_obj.get('discount_amount'):
                     st.markdown(f"🔥 **قيمة/نسبة الخصم :** `{get_obj.get('discount_amount')}`")
