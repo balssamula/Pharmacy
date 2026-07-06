@@ -1051,35 +1051,73 @@ def get_product_details(product_id: int) -> Optional[Dict]:
 def get_group_products(product_id: int) -> List[Dict]:
     """جلب المنتجات المضمنة داخل مجموعة منتجات"""
     headers = get_headers()
-    if not headers: return []
+    if not headers: 
+        return []
     
     product = get_product_details(product_id)
-    if not product or product.get('type') != 'group_products': return []
+    if not product:
+        return []
     
-    # ✅ السر هنا: سلة تستخدم grouped_items بدلاً من skus للمجموعات
-    grouped_items = product.get('grouped_items', [])
+    # ✅ التحقق من نوع المنتج
+    if product.get('type') != 'group_products':
+        return []
+    
     group_products = []
     
-    for item in grouped_items:
-        sub_product_data = item.get('product', {})
-        sub_id = sub_product_data.get('id')
-        
-        if sub_id:
-            sku_details = get_product_details(sub_id)
-            if sku_details:
-                group_products.append({
-                    'id': sku_details.get('id'),
-                    'name': sku_details.get('name', 'منتج بدون اسم'),
-                    'sku': sku_details.get('sku', 'لا يوجد'),
-                    'price': get_flat_price(sku_details.get('price', 0)),
-                    'bundle_quantity': item.get('quantity', 1), # ✅ الكمية المطلوبة للمجموعة
-                    'stock_quantity': sku_details.get('quantity', 0), # المخزون الفعلي
-                    'sold_quantity': sku_details.get('sold_quantity', 0),
-                    'status': sku_details.get('status', 'sale'),
-                    'image': sku_details.get('thumbnail') or sku_details.get('main_image'),
-                    'url': sku_details.get('url'),
-                    'with_tax': sku_details.get('with_tax', True)
-                })
+    # ✅ الطريقة الصحيحة: سلة تستخدم 'skus' للمنتجات داخل المجموعة
+    skus = product.get('skus', [])
+    
+    for sku in skus:
+        # كل SKU يحتوي على product_id
+        sku_product_id = sku.get('id')
+        if not sku_product_id:
+            continue
+            
+        # جلب تفاصيل المنتج الفرعي
+        sku_details = get_product_details(sku_product_id)
+        if sku_details:
+            # ✅ الحصول على الكمية المطلوبة من المجموعة (إذا كانت موجودة)
+            bundle_qty = sku.get('quantity', 1)
+            
+            group_products.append({
+                'id': sku_details.get('id'),
+                'name': sku_details.get('name', 'منتج بدون اسم'),
+                'sku': sku_details.get('sku', 'لا يوجد'),
+                'price': get_flat_price(sku_details.get('price', 0)),
+                'bundle_quantity': bundle_qty,  # الكمية المطلوبة في المجموعة
+                'stock_quantity': sku_details.get('quantity', 0),  # المخزون الفعلي
+                'sold_quantity': sku_details.get('sold_quantity', 0),
+                'status': sku_details.get('status', 'sale'),
+                'image': sku_details.get('thumbnail') or sku_details.get('main_image'),
+                'url': sku_details.get('url'),
+                'with_tax': sku_details.get('with_tax', True),
+                'regular_price': get_flat_price(sku_details.get('regular_price', 0))
+            })
+    
+    # ✅ إذا لم يتم العثور على منتجات عبر skus، جرب grouped_items
+    if not group_products:
+        grouped_items = product.get('grouped_items', [])
+        for item in grouped_items:
+            product_data = item.get('product', {})
+            sku_product_id = product_data.get('id')
+            if sku_product_id:
+                sku_details = get_product_details(sku_product_id)
+                if sku_details:
+                    group_products.append({
+                        'id': sku_details.get('id'),
+                        'name': sku_details.get('name', 'منتج بدون اسم'),
+                        'sku': sku_details.get('sku', 'لا يوجد'),
+                        'price': get_flat_price(sku_details.get('price', 0)),
+                        'bundle_quantity': item.get('quantity', 1),
+                        'stock_quantity': sku_details.get('quantity', 0),
+                        'sold_quantity': sku_details.get('sold_quantity', 0),
+                        'status': sku_details.get('status', 'sale'),
+                        'image': sku_details.get('thumbnail') or sku_details.get('main_image'),
+                        'url': sku_details.get('url'),
+                        'with_tax': sku_details.get('with_tax', True),
+                        'regular_price': get_flat_price(sku_details.get('regular_price', 0))
+                    })
+    
     return group_products
 
 def update_group_product_quantity(parent_product_id: int, child_product_id: int, new_quantity: int) -> bool:
