@@ -111,25 +111,43 @@ def safe_api_request(method: str, url: str, headers: Dict, **kwargs) -> Optional
         st.error(f"⚠️ خطأ في الاتصال: {str(e)}")
         return None
 
-def style_excel_file(ws, is_template=False, header_color="0F1C2E"):
-    header_fill = PatternFill(start_color=header_color, end_color=header_color, fill_type="solid")
-    header_font = Font(name="Segoe UI", size=11, bold=True, color="0F1C2E" if header_color == "00EBCF" else "FFFFFF")
-    center_alignment = Alignment(horizontal="center", vertical="center", wrap_text=True)
-    thin_border = Border(left=Side(style='thin', color='DDDDDD'), right=Side(style='thin', color='DDDDDD'), top=Side(style='thin', color='DDDDDD'), bottom=Side(style='thin', color='DDDDDD'))
-    start_row = 2 if is_template else 1
-    ws.row_dimensions[start_row].height = 28
+def style_excel_file(ws, is_template=True):
+    from openpyxl.styles import PatternFill, Font, Alignment, Border, Side
+    from openpyxl.worksheet.datavalidation import DataValidation
+    from openpyxl.utils import get_column_letter
+
+    header_fill = PatternFill(start_color="0F1C2E", end_color="0F1C2E", fill_type="solid")
+    header_font = Font(color="FFFFFF", bold=True, name="Segoe UI", size=11)
+    center_align = Alignment(horizontal="center", vertical="center", wrap_text=True)
+    thin_border = Border(left=Side(style='thin', color='DDDDDD'), right=Side(style='thin', color='DDDDDD'), 
+                         top=Side(style='thin', color='DDDDDD'), bottom=Side(style='thin', color='DDDDDD'))
+
+    # تنسيق العناوين (الصف الأول)
     for col in range(1, ws.max_column + 1):
-        cell = ws.cell(row=start_row, column=col)
+        cell = ws.cell(row=1, column=col)
         cell.fill = header_fill
         cell.font = header_font
-        cell.alignment = center_alignment
+        cell.alignment = center_align
         cell.border = thin_border
-    last_letter = get_column_letter(ws.max_column)
-    ws.auto_filter.ref = f"A{start_row}:{last_letter}{ws.max_row}"
-    for col in ws.columns:
-        max_len = max(len(str(cell.value or '')) for cell in col)
-        col_letter = get_column_letter(col[0].column)
-        ws.column_dimensions[col_letter].width = min(max(max_len + 4, 16), 35)
+        ws.column_dimensions[get_column_letter(col)].width = 22
+
+    # القوائم المنسدلة (Data Validation) لمنع أخطاء الإدخال
+    validations = {
+        "A": '"إنشاء,تحديث,حذف"',
+        "D": f'"{",".join(OFFER_TYPES_MAP.values())}"',
+        "E": f'"{",".join(CHANNELS_MAP.values())}"',
+        "F": f'"{",".join(APPLIED_TO_MAP.values())}"',
+        "I": '"نعم,لا"',
+        "N": '"منتج,تصنيف,ماركة"',
+        "Q": '"منتج,تصنيف,ماركة"',
+        "T": '"منتج مجاني,خصم بنسبة,مبلغ ثابت"',
+        "W": '"نشط,غير نشط"'
+    }
+
+    for col_letter, formula1 in validations.items():
+        dv = DataValidation(type="list", formula1=formula1, allow_blank=True)
+        ws.add_data_validation(dv)
+        dv.add(f"{col_letter}2:{col_letter}1000")
 
 def prepare_import_dataframe(df: pd.DataFrame) -> pd.DataFrame:
     """تحضير DataFrame للاستيراد إلى سلة"""
@@ -239,22 +257,53 @@ def create_products_template(products=None) -> bytes:
 # ==========================================
 
 def generate_salla_excel_template() -> bytes:
+    import io
+    from openpyxl import Workbook
     headers = [
-        "معرف العرض", "اسم العرض", "نوع العرض", "المنصة", "تطبيق على", "تاريخ البدء", "تاريخ الانتهاء", 
+        "الإجراء", "معرف العرض", "اسم العرض", "نوع العرض", "المنصة", "تطبيق على", "تاريخ البدء", "تاريخ الانتهاء", 
         "تطبيق مع كوبون", "الحد الأقصى للخصم", "الحد الأدنى للشراء", "الحد الأدنى للكمية", 
         "مجموعات العملاء", "نوع شراء X", "كمية شراء X", "عناصر شراء X (IDs)", 
         "نوع عرض Y", "كمية عرض Y", "عناصر عرض Y (IDs)", "نوع الخصم", "قيمة الخصم", 
         "رسالة العرض", "حالة العرض"
     ]
-    df = pd.DataFrame(columns=headers)
+    
+    # إضافة صف كدليل إرشادي للإدخال
+    example_row = [
+        "إنشاء", "", "عرض الشتاء المميز", "اذا اشترى العميل X يحصل على Y", "متصفح وتطبيق المتجر", 
+        "منتجات مختارة", "2026-08-01 00:00:00", "2026-08-30 23:59:59", "لا", 100, 50, 1, 
+        "", "منتج", 1, "1234,5678", "منتج", 1, "91011", "خصم بنسبة", 50, "تسوق الآن واستمتع!", "نشط"
+    ]
+    
+    wb = Workbook()
+    ws = wb.active
+    ws.title = "Salla Offers Template"
+    ws.append(headers)
+    ws.append(example_row)
+    
+    style_excel_file(ws, is_template=True)
+    
     buffer = io.BytesIO()
-    with pd.ExcelWriter(buffer, engine='openpyxl') as writer:
-        df.to_excel(writer, index=False)
+    wb.save(buffer)
     return buffer.getvalue()
 
 def export_offers_to_excel(offers_list: List[Dict]) -> bytes:
     try:
-        data = []
+        from openpyxl import Workbook
+        import io
+        import pandas as pd
+        
+        headers = [
+            "الإجراء", "معرف العرض", "اسم العرض", "نوع العرض", "المنصة", "تطبيق على", "تاريخ البدء", "تاريخ الانتهاء", 
+            "تطبيق مع كوبون", "الحد الأقصى للخصم", "الحد الأدنى للشراء", "الحد الأدنى للكمية", 
+            "مجموعات العملاء", "نوع شراء X", "كمية شراء X", "عناصر شراء X (IDs)", 
+            "نوع عرض Y", "كمية عرض Y", "عناصر عرض Y (IDs)", "نوع الخصم", "قيمة الخصم", 
+            "رسالة العرض", "حالة العرض"
+        ]
+        wb = Workbook()
+        ws = wb.active
+        ws.title = "Salla Offers"
+        ws.append(headers)
+
         for o in offers_list:
             buy = o.get('buy', {})
             get = o.get('get', {})
@@ -287,36 +336,36 @@ def export_offers_to_excel(offers_list: List[Dict]) -> bytes:
             chan_id = o.get('applied_channel', '')
             app_to_id = o.get('applied_to', '')
             
-            row = {
-                "معرف العرض": o.get('id', ''),
-                "اسم العرض": o.get('name', ''),
-                "نوع العرض": OFFER_TYPES_MAP.get(o_type_id, o_type_id),
-                "المنصة": CHANNELS_MAP.get(chan_id, chan_id),
-                "تطبيق على": APPLIED_TO_MAP.get(app_to_id, app_to_id),
-                "تاريخ البدء": o.get('start_date', ''),
-                "تاريخ الانتهاء": o.get('expiry_date', ''),
-                "تطبيق مع كوبون": "نعم" if o.get('applied_with_coupon') else "لا",
-                "الحد الأقصى للخصم": o.get('max_discount_amount', 0),
-                "الحد الأدنى للشراء": o.get('min_purchase_amount', 0),
-                "الحد الأدنى للكمية": o.get('min_items_count', 0),
-                "مجموعات العملاء": ",".join(cust_groups),
-                "نوع شراء X": buy_type_ar,
-                "كمية شراء X": buy.get('quantity', 1),
-                "عناصر شراء X (IDs)": ",".join(buy_elems),
-                "نوع عرض Y": get_type_ar,
-                "كمية عرض Y": get.get('quantity', 1),
-                "عناصر عرض Y (IDs)": ",".join(get_elems),
-                "نوع الخصم": disc_type_ar,
-                "قيمة الخصم": get.get('discount_amount', 0),
-                "رسالة العرض": o.get('message', ''),
-                "حالة العرض": "نشط" if o.get('status') == 'active' else "غير نشط"
-            }
-            data.append(row)
+            row = [
+                "تحديث", # افتراضي عند التصدير
+                o.get('id', ''),
+                o.get('name', ''),
+                OFFER_TYPES_MAP.get(o_type_id, o_type_id),
+                CHANNELS_MAP.get(chan_id, chan_id),
+                APPLIED_TO_MAP.get(app_to_id, app_to_id),
+                o.get('start_date', ''),
+                o.get('expiry_date', ''),
+                "نعم" if o.get('applied_with_coupon') else "لا",
+                o.get('max_discount_amount', 0),
+                o.get('min_purchase_amount', 0),
+                o.get('min_items_count', 0),
+                ",".join(cust_groups),
+                buy_type_ar,
+                buy.get('quantity', 1),
+                ",".join(buy_elems),
+                get_type_ar,
+                get.get('quantity', 1),
+                ",".join(get_elems),
+                disc_type_ar,
+                get.get('discount_amount', 0),
+                o.get('message', ''),
+                "نشط" if o.get('status') == 'active' else "غير نشط"
+            ]
+            ws.append(row)
             
-        df = pd.DataFrame(data)
+        style_excel_file(ws, is_template=False)
         buffer = io.BytesIO()
-        with pd.ExcelWriter(buffer, engine='openpyxl') as writer:
-            df.to_excel(writer, index=False)
+        wb.save(buffer)
         return buffer.getvalue()
     except Exception as e:
         return b""
@@ -334,8 +383,19 @@ def process_excel_import(df) -> dict:
     
     for idx, row in df.iterrows():
         try:
+            action = str(row.get('الإجراء', '')).strip()
             offer_id = str(row.get('معرف العرض', '')).strip() if pd.notna(row.get('معرف العرض')) else ''
             
+            # ✅ تنفيذ الحذف إذا طلب المستخدم ذلك
+            if action == 'حذف':
+                if offer_id and offer_id != 'nan':
+                    res = safe_api_request("DELETE", f"{SALLA_API_URL}/{offer_id}", headers)
+                    if res is not None: results["success"].append(f"تم حذف العرض بنجاح.")
+                    else: results["errors"].append(f"فشل حذف العرض رقم {offer_id}")
+                else:
+                    results["errors"].append(f"السطر {idx+1}: لا يمكن حذف العرض بدون كتابة (معرف العرض).")
+                continue
+                
             o_type_ar = str(row.get('نوع العرض', '')).strip()
             o_type = rev_offer_types.get(o_type_ar, 'buy_x_get_y')
             
@@ -389,11 +449,11 @@ def process_excel_import(df) -> dict:
             
             if pd.isna(payload['message']) or payload['message'] == 'nan': payload['message'] = ''
             
-            if offer_id and offer_id != 'nan':
+            if action == 'تحديث' and offer_id and offer_id != 'nan':
                 res = safe_api_request("PUT", f"{SALLA_API_URL}/{offer_id}", headers, json=payload)
                 if res: results["success"].append(f"تم تحديث العرض: {payload['name']}")
                 else: results["errors"].append(f"فشل تحديث العرض: {payload['name']}")
-            else:
+            elif action == 'إنشاء':
                 res = safe_api_request("POST", SALLA_API_URL, headers, json=payload)
                 if res: results["success"].append(f"تم إنشاء العرض: {payload['name']}")
                 else: results["errors"].append(f"فشل إنشاء العرض: {payload['name']}")
