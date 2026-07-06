@@ -121,7 +121,7 @@ def render_offers_page():
     with col_dl:
         st.download_button("📥 تنزيل نموذج استيراد العروض الترويجية", data=generate_salla_excel_template(), file_name="Salla_Offers_Template.xlsx", mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", use_container_width=True)
         
-    with st.spinner("🔄 جاري جلب كافة العروض (نشطة وغير نشطة) من سلة..."):
+    with st.spinner("🔄 جاري جلب كافة العروض من سلة..."):
         raw_offers = fetch_all_pages(SALLA_API_URL)
         
     with col_ex:
@@ -133,7 +133,7 @@ def render_offers_page():
         try:
             df_user = pd.read_excel(uploaded_file)
             st.dataframe(df_user, use_container_width=True)
-            if st.button("🚀 تأكيد معالجة ونشر ملف العروض المرفوعة", use_container_width=True):
+            if st.button("🚀 تأكيد معالجة العروض المرفوعة", use_container_width=True):
                 res = process_excel_import(df_user)
                 for m in res["success"]: st.success(m)
                 for m in res["errors"]: st.error(m)
@@ -146,7 +146,7 @@ def render_offers_page():
     # ==========================================
     # ✅ أزرار الإجراءات الجماعية المتقدمة
     # ==========================================
-    st.markdown("### ⚡ إجراءات جماعية سريعة على العروض")
+    st.markdown("### ⚡ إجراءات سريعة على العروض")
     col_bulk1, col_bulk2, col_bulk3 = st.columns(3)
     
     with col_bulk1:
@@ -507,6 +507,8 @@ def render_offers_page():
             with col_x:
                 st.markdown("<b style='color:#0f1c2e;'>🛒 مجموعة الشراء (X) - [إذا اشترى العميل]:</b>", unsafe_allow_html=True)
                 buy_obj = offer_data.get('buy', {})
+                buy_products = buy_obj.get('products', [])
+                buy_categories = buy_obj.get('categories', [])
                 b_type_raw = buy_obj.get("type", "product")
                 if isinstance(b_type_raw, dict): b_type_raw = b_type_raw.get("id", "product")
                 st.text(f"مطبق على: {inv_type_map.get(b_type_raw, 'منتجات')}")
@@ -518,6 +520,8 @@ def render_offers_page():
             with col_y:
                 st.markdown("<b style='color:#0f1c2e;'>🎁 مجموعة المنح والهدية (Y) - [يحصل على]:</b>", unsafe_allow_html=True)
                 get_obj = offer_data.get('get', {})
+                get_products = get_obj.get('products', [])
+                get_categories = get_obj.get('categories', [])                
                 g_type_raw = get_obj.get("type", "product")
                 if isinstance(g_type_raw, dict): g_type_raw = g_type_raw.get("id", "product")
                 st.text(f"مطبق على: {inv_type_map.get(g_type_raw, 'منتجات')}")
