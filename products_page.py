@@ -607,27 +607,7 @@ def render_products_page():
                             gp_tax_text = "📗 خاضع" if gp.get('with_tax', True) else "⚪ معفى"
                             
                             # ✅ الإصلاح الجذري: إغلاق جميع وسوم HTML (div) في نفس السطر لمنع انهيار الواجهة!
-                            st.markdown(f"""
-                            <div style='background: #f8f9fa; border-radius: 10px; padding: 15px; margin-bottom: 10px; border-right: 4px solid #6C2BD9; box-shadow: 0 2px 4px rgba(0,0,0,0.05);'>
-                                <div style='display: flex; align-items: center; gap: 15px; flex-wrap: wrap;'>
-                                    <div style='flex: 0 0 60px;'>
-                                        {f'<img src="{gp_image}" style="width: 60px; height: 60px; object-fit: cover; border-radius: 8px;">' if gp_image else '<div style="width: 60px; height: 60px; background: #e0e0e0; border-radius: 8px; display: flex; align-items: center; justify-content: center; font-size: 24px;">🚫</div>'}
-                                    </div>
-                                    <div style='flex: 1; min-width: 150px;'>
-                                        <div style='font-weight: bold; font-size: 16px; color: #1a1a2e;'>{gp_name}</div>
-                                        <div style='font-size: 12px; color: #666;'>🆔 {gp_id} | 🔢 {gp_sku} | 💰 {gp_price:.2f} SAR</div>
-                                        <div style='display: flex; gap: 8px; margin-top: 5px; flex-wrap: wrap;'>
-                                            <span style='background: {("#2ecc71" if gp_status == "sale" else "#e74c3c")}; color: white; padding: 2px 10px; border-radius: 12px; font-size: 10px; font-weight: 600;'>{gp_status_text}</span>
-                                            <span style='background: {("#3498db" if gp.get("with_tax", True) else "#f39c12")}; color: white; padding: 2px 10px; border-radius: 12px; font-size: 10px; font-weight: 600;'>{gp_tax_text}</span>
-                                        </div>
-                                    </div>
-                                    <div style='flex: 0 0 140px;'>
-                                        <div style='font-size: 13px; color:#6C2BD9; font-weight:bold;'>📦 حبات بالمجموعة: {gp_bundle_qty}</div>
-                                        <div style='font-size: 12px; color:#555;'>مخزون المستودع: {gp_stock}</div>
-                                    </div>
-                                </div>
-                            </div>
-                            """, unsafe_allow_html=True)
+                            st.markdown(f"<div style='background: #f8f9fa; border-radius: 10px; padding: 15px; margin-bottom: 10px; border-right: 4px solid #6C2BD9; box-shadow: 0 2px 4px rgba(0,0,0,0.05);'><div style='display: flex; align-items: center; gap: 15px; flex-wrap: wrap;'><div style='flex: 0 0 60px;'>{f'<img src="{gp_image}" style="width: 60px; height: 60px; object-fit: cover; border-radius: 8px;">' if gp_image else '<div style="width: 60px; height: 60px; background: #e0e0e0; border-radius: 8px; display: flex; align-items: center; justify-content: center; font-size: 24px;">🚫</div>'}</div><div style='flex: 1; min-width: 150px;'><div style='font-weight: bold; font-size: 16px; color: #1a1a2e;'>{gp_name}</div><div style='font-size: 12px; color: #666;'>🆔 {gp_id} | 🔢 {gp_sku} | 💰 {gp_price:.2f} SAR</div><div style='display: flex; gap: 8px; margin-top: 5px; flex-wrap: wrap;'><span style='background: {("#2ecc71" if gp_status == "sale" else "#e74c3c")}; color: white; padding: 2px 10px; border-radius: 12px; font-size: 10px; font-weight: 600;'>{gp_status_text}</span><span style='background: {("#3498db" if gp.get("with_tax", True) else "#f39c12")}; color: white; padding: 2px 10px; border-radius: 12px; font-size: 10px; font-weight: 600;'>{gp_tax_text}</span></div></div><div style='flex: 0 0 140px;'><div style='font-size: 13px; color:#6C2BD9; font-weight:bold;'>📦 حبات بالمجموعة: {gp_bundle_qty}</div><div style='font-size: 12px; color:#555;'>مخزون المستودع: {gp_stock}</div></div></div></div>", unsafe_allow_html=True)
                             
                             # عرض أزرار التحكم تحت البطاقة مباشرة
                             col_gp_qty, col_gp_actions = st.columns([1, 1])
