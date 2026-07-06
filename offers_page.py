@@ -236,7 +236,7 @@ def render_offers_page():
                         if success_count > 0: st.rerun()
 
     with col_bulk4:
-        if st.button("🚀 تطبيق وتفعيل دمج العرض مع كوبون التخفيض (لجميع العروض)", type="primary"):
+        if st.button("🚀 تطبيق العرض مع كوبون التخفيض", type="primary"):
             with st.spinner("🔄 جاري تحديث كافة العروض..."):
                 active_offers = [o for o in raw_offers if o.get("status") == "active"]
                 success_count = 0
