@@ -238,147 +238,167 @@ def create_products_template(products=None) -> bytes:
 # 🎁 دوال العروض الخاصة
 # ==========================================
 
-def export_offers_to_excel(offers: List[Dict]) -> bytes:
+def generate_salla_excel_template() -> bytes:
+    headers = [
+        "معرف العرض", "اسم العرض", "نوع العرض", "المنصة", "تطبيق على", "تاريخ البدء", "تاريخ الانتهاء", 
+        "تطبيق مع كوبون", "الحد الأقصى للخصم", "الحد الأدنى للشراء", "الحد الأدنى للكمية", 
+        "مجموعات العملاء", "نوع شراء X", "كمية شراء X", "عناصر شراء X (IDs)", 
+        "نوع عرض Y", "كمية عرض Y", "عناصر عرض Y (IDs)", "نوع الخصم", "قيمة الخصم", 
+        "رسالة العرض", "حالة العرض"
+    ]
+    df = pd.DataFrame(columns=headers)
+    buffer = io.BytesIO()
+    with pd.ExcelWriter(buffer, engine='openpyxl') as writer:
+        df.to_excel(writer, index=False)
+    return buffer.getvalue()
+
+def export_offers_to_excel(offers_list: List[Dict]) -> bytes:
     try:
         data = []
-        for offer in offers:
-            o_type = offer.get('offer_type', '')
-            o_chan = offer.get('applied_channel', 'browser_and_application')
-            o_app = offer.get('applied_to', 'product')
-            buy_p = [str(p.get('id', p)) if isinstance(p, dict) else str(p) for p in offer.get('buy', {}).get('products', [])]
-            get_p = [str(p.get('id', p)) if isinstance(p, dict) else str(p) for p in offer.get('get', {}).get('products', [])]
-            cust_groups = [str(g.get('id', g)) if isinstance(g, dict) else str(g) for g in offer.get('customer_groups', [])]
+        for o in offers_list:
+            buy = o.get('buy', {})
+            get = o.get('get', {})
             
-            data.append({
-                'المعرف': offer.get('id', ''), 'اسم العرض': offer.get('name', ''), 
-                'النوع': OFFER_TYPES_MAP.get(o_type, o_type), 'منصة العرض': CHANNELS_MAP.get(o_chan, o_chan),
-                'تطبيق العرض على': APPLIED_TO_MAP.get(o_app, o_app), 'الحالة': offer.get('status', 'active'),
-                'مع كوبون': 'نعم' if offer.get('applied_with_coupon', False) else 'لا',
-                'مجموعات العملاء المشمولة': ', '.join(cust_groups),
-                'تاريخ البدء': offer.get('start_date', ''), 'تاريخ الانتهاء': offer.get('expiry_date', ''),
-                'الحد الأقصى للخصم': safe_float(offer.get('max_discount_amount', 0)),
-                'الحد الأدنى لمبلغ الشراء': safe_float(offer.get('min_purchase_amount', 0)),
-                'الحد الأدنى لكمية المنتجات': int(safe_float(offer.get('min_items_count', 0))),
-                'Buy_Type': 'تصنيف' if offer.get('buy', {}).get('type') == 'category' else 'منتج',
-                'كمية الشراء (X)': offer.get('buy', {}).get('quantity', 1), 'منتجات الشراء': ', '.join(buy_p),
-                'Get_Type': 'تصنيف' if offer.get('get', {}).get('type') == 'category' else 'منتج',
-                'كمية الهدية (Y)': offer.get('get', {}).get('quantity', 1), 
-                'Discount_Type': 'خصم بنسبة' if offer.get('get', {}).get('discount_type') == 'percentage' else 'منتج مجاني',
-                'قيمة أو نسبة الخصم': safe_float(offer.get('get', {}).get('discount_amount', 0)), 
-                'منتجات الهدية': ', '.join(get_p), 'الرسالة': offer.get('message', '')
-            })
+            b_type = buy.get('type', 'product')
+            if isinstance(b_type, dict): b_type = b_type.get('id', 'product')
+            buy_type_ar = {"product": "منتج", "category": "تصنيف", "brand": "ماركة"}.get(b_type, "منتج")
+            
+            buy_elems = []
+            if b_type == 'product': buy_elems = [str(p.get('id', p) if isinstance(p, dict) else p) for p in buy.get('products', [])]
+            elif b_type == 'category': buy_elems = [str(c.get('id', c) if isinstance(c, dict) else c) for c in buy.get('categories', [])]
+            elif b_type == 'brand': buy_elems = [str(b.get('id', b) if isinstance(b, dict) else b) for b in buy.get('brands', [])]
+            
+            g_type = get.get('type', 'product')
+            if isinstance(g_type, dict): g_type = g_type.get('id', 'product')
+            get_type_ar = {"product": "منتج", "category": "تصنيف", "brand": "ماركة"}.get(g_type, "منتج")
+            
+            get_elems = []
+            if g_type == 'product': get_elems = [str(p.get('id', p) if isinstance(p, dict) else p) for p in get.get('products', [])]
+            elif g_type == 'category': get_elems = [str(c.get('id', c) if isinstance(c, dict) else c) for c in get.get('categories', [])]
+            elif g_type == 'brand': get_elems = [str(b.get('id', b) if isinstance(b, dict) else b) for b in get.get('brands', [])]
+            
+            disc_type_id = get.get('discount_type', 'percentage')
+            if isinstance(disc_type_id, dict): disc_type_id = disc_type_id.get('id', 'percentage')
+            disc_type_ar = "منتج مجاني" if disc_type_id == "free-product" else ("خصم بنسبة" if disc_type_id == "percentage" else "مبلغ ثابت")
+            
+            cust_groups = [str(g.get('id', g) if isinstance(g, dict) else g) for g in o.get('customer_groups', [])]
+            
+            o_type_id = o.get('offer_type', '')
+            chan_id = o.get('applied_channel', '')
+            app_to_id = o.get('applied_to', '')
+            
+            row = {
+                "معرف العرض": o.get('id', ''),
+                "اسم العرض": o.get('name', ''),
+                "نوع العرض": OFFER_TYPES_MAP.get(o_type_id, o_type_id),
+                "المنصة": CHANNELS_MAP.get(chan_id, chan_id),
+                "تطبيق على": APPLIED_TO_MAP.get(app_to_id, app_to_id),
+                "تاريخ البدء": o.get('start_date', ''),
+                "تاريخ الانتهاء": o.get('expiry_date', ''),
+                "تطبيق مع كوبون": "نعم" if o.get('applied_with_coupon') else "لا",
+                "الحد الأقصى للخصم": o.get('max_discount_amount', 0),
+                "الحد الأدنى للشراء": o.get('min_purchase_amount', 0),
+                "الحد الأدنى للكمية": o.get('min_items_count', 0),
+                "مجموعات العملاء": ",".join(cust_groups),
+                "نوع شراء X": buy_type_ar,
+                "كمية شراء X": buy.get('quantity', 1),
+                "عناصر شراء X (IDs)": ",".join(buy_elems),
+                "نوع عرض Y": get_type_ar,
+                "كمية عرض Y": get.get('quantity', 1),
+                "عناصر عرض Y (IDs)": ",".join(get_elems),
+                "نوع الخصم": disc_type_ar,
+                "قيمة الخصم": get.get('discount_amount', 0),
+                "رسالة العرض": o.get('message', ''),
+                "حالة العرض": "نشط" if o.get('status') == 'active' else "غير نشط"
+            }
+            data.append(row)
+            
         df = pd.DataFrame(data)
         buffer = io.BytesIO()
         with pd.ExcelWriter(buffer, engine='openpyxl') as writer:
             df.to_excel(writer, index=False)
-            style_excel_file(writer.sheets['Sheet1'], is_template=False, header_color="0F1C2E")
         return buffer.getvalue()
     except Exception as e:
         return b""
 
-def generate_salla_excel_template() -> bytes:
-    from openpyxl import Workbook
-    output = io.BytesIO()
-    wb = Workbook()
-    ws = wb.active
-    ws.title = "قائمة العروض"
-    ws.append(["💡 إرشادات سلة المحدثة: تم تصحيح أماكن القوائم المنسدلة لتعمل باللغة العربية كلياً وبشكل صحيح."])
-    ws.merge_cells('A1:W1')
-    ws.row_dimensions[1].height = 24
-    columns = [
-        "Action", "Offer_ID", "Offer_Name", "Offer_Type", "Applied_Channel",
-        "Applied_To", "With_Coupon", "Customer_Groups", "Offer_Status", "Start_Date_Time", "Expiry_Date_Time",
-        "Max_Discount_Amount", "Min_Purchase_Amount", "Min_Items_Count",
-        "Buy_Type", "Buy_Quantity", "Buy_Products_IDs", "Get_Type", "Get_Quantity", 
-        "Discount_Type", "Discount_Amount", "Get_Products_IDs", "Offer_Message"
-    ]
-    ws.append(columns)
-    ws.append(["create", "", "عرض بلسم المطور", "اذا اشترى العميل X يحصل على Y", "متصفح وتطبيق المتجر", "منتجات مختارة", "لا", "10239", "active", "2026-06-24 12:00:00", "2026-12-31 23:59:59", 0, 150, 0, "منتج", 1, "12345", "منتج", 1, "منتج مجاني", 0, "67890", "خصم بلسم المميز"])
-    style_excel_file(ws, is_template=True, header_color="00EBCF")
-    
-    types_str = ",".join(OFFER_TYPES_MAP.values())
-    channels_str = ",".join(CHANNELS_MAP.values())
-    applied_str = ",".join(APPLIED_TO_MAP.values())
-    
-    dv_action = DataValidation(type="list", formula1='"create,update,delete"', allow_blank=True)
-    ws.add_data_validation(dv_action); dv_action.add("A3:A100")
-    dv_type = DataValidation(type="list", formula1=f'"{types_str}"', allow_blank=True)
-    ws.add_data_validation(dv_type); dv_type.add("D3:D100")
-    dv_channel = DataValidation(type="list", formula1=f'"{channels_str}"', allow_blank=True)
-    ws.add_data_validation(dv_channel); dv_channel.add("E3:E100")
-    dv_applied = DataValidation(type="list", formula1=f'"{applied_str}"', allow_blank=True)
-    ws.add_data_validation(dv_applied); dv_applied.add("F3:F100")
-    dv_coupon = DataValidation(type="list", formula1='"نعم,لا"', allow_blank=True)
-    ws.add_data_validation(dv_coupon); dv_coupon.add("G3:G100")
-    dv_status = DataValidation(type="list", formula1='"active,inactive"', allow_blank=True)
-    ws.add_data_validation(dv_status); dv_status.add("I3:I100")
-    dv_btype = DataValidation(type="list", formula1='"منتج,تصنيف"', allow_blank=True)
-    ws.add_data_validation(dv_btype); dv_btype.add("O3:O100")
-    dv_gtype = DataValidation(type="list", formula1='"منتج,تصنيف"', allow_blank=True)
-    ws.add_data_validation(dv_gtype); dv_gtype.add("R3:R100")
-    dv_dtype = DataValidation(type="list", formula1='"منتج مجاني,خصم بنسبة"', allow_blank=True)
-    ws.add_data_validation(dv_dtype); dv_dtype.add("T3:T100")
-    
-    wb.save(output)
-    return output.getvalue()
-
-def process_excel_import(df: pd.DataFrame) -> Dict:
+def process_excel_import(df) -> dict:
     results = {"success": [], "errors": []}
     headers = get_headers()
-    if not headers: return results
-    for idx, row in df.iterrows():
-        if row.isna().all() or str(row.iloc[0]).strip().startswith("📋") or str(row.iloc[0]).strip().startswith("💡"): continue
-        try:
-            action = str(row.get('Action', 'create')).strip().lower()
-            offer_name = str(row.get('Offer_Name', 'عرض جديد')).strip()
-            offer_id = row.get('Offer_ID')
-            if offer_id and pd.notna(offer_id): offer_id = int(float(offer_id))
-            
-            api_type = REV_OFFER_TYPES_MAP.get(str(row.get('Offer_Type', '')).strip(), "buy_x_get_y")
-            api_channel = REV_CHANNELS_MAP.get(str(row.get('Applied_Channel', '')).strip(), "browser_and_application")
-            api_applied_to = REV_APPLIED_TO_MAP.get(str(row.get('Applied_To', '')).strip(), "product")
-            b_type_raw = str(row.get('Buy_Type', 'منتج')).strip()
-            api_buy_type = "category" if b_type_raw == "تصنيف" else "product"
-            g_type_raw = str(row.get('Get_Type', 'منتج')).strip()
-            api_get_type = "category" if g_type_raw == "تصنيف" else "product"
-            disc_type_raw = str(row.get('Discount_Type', '')).strip()
-            api_disc_type = "percentage" if disc_type_raw == "خصم بنسبة" else "free-product"
-            
-            cg_str = str(row.get('Customer_Groups', '')).strip()
-            cg_ids = [int(g.strip()) for g in re.split(r'[,\s;]+', cg_str) if g.strip().isdigit()] if cg_str and cg_str != 'nan' else []
-            
-            offer_data = {
-                "name": offer_name, "offer_type": api_type, "applied_channel": api_channel, "applied_to": api_applied_to,
-                "start_date": str(row.get('Start_Date_Time', datetime.now().strftime('%Y-%m-%d %H:%M:%S'))),
-                "expiry_date": str(row.get('Expiry_Date_Time', datetime.now().strftime('%Y-%m-%d %H:%M:%S'))),
-                "message": str(row.get('Offer_Message', '')).strip(), "status": str(row.get('Offer_Status', 'active')).strip().lower(),
-                "applied_with_coupon": str(row.get('With_Coupon', 'لا')).strip() == 'نعم',
-                "customer_groups": cg_ids,
-                "max_discount_amount": safe_float(row.get('Max_Discount_Amount', 0)),
-                "min_purchase_amount": safe_float(row.get('Min_Purchase_Amount', 0)),
-                "min_items_count": int(safe_float(row.get('Min_Items_Count', 0))),
-                "buy": {"type": api_buy_type, "quantity": int(row.get('Buy_Quantity', 1))},
-                "get": {"type": api_get_type, "quantity": int(row.get('Get_Quantity', 1)), "discount_type": api_disc_type}
-            }
-            for key, col_name in [("buy", "Buy_Products_IDs"), ("get", "Get_Products_IDs")]:
-                p_str = str(row.get(col_name, '')).strip()
-                if p_str and p_str != 'nan':
-                    ids = [int(p) for p in re.split(r'[,\s;]+', p_str) if p.strip().isdigit()]
-                    if ids: offer_data[key]["products"] = ids
-            disc_amt = safe_float(row.get('Discount_Amount', 0))
-            if disc_amt > 0: offer_data["get"]["discount_amount"] = disc_amt
+    if not headers:
+        results["errors"].append("فشل في المصادقة.")
+        return results
 
-            if action == 'create':
-                res = safe_api_request("POST", SALLA_API_URL, headers, json=offer_data)
-                if res: results["success"].append(f"✅ تم إنشاء العرض: {offer_name}")
-            elif action == 'update' and offer_id:
-                res = safe_api_request("PUT", f"{SALLA_API_URL}/{offer_id}", headers, json=offer_data)
-                if res: results["success"].append(f"✅ تم تحديث العرض ID: {offer_id}")
-            elif action == 'delete' and offer_id:
-                res = safe_api_request("DELETE", f"{SALLA_API_URL}/{offer_id}", headers)
-                if res: results["success"].append(f"✅ تم حذف العرض ID: {offer_id}")
+    rev_offer_types = {v: k for k, v in OFFER_TYPES_MAP.items()}
+    rev_channels = {v: k for k, v in CHANNELS_MAP.items()}
+    rev_applied_to = {v: k for k, v in APPLIED_TO_MAP.items()}
+    
+    for idx, row in df.iterrows():
+        try:
+            offer_id = str(row.get('معرف العرض', '')).strip() if pd.notna(row.get('معرف العرض')) else ''
+            
+            o_type_ar = str(row.get('نوع العرض', '')).strip()
+            o_type = rev_offer_types.get(o_type_ar, 'buy_x_get_y')
+            
+            chan_ar = str(row.get('المنصة', '')).strip()
+            chan = rev_channels.get(chan_ar, 'browser')
+            
+            app_to_ar = str(row.get('تطبيق على', '')).strip()
+            app_to = rev_applied_to.get(app_to_ar, 'all')
+            
+            with_coupon = str(row.get('تطبيق مع كوبون', '')).strip() == 'نعم'
+            
+            b_type_ar = str(row.get('نوع شراء X', '')).strip()
+            b_type = {"منتج": "product", "تصنيف": "category", "ماركة": "brand"}.get(b_type_ar, "product")
+            
+            b_elems_raw = str(row.get('عناصر شراء X (IDs)', '')).strip()
+            b_elems = [int(i.strip()) for i in b_elems_raw.split(',')] if b_elems_raw and b_elems_raw != 'nan' else []
+            
+            g_type_ar = str(row.get('نوع عرض Y', '')).strip()
+            g_type = {"منتج": "product", "تصنيف": "category", "ماركة": "brand"}.get(g_type_ar, "product")
+            
+            g_elems_raw = str(row.get('عناصر عرض Y (IDs)', '')).strip()
+            g_elems = [int(i.strip()) for i in g_elems_raw.split(',')] if g_elems_raw and g_elems_raw != 'nan' else []
+            
+            disc_type_ar = str(row.get('نوع الخصم', '')).strip()
+            disc_type = "free-product" if disc_type_ar == "منتج مجاني" else ("percentage" if disc_type_ar == "خصم بنسبة" else "fixed_amount")
+            
+            cg_raw = str(row.get('مجموعات العملاء', '')).strip()
+            c_groups = [int(g.strip()) for g in cg_raw.split(',')] if cg_raw and cg_raw != 'nan' else []
+            
+            status_ar = str(row.get('حالة العرض', '')).strip()
+            status = "active" if status_ar == "نشط" else "inactive"
+            
+            payload = {
+                "name": str(row.get('اسم العرض', 'عرض')), "offer_type": o_type, "applied_channel": chan,
+                "applied_to": app_to, "start_date": str(row.get('تاريخ البدء', '')).strip(), "expiry_date": str(row.get('تاريخ الانتهاء', '')).strip(),
+                "status": status, "applied_with_coupon": with_coupon, "max_discount_amount": float(row.get('الحد الأقصى للخصم', 0) or 0),
+                "min_purchase_amount": float(row.get('الحد الأدنى للشراء', 0) or 0), "min_items_count": int(row.get('الحد الأدنى للكمية', 0) or 0),
+                "message": str(row.get('رسالة العرض', '')).strip(),
+                "buy": {"type": b_type, "quantity": int(row.get('كمية شراء X', 1) or 1)},
+                "get": {"type": g_type, "quantity": int(row.get('كمية عرض Y', 1) or 1), "discount_type": disc_type, "discount_amount": float(row.get('قيمة الخصم', 0) or 0)}
+            }
+            if c_groups: payload["customer_groups"] = c_groups
+            
+            if b_type == 'product' and b_elems: payload["buy"]["products"] = b_elems
+            elif b_type == 'category' and b_elems: payload["buy"]["categories"] = b_elems
+            elif b_type == 'brand' and b_elems: payload["buy"]["brands"] = b_elems
+            
+            if g_type == 'product' and g_elems: payload["get"]["products"] = g_elems
+            elif g_type == 'category' and g_elems: payload["get"]["categories"] = g_elems
+            elif g_type == 'brand' and g_elems: payload["get"]["brands"] = g_elems
+            
+            if pd.isna(payload['message']) or payload['message'] == 'nan': payload['message'] = ''
+            
+            if offer_id and offer_id != 'nan':
+                res = safe_api_request("PUT", f"{SALLA_API_URL}/{offer_id}", headers, json=payload)
+                if res: results["success"].append(f"تم تحديث العرض: {payload['name']}")
+                else: results["errors"].append(f"فشل تحديث العرض: {payload['name']}")
+            else:
+                res = safe_api_request("POST", SALLA_API_URL, headers, json=payload)
+                if res: results["success"].append(f"تم إنشاء العرض: {payload['name']}")
+                else: results["errors"].append(f"فشل إنشاء العرض: {payload['name']}")
         except Exception as e:
-            results["errors"].append(f"❌ خطأ في الصف {idx+1}: {str(e)}")
+            results["errors"].append(f"خطأ في الصف {idx+1}: {str(e)}")
     return results
 
 # ==========================================
