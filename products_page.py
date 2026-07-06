@@ -578,28 +578,7 @@ def render_products_page():
             offer_badge_html = ""
 
         # ✅ شريط عنوان المنتج (تم إصلاحه ووضعه خارج شرط offer)
-        st.markdown(f"""
-        <div style='background: linear-gradient(135deg, #243b55 0%, #141e30 100%); 
-            padding: 14px 20px; 
-            border-radius: 12px 12px 0px 0px; 
-            margin-top: 25px; 
-            display: flex; 
-            justify-content: space-between; 
-            align-items: center; 
-            flex-wrap: wrap; 
-            gap: 10px; 
-            border-bottom: 3px solid {border_color};'>
-            <span style='color: #ffffff; font-weight: bold; font-size: 15px;'>
-                📦 {p_name}
-            </span>
-            <div style='display: flex; gap: 8px; flex-wrap: wrap;'>
-                <span style='background: rgba(255,255,255,0.2); color: #fff; padding: 4px 12px; border-radius: 20px; font-size: 11px; font-weight:600;'>{disp_status}</span>
-                <span style='background: rgba(0, 235, 207, 0.2); color: #00EBCF; padding: 4px 12px; border-radius: 20px; font-size: 11px; font-weight:600;'>{tax_status_badge}</span>
-                {type_badge}
-                {offer_badge_html}
-            </div>
-        </div>
-        """, unsafe_allow_html=True)
+        st.markdown(f"<div style='background: linear-gradient(135deg, #243b55 0%, #141e30 100%); padding: 14px 20px; border-radius: 12px 12px 0px 0px; margin-top: 25px; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 10px; border-bottom: 3px solid {border_color};'><span style='color: #ffffff; font-weight: bold; font-size: 15px;'>📦 {p_name}</span><div style='display: flex; gap: 8px; flex-wrap: wrap;'><span style='background: rgba(255,255,255,0.2); color: #fff; padding: 4px 12px; border-radius: 20px; font-size: 11px; font-weight:600;'>{disp_status}</span><span style='background: rgba(0, 235, 207, 0.2); color: #00EBCF; padding: 4px 12px; border-radius: 20px; font-size: 11px; font-weight:600;'>{tax_status_badge}</span>{type_badge}{offer_badge_html}</div></div>", unsafe_allow_html=True)
         
         with st.container(border=True):
             st.markdown("""<div style="background-color: #fafbfc; padding: 20px; border-radius: 0px 0px 12px 12px; border: 1px solid #e1e8ed; border-top: none; box-shadow: 0 4px 10px rgba(0,0,0,0.03); margin-bottom: 25px;">""", unsafe_allow_html=True)
