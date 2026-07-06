@@ -440,19 +440,18 @@ def render_offers_page():
         </div>
     """, unsafe_allow_html=True)
     
-    st.markdown()
-        if "filtered_offers" in st.session_state and st.session_state["filtered_offers"] and len(st.session_state["filtered_offers"]) < len(raw_offers):
-            st.download_button(
-                label="📥 تصدير العروض المفلترة",
-                data=export_offers_to_excel(st.session_state["filtered_offers"]),
-                file_name=f"filtered_offers_export_{datetime.now().strftime('%Y%m%d_%H%M%S')}.xlsx",
-                mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-                key="bulk_export_filtered_top_active",
-                type="secondary"
-            )
-        else:
-            if st.button("📥 تصدير العروض المفلترة", use_container_width=True, type="secondary", key="bulk_export_filtered_top_disabled"):
-                st.info("💡 يرجى استخدام فلاتر البحث في الأسفل أولاً، ليتم تصدير العروض الناتجة.")
+    if "filtered_offers" in st.session_state and st.session_state["filtered_offers"] and len(st.session_state["filtered_offers"]) < len(raw_offers):
+        st.download_button(
+            label="📥 تصدير العروض المفلترة",
+            data=export_offers_to_excel(st.session_state["filtered_offers"]),
+            file_name=f"filtered_offers_export_{datetime.now().strftime('%Y%m%d_%H%M%S')}.xlsx",
+            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            key="bulk_export_filtered_top_active",
+            type="secondary"
+        )
+    else:
+        if st.button("📥 تصدير العروض المفلترة", use_container_width=True, type="secondary", key="bulk_export_filtered_top_disabled"):
+            st.info("💡 يرجى استخدام فلاتر البحث في الأسفل أولاً، ليتم تصدير العروض الناتجة.")
                 
     # عرض العروض
     for idx, offer in enumerate(filtered_offers):
