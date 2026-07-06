@@ -111,12 +111,13 @@ def safe_api_request(method: str, url: str, headers: Dict, **kwargs) -> Optional
         st.error(f"⚠️ خطأ في الاتصال: {str(e)}")
         return None
 
-def style_excel_file(ws, is_template=True):
+def style_excel_file(ws, is_template=True, header_color="0F1C2E"):
     from openpyxl.styles import PatternFill, Font, Alignment, Border, Side
     from openpyxl.worksheet.datavalidation import DataValidation
     from openpyxl.utils import get_column_letter
 
-    header_fill = PatternFill(start_color="0F1C2E", end_color="0F1C2E", fill_type="solid")
+    # استخدام اللون الممرر برمجياً
+    header_fill = PatternFill(start_color=header_color, end_color=header_color, fill_type="solid")
     header_font = Font(color="FFFFFF", bold=True, name="Segoe UI", size=11)
     center_align = Alignment(horizontal="center", vertical="center", wrap_text=True)
     thin_border = Border(left=Side(style='thin', color='DDDDDD'), right=Side(style='thin', color='DDDDDD'), 
@@ -131,23 +132,24 @@ def style_excel_file(ws, is_template=True):
         cell.border = thin_border
         ws.column_dimensions[get_column_letter(col)].width = 22
 
-    # القوائم المنسدلة (Data Validation) لمنع أخطاء الإدخال
-    validations = {
-        "A": '"إنشاء,تحديث,حذف"',
-        "D": f'"{",".join(OFFER_TYPES_MAP.values())}"',
-        "E": f'"{",".join(CHANNELS_MAP.values())}"',
-        "F": f'"{",".join(APPLIED_TO_MAP.values())}"',
-        "I": '"نعم,لا"',
-        "N": '"منتج,تصنيف,ماركة"',
-        "Q": '"منتج,تصنيف,ماركة"',
-        "T": '"منتج مجاني,خصم بنسبة,مبلغ ثابت"',
-        "W": '"نشط,غير نشط"'
-    }
+    # إضافة القوائم المنسدلة (فقط إذا كان الملف يخص العروض الترويجية لمنع تخريب الملفات الأخرى)
+    if ws.title in ["Salla Offers Template", "Salla Offers"]:
+        validations = {
+            "A": '"إنشاء,تحديث,حذف"',
+            "D": f'"{",".join(OFFER_TYPES_MAP.values())}"',
+            "E": f'"{",".join(CHANNELS_MAP.values())}"',
+            "F": f'"{",".join(APPLIED_TO_MAP.values())}"',
+            "I": '"نعم,لا"',
+            "N": '"منتج,تصنيف,ماركة"',
+            "Q": '"منتج,تصنيف,ماركة"',
+            "T": '"منتج مجاني,خصم بنسبة,مبلغ ثابت"',
+            "W": '"نشط,غير نشط"'
+        }
 
-    for col_letter, formula1 in validations.items():
-        dv = DataValidation(type="list", formula1=formula1, allow_blank=True)
-        ws.add_data_validation(dv)
-        dv.add(f"{col_letter}2:{col_letter}1000")
+        for col_letter, formula1 in validations.items():
+            dv = DataValidation(type="list", formula1=formula1, allow_blank=True)
+            ws.add_data_validation(dv)
+            dv.add(f"{col_letter}2:{col_letter}1000")
 
 def prepare_import_dataframe(df: pd.DataFrame) -> pd.DataFrame:
     """تحضير DataFrame للاستيراد إلى سلة"""
