@@ -197,7 +197,7 @@ if "login_time" not in st.session_state: st.session_state["login_time"] = ""
 if not st.session_state["logged_in"]:
     _, col2, _ = st.columns([1, 2, 1])
     with col2:
-        st.markdown("<h3 style='text-align:center;'>🏥 تسجيل الدخول - مدير العروض الخاصة  والمنتجات الذكي</h3>", unsafe_allow_html=True)
+        st.markdown("<h3 style='text-align:center;'>🏥 تسجيل الدخول - مدير العروض الخاصة والمنتجات الذكي</h3>", unsafe_allow_html=True)
         st.divider()
         token = st.text_input("🔑 مفتاح الربط (Access Token):", type="password")
         un = st.text_input("👤 اسم المستخدم:")
