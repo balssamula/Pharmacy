@@ -3,7 +3,7 @@ from datetime import datetime, timedelta
 import pandas as pd
 from utils import (
     get_headers, safe_api_request, SALLA_API_URL, generate_salla_excel_template,
-    process_excel_import, export_offers_to_excel, safe_parse_date, parse_products_cleanly,
+    process_excel_import, export_offers_to_excel, safe_parse_date,
     OFFER_TYPES_MAP, CHANNELS_MAP, APPLIED_TO_MAP, safe_float
 )
 
@@ -17,17 +17,39 @@ def render_offers_page():
     headers = get_headers()
     if not headers: return
 
-    # ✅ دالة جلب شاملة لتفادي أخطاء per_page <= 60
-    def fetch_all_pages(url_base):
+    # ==========================================
+    # 🌟 دالة السحب الذكية مع شريط التقدم المرئي
+    # ==========================================
+    def fetch_all_pages(url_base, loading_text="جاري التحميل..."):
         all_data = []
         page = 1
+        total_pages = 1
+        
+        # إنشاء عناصر واجهة التحميل
+        status_text = st.empty()
+        progress_bar = st.progress(0)
+        
         while True:
+            status_text.markdown(f"**{loading_text}** (صفحة {page} من {total_pages if page > 1 else '...'})")
             url = f"{url_base}?per_page=60&page={page}" if "?" not in url_base else f"{url_base}&per_page=60&page={page}"
+            
             res = safe_api_request("GET", url, headers)
             if not res or not res.get("data"): break
+            
+            if page == 1:
+                total_pages = res.get("pagination", {}).get("totalPages", 1)
+            
             all_data.extend(res["data"])
-            if page >= res.get("pagination", {}).get("totalPages", 1): break
+            
+            # تحديث شريط التقدم
+            progress_bar.progress(min(page / total_pages, 1.0))
+            
+            if page >= total_pages: break
             page += 1
+            
+        # إخفاء عناصر التحميل بعد الانتهاء
+        progress_bar.empty()
+        status_text.empty()
         return all_data
     
     # ==========================================
@@ -37,13 +59,13 @@ def render_offers_page():
     if "all_categories" not in st.session_state: st.session_state["all_categories"] = []
     if "all_brands" not in st.session_state: st.session_state["all_brands"] = []
     
-    with st.spinner("🔄 جاري تهيئة البيانات المساعدة (المنتجات، التصنيفات، والماركات) للعروض..."):
+    with st.spinner("🔄 جاري تهيئة البيانات المساعدة للعروض..."):
         if not st.session_state["all_categories"]:
-            st.session_state["all_categories"] = fetch_all_pages("https://api.salla.dev/admin/v2/categories")
+            st.session_state["all_categories"] = fetch_all_pages("https://api.salla.dev/admin/v2/categories", "جاري سحب التصنيفات...")
         if not st.session_state["all_brands"]:
-            st.session_state["all_brands"] = fetch_all_pages("https://api.salla.dev/admin/v2/brands")
+            st.session_state["all_brands"] = fetch_all_pages("https://api.salla.dev/admin/v2/brands", "جاري سحب الماركات التجارية...")
         if not st.session_state["all_products"]:
-            st.session_state["all_products"] = fetch_all_pages("https://api.salla.dev/admin/v2/products")
+            st.session_state["all_products"] = fetch_all_pages("https://api.salla.dev/admin/v2/products", "جاري سحب قائمة المنتجات...")
 
     def render_dynamic_selection(label, selection_type, existing_ids, key_prefix):
         options = {}
@@ -121,8 +143,8 @@ def render_offers_page():
     with col_dl:
         st.download_button("📥 تنزيل نموذج استيراد العروض الترويجية", data=generate_salla_excel_template(), file_name="Salla_Offers_Template.xlsx", mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", use_container_width=True)
         
-    with st.spinner("🔄 جاري جلب كافة العروض من سلة..."):
-        raw_offers = fetch_all_pages(SALLA_API_URL)
+    with st.spinner("🔄 جاري جلب كافة العروض الحالية..."):
+        raw_offers = fetch_all_pages(SALLA_API_URL, "جاري سحب العروض من متجرك...")
         
     with col_ex:
         if raw_offers:
@@ -144,9 +166,11 @@ def render_offers_page():
     st.divider()
 
     # ==========================================
-    # ✅ أزرار الإجراءات الجماعية المتقدمة
+    # ✅ أزرار الإجراءات الجماعية المتقدمة (منسقة 100%)
     # ==========================================
     st.markdown("### ⚡ إجراءات سريعة على العروض")
+    
+    # الصف الأول (3 أزرار متساوية)
     col_bulk1, col_bulk2, col_bulk3 = st.columns(3)
     
     with col_bulk1:
@@ -163,7 +187,7 @@ def render_offers_page():
                     if success_count > 0: st.rerun()
     
     with col_bulk2:
-        with st.popover("📅 تمديد وإدارة تواريخ الانتهاء"):
+        with st.popover("📅 تمديد وإدارة تواريخ الانتهاء", use_container_width=True):
             target_scope_end = st.radio("استهداف العروض:", ["تنتهي في تاريخ محدد", "جميع العروض المتاحة"], key="b_end_scope")
             if target_scope_end == "تنتهي في تاريخ محدد":
                 col_date1, col_time1 = st.columns(2)
@@ -206,7 +230,7 @@ def render_offers_page():
                         if success_count > 0: st.rerun()
 
     with col_bulk3:
-        with st.popover("📅 إدارة تواريخ البداية"):
+        with st.popover("📅 إدارة تواريخ البداية", use_container_width=True):
             target_scope_start = st.radio("استهداف العروض:", ["تبدأ في تاريخ محدد", "جميع العروض المتاحة"], key="bs_scope")
             if target_scope_start == "تبدأ في تاريخ محدد":
                 col_sd1, col_st1 = st.columns(2)
@@ -242,9 +266,11 @@ def render_offers_page():
                         st.success(f"✅ تم تعديل تاريخ البداية لـ {success_count} عرض بنجاح!")
                         if success_count > 0: st.rerun()
 
-    col_bulk4, col_bulk5 = st.columns([2, 1])
+    # الصف الثاني (زرين متساويين في المنتصف)
+    col_bulk4, col_bulk5, col_bulk6 = st.columns(3)
+    
     with col_bulk4:
-        if st.button("🚀 تطبيق وتفعيل دمج العرض مع كوبون التخفيض (لجميع العروض)", type="primary", use_container_width=True):
+        if st.button("🚀 تطبيق العرض مع كوبون التخفيض (الكل)", type="primary", use_container_width=True):
             with st.spinner("🔄 جاري تحديث كافة العروض..."):
                 active_offers = [o for o in raw_offers if o.get("status") == "active"]
                 success_count = 0
@@ -262,6 +288,10 @@ def render_offers_page():
         else:
             if st.button("📥 تصدير العروض المفلترة", use_container_width=True, type="secondary", key="bulk_export_filtered_top_disabled"):
                 st.info("💡 يرجى استخدام فلاتر البحث في الأسفل أولاً، ليتم تصدير العروض الناتجة.")
+                
+    with col_bulk6:
+        # مساحة فارغة للحفاظ على التوازن الهندسي للأزرار
+        pass
 
     # ==========================================
     # --- حاوية إنشاء عرض جديد (ديناميكي) ---
@@ -386,7 +416,6 @@ def render_offers_page():
     with f3: filter_date = st.date_input("📅 ابحث عن تاريخ الانتهاء:", value=None, key="filter_date_input")
     with f4: filter_overlap = st.checkbox("🔄 فحص التداخل (منتجات مكررة)", key="f_overlap")
 
-    # 🕒 ضبط التوقيت ليتوافق مع توقيت السعودية KSA (لتصحيح شارة "لم تبدأ بعد")
     now_ksa = datetime.now() + timedelta(hours=3)
     
     overlapping_offer_ids = set()
@@ -418,7 +447,6 @@ def render_offers_page():
         start_date = safe_parse_date(offer.get('start_date'))
         exp_date = safe_parse_date(offer.get('expiry_date'))
         
-        # ✅ تجاهل فلتر النشاط إذا قام المستخدم بالبحث عن اسم معين
         if search_offer:
             if search_offer.lower() not in offer_name.lower() and search_offer not in str(offer_id): continue
         else:
@@ -466,7 +494,6 @@ def render_offers_page():
         
         badge = "🟢 نشط بالمتجر" if status == "active" else "🔴 متوقف حالياً"
         
-        # ✅ تطبيق تصحيح الوقت (now_ksa) على شارات الانتهاء والبدء
         if start_date and start_date > now_ksa: exp_badge = "⏳ لم يبدأ بعد"
         elif exp_date and exp_date < now_ksa: exp_badge = "⚠️ منتهي الصلاحية"
         else: exp_badge = "⏳ ساري الصلاحية"
@@ -504,31 +531,40 @@ def render_offers_page():
             st.markdown("<hr style='margin: 15px 0; border-top: 1px dashed #e2e8f0;'>", unsafe_allow_html=True)
             
             col_x, col_y = st.columns(2)
+            
+            # ✅ استخراج وتنسيق وعرض عناصر الشراء (X)
             with col_x:
                 st.markdown("<b style='color:#0f1c2e;'>🛒 مجموعة الشراء (X) - [إذا اشترى العميل]:</b>", unsafe_allow_html=True)
                 buy_obj = offer_data.get('buy', {})
-                buy_products = buy_obj.get('products', [])
-                buy_categories = buy_obj.get('categories', [])
                 b_type_raw = buy_obj.get("type", "product")
                 if isinstance(b_type_raw, dict): b_type_raw = b_type_raw.get("id", "product")
                 st.text(f"مطبق على: {inv_type_map.get(b_type_raw, 'منتجات')}")
-                if buy_products or buy_categories:
-                    buy_text = parse_products_cleanly({'products': buy_products, 'categories': buy_categories})
-                else:
-                    buy_text = "جميع الأصناف المشمولة"
+                
+                buy_elems = []
+                for p in buy_obj.get('products', []): buy_elems.append(f"• صنف: {p.get('name', '')} (ID: {p.get('id', p)})")
+                for c in buy_obj.get('categories', []): buy_elems.append(f"• تصنيف: {c.get('name', '')} (ID: {c.get('id', c)})")
+                for b in buy_obj.get('brands', []): buy_elems.append(f"• ماركة: {b.get('name', '')} (ID: {b.get('id', b)})")
+                
+                if buy_elems: st.info("\n".join(buy_elems))
+                else: st.info("جميع الأصناف المشمولة")
                 st.caption(f"الكمية المطلوبة: {buy_obj.get('quantity', 1)} قطعة")
+                
+            # ✅ استخراج وتنسيق وعرض عناصر الهدية والخصم (Y)
             with col_y:
                 st.markdown("<b style='color:#0f1c2e;'>🎁 مجموعة المنح والهدية (Y) - [يحصل على]:</b>", unsafe_allow_html=True)
-                get_obj = offer_data.get('get', {})
-                get_products = get_obj.get('products', [])
-                get_categories = get_obj.get('categories', [])                
+                get_obj = offer_data.get('get', {})               
                 g_type_raw = get_obj.get("type", "product")
                 if isinstance(g_type_raw, dict): g_type_raw = g_type_raw.get("id", "product")
                 st.text(f"مطبق على: {inv_type_map.get(g_type_raw, 'منتجات')}")
-                if get_products or get_categories:
-                    get_text = parse_products_cleanly({'products': get_products, 'categories': get_categories})
-                else:
-                    get_text = "جميع الأصناف المشمولة"
+                
+                get_elems = []
+                for p in get_obj.get('products', []): get_elems.append(f"• صنف: {p.get('name', '')} (ID: {p.get('id', p)})")
+                for c in get_obj.get('categories', []): get_elems.append(f"• تصنيف: {c.get('name', '')} (ID: {c.get('id', c)})")
+                for b in get_obj.get('brands', []): get_elems.append(f"• ماركة: {b.get('name', '')} (ID: {b.get('id', b)})")
+                
+                if get_elems: st.success("\n".join(get_elems))
+                else: st.success("جميع الأصناف المشمولة")
+                
                 st.caption(f"كمية المنح/الخصم: {get_obj.get('quantity', 1)} قطعة")
                 if get_obj.get('discount_amount'):
                     st.markdown(f"🔥 **قيمة/نسبة الخصم :** `{get_obj.get('discount_amount')}`")
