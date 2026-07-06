@@ -124,7 +124,7 @@ def render_offers_page():
     col_bulk1, col_bulk2, col_bulk3 = st.columns(3)
     
     with col_bulk1:
-        if st.button("⏹️ إيقاف جميع العروض المفعلة", use_container_width=True, type="primary"):
+        if st.button("⏹️ إيقاف جميع العروض المفعلة", type="primary"):
             active_offers = [o for o in raw_offers if o.get('status') == 'active']
             if not active_offers:
                 st.warning("⚠️ لا توجد عروض مفعلة حالياً لإيقافها")
@@ -237,7 +237,7 @@ def render_offers_page():
 
     col_bulk4, col_bulk5 = st.columns([2, 1])
     with col_bulk4:
-        if st.button("🚀 تطبيق وتفعيل دمج العرض مع كوبون التخفيض (لجميع العروض)", type="primary", use_container_width=True):
+        if st.button("🚀 تطبيق وتفعيل دمج العرض مع كوبون التخفيض (لجميع العروض)", type="primary"):
             with st.spinner("🔄 جاري تحديث كافة العروض..."):
                 active_offers = [o for o in raw_offers if o.get("status") == "active"]
                 success_count = 0
@@ -259,7 +259,6 @@ def render_offers_page():
                 file_name=f"filtered_offers_export_{datetime.now().strftime('%Y%m%d_%H%M%S')}.xlsx",
                 mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
                 key="bulk_export_filtered_top_active",
-                use_container_width=True,
                 type="secondary"
             )
         else:
