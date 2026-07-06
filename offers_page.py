@@ -121,7 +121,7 @@ def render_offers_page():
     # ==========================================
     st.markdown("### ⚡ إجراءات جماعية سريعة على العروض")
     
-    col_bulk1, col_bulk2, col_bulk3 = st.columns(3)
+    col_bulk1, col_bulk2, col_bulk3, col_bulk4, col_bulk5 = st.columns(5)
     
     with col_bulk1:
         if st.button("⏹️ إيقاف جميع العروض المفعلة", type="primary"):
@@ -235,7 +235,6 @@ def render_offers_page():
                         st.success(f"✅ تم تعديل تاريخ البداية لـ {success_count} عرض بنجاح!")
                         if success_count > 0: st.rerun()
 
-    col_bulk4, col_bulk5 = st.columns([2, 1])
     with col_bulk4:
         if st.button("🚀 تطبيق وتفعيل دمج العرض مع كوبون التخفيض (لجميع العروض)", type="primary"):
             with st.spinner("🔄 جاري تحديث كافة العروض..."):
