@@ -1123,25 +1123,29 @@ def get_group_products(product_id: int) -> List[Dict]:
 def update_group_product_quantity(parent_product_id: int, child_product_id: int, new_quantity: int) -> bool:
     """تحديث عدد حبات المنتج الفرعي داخل المجموعة"""
     headers = get_headers()
-    if not headers: return False
+    if not headers: 
+        return False
     
+    # جلب المنتج الأب
     parent = get_product_details(parent_product_id)
-    if not parent: return False
+    if not parent:
+        return False
     
-    current_grouped = parent.get('grouped_items', [])
-    new_grouped_items = []
+    # ✅ تحديث كمية المنتج الفرعي
+    skus = parent.get('skus', [])
+    new_skus = []
     
-    # إعادة بناء المصفوفة مع الكمية الجديدة
-    for item in current_grouped:
-        p_id = item.get('product', {}).get('id')
-        if p_id:
-            qty = new_quantity if str(p_id) == str(child_product_id) else item.get('quantity', 1)
-            new_grouped_items.append({"product_id": p_id, "quantity": qty})
-            
+    for sku in skus:
+        sku_id = sku.get('id')
+        if str(sku_id) == str(child_product_id):
+            # تحديث الكمية
+            sku['quantity'] = new_quantity
+        new_skus.append(sku)
+    
     payload = {
         "name": parent.get('name'),
         "price": get_flat_price(parent.get('price', 0)),
-        "grouped_items": new_grouped_items
+        "skus": new_skus
     }
     
     res = safe_api_request("PUT", f"https://api.salla.dev/admin/v2/products/{parent_product_id}", headers, json=payload)
