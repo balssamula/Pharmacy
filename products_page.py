@@ -560,9 +560,6 @@ def render_products_page():
         sale_start_date = p.get('sale_start') or "غير محدد"
         sale_end_date = p.get('sale_end') or "غير محدد"
         
-        disp_status = "🟢 معروض بالمتجر" if status == "sale" else "🔴 مخفي في المسودات"
-        tax_status_badge = "📗 خاضع للضريبة" if p.get('with_tax', True) else f"⚪ يخضع لنسبة الصفر ({p.get('tax_exemption_cause', 'بدون سبب')})"
-
         if p_id in offer_product_ids:
             offer_badge_html = "<span style='background: rgba(255, 193, 7, 0.3); color: #FFC107; padding: 4px 12px; border-radius: 20px; font-size: 11px; font-weight:600;'>🎁 مشمول في عرض خاص</span>"
         else:
