@@ -16,6 +16,65 @@ def render_offers_page():
     
     headers = get_headers()
     if not headers: return
+    
+    # ==========================================
+    # دالة محصنة لبناء هيكل العرض لمنع خطأ 422
+    # ==========================================
+    def rebuild_offer_payload(full_offer: dict, overrides: dict) -> dict:
+        def get_id(field_name):
+            val = full_offer.get(field_name)
+            return val.get("id") if isinstance(val, dict) else val
+
+        payload = {
+            "name": full_offer.get("name", "عرض خاص"),
+            "status": get_id("status") or "active",
+            "offer_type": get_id("offer_type") or "buy_x_get_y",
+            "applied_channel": get_id("applied_channel") or "browser",
+            "applied_to": get_id("applied_to") or "all",
+            "applied_with_coupon": full_offer.get("applied_with_coupon", False)
+        }
+        
+        if full_offer.get("start_date"): payload["start_date"] = full_offer["start_date"]
+        if full_offer.get("expiry_date"): payload["expiry_date"] = full_offer["expiry_date"]
+        elif full_offer.get("end_date"): payload["expiry_date"] = full_offer["end_date"]
+            
+        for key in ["max_discount_amount", "min_purchase_amount", "min_items_count"]:
+            if full_offer.get(key) is not None:
+                payload[key] = safe_float(full_offer[key]) if "amount" in key else int(safe_float(full_offer[key]))
+                
+        if full_offer.get("customer_groups"):
+            payload["customer_groups"] = [g.get("id", g) if isinstance(g, dict) else g for g in full_offer["customer_groups"]]
+            
+        if full_offer.get("buy"):
+            buy = full_offer["buy"]
+            b_type = buy.get("type", {}).get("id") if isinstance(buy.get("type"), dict) else buy.get("type")
+            payload["buy"] = {"type": b_type or "quantity", "quantity": int(buy.get("quantity", 1))}
+            b_prods = [p.get("id", p) if isinstance(p, dict) else p for p in buy.get("products", [])]
+            if b_prods: payload["buy"]["products"] = b_prods
+            b_cats = [c.get("id", c) if isinstance(c, dict) else c for c in buy.get("categories", [])]
+            if b_cats: payload["buy"]["categories"] = b_cats
+                
+        if full_offer.get("get"):
+            get_obj = full_offer["get"]
+            g_type = get_obj.get("type", {}).get("id") if isinstance(get_obj.get("type"), dict) else get_obj.get("type")
+            g_disc_type = get_obj.get("discount_type", {}).get("id") if isinstance(get_obj.get("discount_type"), dict) else get_obj.get("discount_type")
+            payload["get"] = {
+                "type": g_type or "quantity",
+                "quantity": int(get_obj.get("quantity", 1)),
+                "discount_type": g_disc_type or "percentage"
+            }
+            if get_obj.get("discount_amount") is not None: 
+                payload["get"]["discount_amount"] = safe_float(get_obj["discount_amount"])
+                
+            g_prods = [p.get("id", p) if isinstance(p, dict) else p for p in get_obj.get("products", [])]
+            if g_prods: payload["get"]["products"] = g_prods
+            g_cats = [c.get("id", c) if isinstance(c, dict) else c for c in get_obj.get("categories", [])]
+            if g_cats: payload["get"]["categories"] = g_cats
+
+        for k, v in overrides.items():
+            payload[k] = v
+            
+        return payload
 
     col_dl, col_ex = st.columns([1, 1])
     with col_dl:
@@ -58,11 +117,11 @@ def render_offers_page():
     st.divider()
 
     # ==========================================
-    # ✅ أزرار الإجراءات الجماعية
+    # ✅ أزرار الإجراءات الجماعية المتقدمة
     # ==========================================
     st.markdown("### ⚡ إجراءات جماعية سريعة على العروض")
     
-    col_bulk1, col_bulk2, col_bulk3, col_bulk4 = st.columns(4)
+    col_bulk1, col_bulk2, col_bulk3 = st.columns(3)
     
     with col_bulk1:
         if st.button("⏹️ إيقاف جميع العروض المفعلة", use_container_width=True, type="primary"):
@@ -75,173 +134,124 @@ def render_offers_page():
                     for offer in active_offers:
                         offer_id = offer.get('id')
                         if offer_id:
-                            res = safe_api_request(
-                                "PUT", 
-                                f"{SALLA_API_URL}/{offer_id}/status", 
-                                headers, 
-                                json={"status": "inactive"}
-                            )
+                            res = safe_api_request("PUT", f"{SALLA_API_URL}/{offer_id}/status", headers, json={"status": "inactive"})
                             if res: success_count += 1
                     st.success(f"✅ تم إيقاف {success_count} عرض بنجاح من أصل {len(active_offers)}")
                     if success_count > 0: st.rerun()
     
     with col_bulk2:
-        with st.popover("📅 تمديد/إيقاف العروض المنتهية"):
-            st.markdown("إدارة العروض التي تنتهي في تاريخ محدد")
-            st.markdown("**📅 تاريخ انتهاء العرض الحالي (للفلترة):**")
-            col_date1, col_time1 = st.columns(2)
-            with col_date1:
-                target_date = st.date_input("اختر التاريخ:", value=datetime.now().date(), key="bulk_extend_target_date")
-            with col_time1:
-                target_time = st.time_input("اختر الوقت:", value=datetime.now().time().replace(minute=59, second=59), key="bulk_extend_target_time", step=60)
-            target_datetime = datetime.combine(target_date, target_time)
-            target_str = target_datetime.strftime('%Y-%m-%d')
+        with st.popover("📅 تمديد وإدارة تواريخ الانتهاء"):
+            st.markdown("إدارة تواريخ الانتهاء أو تمديد العروض")
+            target_scope_end = st.radio("استهداف العروض:", ["تنتهي في تاريخ محدد", "جميع العروض المتاحة"], key="b_end_scope")
             
-            matching_offers = [o for o in raw_offers if o.get('expiry_date', '') and o.get('expiry_date', '').startswith(target_str)]
-            st.info(f"📊 عدد العروض التي تنتهي في {target_str}: **{len(matching_offers)}** عرض")
+            if target_scope_end == "تنتهي في تاريخ محدد":
+                col_date1, col_time1 = st.columns(2)
+                with col_date1:
+                    target_date = st.date_input("تاريخ الانتهاء الحالي للفحص:", value=datetime.now().date(), key="be_t_date")
+                with col_time1:
+                    target_time = st.time_input("الوقت:", value=datetime.now().time().replace(minute=59, second=59), key="be_t_time")
+                target_str = datetime.combine(target_date, target_time).strftime('%Y-%m-%d')
+                matching_offers_end = [o for o in raw_offers if o.get('expiry_date', '') and o.get('expiry_date', '').startswith(target_str)]
+                st.info(f"📊 عدد العروض المطابقة: **{len(matching_offers_end)}** عرض")
+            else:
+                matching_offers_end = raw_offers
+                st.info(f"📊 سيتم تطبيق الإجراء على جميع العروض ({len(matching_offers_end)} عرض)")
 
-            # --- الخيارات الجديدة للإجراء المطلوب ---
-            st.markdown("**🛠️ الإجراء المطلوب تنفيذه:**")
-            action_type = st.radio("اختر الإجراء:", ["تاريخ جديد للتمديد", "إلغاء التفعيل (إيقاف)"], key="bulk_expired_action", label_visibility="collapsed")
+            action_type = st.radio("الإجراء المطلوب تنفيذه:", ["تاريخ جديد للتمديد", "إلغاء التفعيل (إيقاف)"], key="be_action")
             
             if action_type == "تاريخ جديد للتمديد":
                 st.markdown("**📅 التاريخ الجديد للتمديد:**")
                 col_date2, col_time2 = st.columns(2)
                 with col_date2:
-                    new_date = st.date_input("اختر التاريخ الجديد:", value=datetime.now().date() + timedelta(days=30), key="bulk_extend_new_date")
+                    new_date = st.date_input("التاريخ الجديد:", value=datetime.now().date() + timedelta(days=30), key="be_n_date")
                 with col_time2:
-                    new_time = st.time_input("اختر الوقت الجديد:", value=datetime.now().time().replace(minute=59, second=59), key="bulk_extend_new_time", step=60)
-                new_datetime = datetime.combine(new_date, new_time)
-                new_datetime_str = new_datetime.strftime('%Y-%m-%d %H:%M:%S')
-                st.info(f"📅 سيتم تمديد العروض المطابقة إلى **{new_datetime_str}**")
+                    new_time = st.time_input("الوقت الجديد:", value=datetime.now().time().replace(minute=59, second=59), key="be_n_time")
+                new_expiry_str = datetime.combine(new_date, new_time).strftime('%Y-%m-%d %H:%M:%S')
+                st.info(f"📅 سيتم تمديد العروض المطابقة إلى **{new_expiry_str}**")
                 btn_lbl = "🔄 تطبيق التمديد"
             else:
                 st.info("🔴 سيتم إيقاف العروض المطابقة ونقلها للمسودات")
-                btn_lbl = "🛑 تطبيق الإيقاف وإلغاء التفعيل"
+                btn_lbl = "🛑 تطبيق الإيقاف"
             
             if st.button(btn_lbl, use_container_width=True, type="primary"):
-                if not matching_offers:
-                    st.warning(f"⚠️ لا توجد عروض تنتهي في تاريخ {target_str}")
+                if not matching_offers_end:
+                    st.warning("⚠️ لا توجد عروض مطابقة")
                 else:
-                    with st.spinner(f"🔄 جاري معالجة {len(matching_offers)} عرض..."):
+                    with st.spinner("🔄 جاري المعالجة والمزامنة..."):
                         success_count = 0
-                        for offer in matching_offers:
+                        for offer in matching_offers_end:
                             offer_id = offer.get('id')
-                            if offer_id:
-                                if action_type == "إلغاء التفعيل (إيقاف)":
-                                    # إجراء إيقاف العرض السريع
-                                    res = safe_api_request("PUT", f"{SALLA_API_URL}/{offer_id}/status", headers, json={"status": "inactive"})
+                            if action_type == "إلغاء التفعيل (إيقاف)":
+                                res = safe_api_request("PUT", f"{SALLA_API_URL}/{offer_id}/status", headers, json={"status": "inactive"})
+                                if res: success_count += 1
+                            else:
+                                full_res = safe_api_request("GET", f"{SALLA_API_URL}/{offer_id}", headers)
+                                if full_res and full_res.get('data'):
+                                    payload = rebuild_offer_payload(full_res['data'], {"expiry_date": new_expiry_str})
+                                    res = safe_api_request("PUT", f"{SALLA_API_URL}/{offer_id}", headers, json=payload)
                                     if res: success_count += 1
-                                else:
-                                    # إجراء التمديد (نفس الكود القديم المعقد لضمان سلامة العرض)
-                                    current = safe_api_request("GET", f"{SALLA_API_URL}/{offer_id}", headers)
-                                    if current and current.get('data'):
-                                        offer_data = current['data']
-                                        offer_data['expiry_date'] = new_datetime_str
-                                        
-                                        if 'buy' in offer_data and isinstance(offer_data['buy'], dict):
-                                            if 'products' in offer_data['buy'] and isinstance(offer_data['buy']['products'], list):
-                                                offer_data['buy']['products'] = [p.get('id') if isinstance(p, dict) else p for p in offer_data['buy']['products']]
-                                            if 'categories' in offer_data['buy'] and isinstance(offer_data['buy']['categories'], list):
-                                                offer_data['buy']['categories'] = [c.get('id') if isinstance(c, dict) else c for c in offer_data['buy']['categories']]
-                                                
-                                        if 'get' in offer_data and isinstance(offer_data['get'], dict):
-                                            if 'products' in offer_data['get'] and isinstance(offer_data['get']['products'], list):
-                                                offer_data['get']['products'] = [p.get('id') if isinstance(p, dict) else p for p in offer_data['get']['products']]
-                                            if 'categories' in offer_data['get'] and isinstance(offer_data['get']['categories'], list):
-                                                offer_data['get']['categories'] = [c.get('id') if isinstance(c, dict) else c for c in offer_data['get']['categories']]
-                                                
-                                        if 'customer_groups' in offer_data and isinstance(offer_data['customer_groups'], list):
-                                            offer_data['customer_groups'] = [g.get('id') if isinstance(g, dict) else g for g in offer_data['customer_groups']]
-                                        
-                                        for key in ['id', 'created_at', 'updated_at', 'show_price_after_discount', 'show_discounts_table_message']:
-                                            offer_data.pop(key, None)
-                                        
-                                        res = safe_api_request("PUT", f"{SALLA_API_URL}/{offer_id}", headers, json=offer_data)
-                                        if res: success_count += 1
-                                        
-                        action_msg = "تمديد" if action_type == "تاريخ جديد للتمديد" else "إيقاف"
-                        st.success(f"✅ تم {action_msg} {success_count} عرض بنجاح من أصل {len(matching_offers)}")
+                        st.success(f"✅ تم تنفيذ الإجراء لـ {success_count} عرض بنجاح!")
                         if success_count > 0: st.rerun()
 
     with col_bulk3:
-        if st.button("🚀 تطبيق العرض مع كوبون التخفيض لجميع العروض", type="primary", use_container_width=True):
-            headers = get_headers()
-            with st.spinner("🔄 جاري قراءة التفاصيل الكاملة وتحديث كافة العروض النشطة..."):
-                offers_res = safe_api_request("GET", "https://api.salla.dev/admin/v2/specialoffers", headers)
-                active_offers = [o for o in offers_res.get("data", []) if o.get("status") == "active"]
+        with st.popover("📅 إدارة تواريخ البداية"):
+            st.markdown("تعديل وتحديث تواريخ البداية للعروض")
+            target_scope_start = st.radio("استهداف العروض:", ["تبدأ في تاريخ محدد", "جميع العروض المتاحة"], key="bs_scope")
             
+            if target_scope_start == "تبدأ في تاريخ محدد":
+                col_sd1, col_st1 = st.columns(2)
+                with col_sd1:
+                    target_s_date = st.date_input("تاريخ البداية الحالي للفحص:", value=datetime.now().date(), key="bs_t_date")
+                with col_st1:
+                    target_s_time = st.time_input("الوقت:", value=datetime.now().time().replace(minute=0, second=0), key="bs_t_time")
+                target_s_str = datetime.combine(target_s_date, target_s_time).strftime('%Y-%m-%d')
+                matching_offers_start = [o for o in raw_offers if o.get('start_date', '') and o.get('start_date', '').startswith(target_s_str)]
+                st.info(f"📊 عدد العروض المطابقة: **{len(matching_offers_start)}** عرض")
+            else:
+                matching_offers_start = raw_offers
+                st.info(f"📊 سيتم تطبيق الإجراء على جميع العروض ({len(matching_offers_start)} عرض)")
+            
+            st.markdown("**📅 تاريخ البداية الجديد:**")
+            col_nsd, col_nst = st.columns(2)
+            with col_nsd:
+                new_s_date = st.date_input("التاريخ الجديد لبداية العرض:", value=datetime.now().date(), key="bs_n_date")
+            with col_nst:
+                new_s_time = st.time_input("الوقت الجديد:", value=datetime.now().time().replace(minute=0, second=0), key="bs_n_time")
+            new_start_str = datetime.combine(new_s_date, new_s_time).strftime('%Y-%m-%d %H:%M:%S')
+            
+            if st.button("🚀 تطبيق تاريخ البداية المحدث", use_container_width=True, type="primary"):
+                if not matching_offers_start:
+                    st.warning("⚠️ لا توجد عروض مطابقة")
+                else:
+                    with st.spinner("🔄 جاري التعديل..."):
+                        success_count = 0
+                        for offer in matching_offers_start:
+                            offer_id = offer.get('id')
+                            full_res = safe_api_request("GET", f"{SALLA_API_URL}/{offer_id}", headers)
+                            if full_res and full_res.get('data'):
+                                payload = rebuild_offer_payload(full_res['data'], {"start_date": new_start_str})
+                                res = safe_api_request("PUT", f"{SALLA_API_URL}/{offer_id}", headers, json=payload)
+                                if res: success_count += 1
+                        st.success(f"✅ تم تعديل تاريخ البداية لـ {success_count} عرض بنجاح!")
+                        if success_count > 0: st.rerun()
+
+    col_bulk4, col_bulk5 = st.columns([2, 1])
+    with col_bulk4:
+        if st.button("🚀 تطبيق وتفعيل دمج العرض مع كوبون التخفيض (لجميع العروض)", type="primary", use_container_width=True):
+            with st.spinner("🔄 جاري تحديث كافة العروض..."):
+                active_offers = [o for o in raw_offers if o.get("status") == "active"]
                 success_count = 0
                 for offer_summary in active_offers:
                     offer_id = offer_summary.get("id")
-                
-                    # ✅ الحل الجذري: جلب التفاصيل "الكاملة" للعرض من سلة لتفادي اختفاء مصفوفة المنتجات
-                    full_offer_res = safe_api_request("GET", f"https://api.salla.dev/admin/v2/specialoffers/{offer_id}", headers)
-                    if not full_offer_res or not full_offer_res.get("data"):
-                        continue
-                
-                    full_offer = full_offer_res["data"]
-                
-                    def get_id(field_name):
-                        val = full_offer.get(field_name)
-                        return val.get("id") if isinstance(val, dict) else val
-
-                    payload = {
-                        "name": full_offer.get("name", "عرض خاص"),
-                        "status": get_id("status") or "active",
-                        "offer_type": get_id("offer_type") or "buy_x_get_y",
-                        "applied_channel": get_id("applied_channel") or "browser",
-                        "applied_to": get_id("applied_to") or "all",
-                        "applied_with_coupon": True  # التعديل السحري هنا
-                    }
-                
-                    if full_offer.get("start_date"): payload["start_date"] = full_offer["start_date"]
-                    if full_offer.get("end_date"): payload["end_date"] = full_offer["end_date"]
-                
-                    for key in ["max_discount_amount", "min_purchase_amount", "min_items_count"]:
-                        if full_offer.get(key) is not None:
-                            payload[key] = float(full_offer[key]) if "amount" in key else int(full_offer[key])
-                        
-                    if full_offer.get("customer_groups"):
-                        payload["customer_groups"] = [g.get("id", g) if isinstance(g, dict) else g for g in full_offer["customer_groups"]]
+                    full_offer_res = safe_api_request("GET", f"{SALLA_API_URL}/{offer_id}", headers)
+                    if not full_offer_res or not full_offer_res.get("data"): continue
                     
-                    if full_offer.get("buy"):
-                        buy = full_offer["buy"]
-                        b_type = buy.get("type", {}).get("id") if isinstance(buy.get("type"), dict) else buy.get("type")
-                        payload["buy"] = {
-                            "type": b_type or "quantity", 
-                            "quantity": int(buy.get("quantity", 1))
-                        }
-                        b_prods = [p.get("id", p) if isinstance(p, dict) else p for p in buy.get("products", [])]
-                        if b_prods: payload["buy"]["products"] = b_prods
-                        b_cats = [c.get("id", c) if isinstance(c, dict) else c for c in buy.get("categories", [])]
-                        if b_cats: payload["buy"]["categories"] = b_cats
-                        
-                    if full_offer.get("get"):
-                        get_obj = full_offer["get"]
-                        g_type = get_obj.get("type", {}).get("id") if isinstance(get_obj.get("type"), dict) else get_obj.get("type")
-                        g_disc_type = get_obj.get("discount_type", {}).get("id") if isinstance(get_obj.get("discount_type"), dict) else get_obj.get("discount_type")
-                        payload["get"] = {
-                            "type": g_type or "quantity",
-                            "quantity": int(get_obj.get("quantity", 1)),
-                            "discount_type": g_disc_type or "percentage"
-                        }
-                        if get_obj.get("discount_amount") is not None: 
-                            payload["get"]["discount_amount"] = float(get_obj["discount_amount"])
-                        
-                        g_prods = [p.get("id", p) if isinstance(p, dict) else p for p in get_obj.get("products", [])]
-                        if g_prods: payload["get"]["products"] = g_prods
-                        g_cats = [c.get("id", c) if isinstance(c, dict) else c for c in get_obj.get("categories", [])]
-                        if g_cats: payload["get"]["categories"] = g_cats
-
-                    res = safe_api_request("PUT", f"https://api.salla.dev/admin/v2/specialoffers/{offer_id}", headers, json=payload)
-                    if res:
-                        success_count += 1
-                    
+                    payload = rebuild_offer_payload(full_offer_res["data"], {"applied_with_coupon": True})
+                    res = safe_api_request("PUT", f"{SALLA_API_URL}/{offer_id}", headers, json=payload)
+                    if res: success_count += 1
                 st.success(f"✅ تم تفعيل دمج الكوبونات لـ {success_count} عرض بنجاح!")
-
-    with col_bulk4:
-        # الاستفادة من العروض المفلترة المخزنة في الجلسة من التحديث السابق لزر التصدير العلوي
+                
+    with col_bulk5:
         if "filtered_offers" in st.session_state and st.session_state["filtered_offers"] and len(st.session_state["filtered_offers"]) < len(raw_offers):
             st.download_button(
                 label="📥 تصدير العروض المفلترة",
@@ -254,8 +264,8 @@ def render_offers_page():
             )
         else:
             if st.button("📥 تصدير العروض المفلترة", use_container_width=True, type="secondary", key="bulk_export_filtered_top_disabled"):
-                st.info("💡 يرجى كتابة أو اختيار فلاتر البحث في الأسفل أولاً، ليقوم الزر بحصرها وتصديرها فوراً!")
-                
+                st.info("💡 يرجى استخدام فلاتر البحث في الأسفل أولاً، ليتم تصدير العروض الناتجة.")
+
     # --- حاوية إنشاء عرض جديد ---
     with st.expander("➕ إنشاء عرض ترويجي جديد", expanded=False):
         st.markdown("### 📝 تفاصيل العرض الأساسية")
@@ -367,13 +377,48 @@ def render_offers_page():
 
     # --- أدوات التصفية والبحث ---
     st.markdown(" 🔍 أدوات التصفية والبحث المتقدمة عن العروض")
-    f1, f2, f3 = st.columns(3)
-    with f1: search_offer = st.text_input("🔎 ابحث باسم العرض أو بالمعرف الرقمي:", key="filter_search_input")
-    with f2: status_filter = st.selectbox("📌 حالة نشاط وظهور العرض بالمتجر:", ["الكل", "نشط", "غير نشط"], key="filter_status_select")
-    with f3: filter_date = st.date_input("📅 ابحث عن تاريخ انتهاء العرض:", value=None, key="filter_date_input")
+    f1, f2, f3, f4 = st.columns(4)
+    with f1: search_offer = st.text_input("🔎 ابحث باسم العرض أو بالمعرف:", key="filter_search_input")
+    with f2: status_filter = st.selectbox("📌 حالة نشاط العرض:", ["الكل", "نشط", "غير نشط"], key="filter_status_select")
+    with f3: filter_date = st.date_input("📅 ابحث عن تاريخ الانتهاء:", value=None, key="filter_date_input")
+    with f4: filter_overlap = st.checkbox("🔄 فحص التداخل (منتجات مكررة)", key="f_overlap", help="يعرض فقط العروض التي تتضمن منتجات موجودة في أكثر من عرض نشط")
 
     now = datetime.now()
     
+    # ==========================================
+    # ✅ نظام كشف وتصفية المنتجات المتداخلة (المكررة)
+    # ==========================================
+    overlapping_offer_ids = set()
+    if filter_overlap:
+        with st.spinner("🔄 جاري تحليل تفاصيل جميع العروض للبحث عن تداخل المنتجات..."):
+            product_offer_map = {}
+            for o in raw_offers:
+                o_id = o.get('id')
+                if o.get('status') != 'active': continue
+                
+                full_res = safe_api_request("GET", f"{SALLA_API_URL}/{o_id}", headers)
+                if full_res and full_res.get('data'):
+                    full_offer = full_res['data']
+                    p_ids = set()
+                    
+                    for p in full_offer.get('buy', {}).get('products', []):
+                        p_ids.add(str(p.get('id', p) if isinstance(p, dict) else p))
+                    for p in full_offer.get('get', {}).get('products', []):
+                        p_ids.add(str(p.get('id', p) if isinstance(p, dict) else p))
+                    
+                    for pid in p_ids:
+                        if pid not in product_offer_map: product_offer_map[pid] = []
+                        product_offer_map[pid].append(o_id)
+            
+            for pid, o_ids in product_offer_map.items():
+                if len(o_ids) > 1:
+                    overlapping_offer_ids.update(o_ids)
+                    
+            if not overlapping_offer_ids:
+                st.success("✅ ممتاز! لا يوجد أي تداخل في منتجات العروض النشطة.")
+            else:
+                st.warning(f"⚠️ انتبه: تم العثور على منتجات مكررة مشتركة بين {len(overlapping_offer_ids)} عروض نشطة.")
+
     filtered_offers = []
     for offer in raw_offers:
         offer_id = offer.get('id', 'N/A')
@@ -387,13 +432,13 @@ def render_offers_page():
         if status_filter == "نشط" and status != "active": continue
         if status_filter == "غير نشط" and status == "active": continue
         if filter_date and (not exp_date or exp_date.date() != filter_date): continue
+        if filter_overlap and offer_id not in overlapping_offer_ids: continue
         
         filtered_offers.append(offer)
     
     st.session_state["filtered_offers"] = filtered_offers
     
     if filtered_offers and len(filtered_offers) < len(raw_offers):
-        # تحويله إلى زر تحميل مباشر دون وضعه داخل st.button لمنع اختفائه أثناء الـ Rerun
         st.download_button(
             label="📥 اضغط هنا لتحميل ملف العروض المفلترة الحالية مباشرة",
             data=export_offers_to_excel(filtered_offers),
@@ -406,7 +451,7 @@ def render_offers_page():
     
     st.markdown(f"""
         <div style="background: #f0f4f8; padding: 8px 16px; border-radius: 8px; margin-bottom: 14px; border-right: 4px solid #00b4d8;">
-            <strong>📊 عدد العروض: {len(filtered_offers)} عرض</strong>
+            <strong>📊 عدد العروض المطابقة للبحث: {len(filtered_offers)} عرض</strong>
             {f' (تم تصفيتها من أصل {len(raw_offers)})' if len(filtered_offers) < len(raw_offers) else ''}
         </div>
     """, unsafe_allow_html=True)
@@ -417,7 +462,6 @@ def render_offers_page():
         offer_name = offer.get('name', 'عرض بدون اسم')
         status = offer.get('status', 'inactive')
         
-        # ✅ الاستدعاء التفصيلي الحي لكل عرض لحل مشكلة اختفاء مسميات الأصناف ومجموعات العملاء
         with st.spinner(f"جاري جلب تفاصيل العرض: {offer_name}..."):
             detailed_res = safe_api_request("GET", f"{SALLA_API_URL}/{offer_id}", headers)
             offer_data = detailed_res.get("data", offer) if detailed_res else offer
@@ -431,7 +475,6 @@ def render_offers_page():
         
         badge = "🟢 نشط بالمتجر" if status == "active" else "🔴 متوقف حالياً"
         
-        # الشارات الصارمة الثلاثية المحدثة
         if start_date and start_date > now:
             exp_badge = "⏳ لم يبدأ بعد"
         elif exp_date and exp_date < now:
@@ -612,7 +655,7 @@ def render_offers_page():
                     ed_end_time_val = st.time_input("اختر الوقت:", value=safe_parse_date(offer_data.get('expiry_date', datetime.now().strftime('%Y-%m-%d %H:%M:%S'))).time() if safe_parse_date(offer_data.get('expiry_date')) else datetime.now().time().replace(hour=23, minute=59, second=59), key=f"ed_end_time_{offer_id}_{idx}", step=60)
                 ed_end = datetime.combine(ed_end_date_val, ed_end_time_val).strftime('%Y-%m-%d %H:%M:%S')
                 
-                if st.button("💾Box اعتماد وحفظ العرض المحدث", key=f"sv_of_{offer_id}_{idx}", type="primary", use_container_width=True):
+                if st.button("💾 اعتماد وحفظ العرض المحدث", key=f"sv_of_{offer_id}_{idx}", type="primary", use_container_width=True):
                     try:
                         b_p_list = [int(i.strip()) for i in ed_buy_products.split(",") if i.strip().isdigit()] if ed_buy_products.strip() else []
                         cg_p_list = [int(g.strip()) for g in ed_cust_groups.split(",") if g.strip().isdigit()] if ed_cust_groups.strip() else []
