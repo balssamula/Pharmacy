@@ -1062,21 +1062,37 @@ def get_group_products(product_id: int) -> List[Dict]:
     group_products = []
     
     for sku in skus:
-        # جلب تفاصيل المنتج الفرعي
+        # ✅ جلب تفاصيل المنتج الفرعي باستخدام المعرف
         sku_id = sku.get('id')
         if sku_id:
+            # محاولة جلب تفاصيل المنتج من الـ API
             sku_details = get_product_details(sku_id)
             if sku_details:
                 group_products.append({
                     'id': sku_details.get('id'),
-                    'name': sku_details.get('name'),
-                    'sku': sku_details.get('sku'),
+                    'name': sku_details.get('name', 'منتج بدون اسم'),
+                    'sku': sku_details.get('sku', 'لا يوجد'),
                     'price': get_flat_price(sku_details.get('price', 0)),
                     'quantity': sku_details.get('quantity', 0),
                     'sold_quantity': sku_details.get('sold_quantity', 0),
                     'status': sku_details.get('status', 'sale'),
                     'image': sku_details.get('thumbnail') or sku_details.get('main_image'),
-                    'url': sku_details.get('url')
+                    'url': sku_details.get('url'),
+                    'with_tax': sku_details.get('with_tax', True)
+                })
+            else:
+                # ✅ إذا فشل جلب التفاصيل، استخدم البيانات الموجودة في الـ SKU
+                group_products.append({
+                    'id': sku_id,
+                    'name': sku.get('name', f'منتج {sku_id}'),
+                    'sku': sku.get('sku', 'لا يوجد'),
+                    'price': get_flat_price(sku.get('price', 0)),
+                    'quantity': sku.get('stock_quantity', 0),
+                    'sold_quantity': 0,
+                    'status': 'sale',
+                    'image': None,
+                    'url': None,
+                    'with_tax': True
                 })
     
     return group_products
