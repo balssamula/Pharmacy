@@ -121,7 +121,7 @@ def render_offers_page():
     # ==========================================
     st.markdown("### ⚡ إجراءات جماعية سريعة على العروض")
     
-    col_bulk1, col_bulk2, col_bulk3, col_bulk4, col_bulk5 = st.columns(5)
+    col_bulk1, col_bulk2, col_bulk3, col_bulk4 = st.columns(4)
     
     with col_bulk1:
         if st.button("⏹️ إيقاف جميع العروض المفعلة", type="primary"):
