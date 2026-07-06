@@ -538,14 +538,29 @@ def render_offers_page():
                 buy_obj = offer_data.get('buy', {})
                 b_type_raw = buy_obj.get("type", "product")
                 if isinstance(b_type_raw, dict): b_type_raw = b_type_raw.get("id", "product")
-                st.text(f"مطبق على: {inv_type_map.get(b_type_raw, 'منتجات')}")
+                st.markdown(f"<div style='margin-bottom:8px; font-size:13px; color:#64748b;'>مطبق على: <b>{inv_type_map.get(b_type_raw, 'منتجات')}</b></div>", unsafe_allow_html=True)
                 
-                buy_elems = []
-                for p in buy_obj.get('products', []): buy_elems.append(f"• صنف: {p.get('name', '')} (ID: {p.get('id', p)})")
-                for c in buy_obj.get('categories', []): buy_elems.append(f"• تصنيف: {c.get('name', '')} (ID: {c.get('id', c)})")
-                for b in buy_obj.get('brands', []): buy_elems.append(f"• ماركة: {b.get('name', '')} (ID: {b.get('id', b)})")
+                buy_html = "<div style='background:#f8fafc; padding:12px; border-radius:8px; border:1px solid #e2e8f0; max-height: 180px; overflow-y: auto;'><ul style='margin:0; padding-right:15px; font-size:13px; line-height:1.6;'>"
+                has_items = False
+                for p in buy_obj.get('products', []):
+                    p_id = p.get('id', p) if isinstance(p, dict) else p
+                    p_name = p.get('name', 'بدون اسم') if isinstance(p, dict) else 'منتج'
+                    p_sku = p.get('sku', 'لا يوجد') if isinstance(p, dict) else 'لا يوجد'
+                    buy_html += f"<li style='margin-bottom:8px;'>📦 <b>{p_name}</b><br><span style='color:#64748b; font-size:11px; background:#e2e8f0; padding:2px 6px; border-radius:4px;'>SKU: {p_sku}</span> <span style='color:#64748b; font-size:11px; background:#e2e8f0; padding:2px 6px; border-radius:4px;'>ID: {p_id}</span></li>"
+                    has_items = True
+                for c in buy_obj.get('categories', []):
+                    c_id = c.get('id', c) if isinstance(c, dict) else c
+                    c_name = c.get('name', 'بدون اسم') if isinstance(c, dict) else 'تصنيف'
+                    buy_html += f"<li style='margin-bottom:8px;'>📁 <b>{c_name}</b><br><span style='color:#64748b; font-size:11px; background:#e2e8f0; padding:2px 6px; border-radius:4px;'>ID: {c_id}</span></li>"
+                    has_items = True
+                for b in buy_obj.get('brands', []):
+                    b_id = b.get('id', b) if isinstance(b, dict) else b
+                    b_name = b.get('name', 'بدون اسم') if isinstance(b, dict) else 'ماركة'
+                    buy_html += f"<li style='margin-bottom:8px;'>🏢 <b>{b_name}</b><br><span style='color:#64748b; font-size:11px; background:#e2e8f0; padding:2px 6px; border-radius:4px;'>ID: {b_id}</span></li>"
+                    has_items = True
+                buy_html += "</ul></div>"
                 
-                if buy_elems: st.info("\n".join(buy_elems))
+                if has_items: st.markdown(buy_html, unsafe_allow_html=True)
                 else: st.info("جميع الأصناف المشمولة")
                 st.caption(f"الكمية المطلوبة: {buy_obj.get('quantity', 1)} قطعة")
                 
@@ -555,14 +570,29 @@ def render_offers_page():
                 get_obj = offer_data.get('get', {})               
                 g_type_raw = get_obj.get("type", "product")
                 if isinstance(g_type_raw, dict): g_type_raw = g_type_raw.get("id", "product")
-                st.text(f"مطبق على: {inv_type_map.get(g_type_raw, 'منتجات')}")
+                st.markdown(f"<div style='margin-bottom:8px; font-size:13px; color:#64748b;'>مطبق على: <b>{inv_type_map.get(g_type_raw, 'منتجات')}</b></div>", unsafe_allow_html=True)
                 
-                get_elems = []
-                for p in get_obj.get('products', []): get_elems.append(f"• صنف: {p.get('name', '')} (ID: {p.get('id', p)})")
-                for c in get_obj.get('categories', []): get_elems.append(f"• تصنيف: {c.get('name', '')} (ID: {c.get('id', c)})")
-                for b in get_obj.get('brands', []): get_elems.append(f"• ماركة: {b.get('name', '')} (ID: {b.get('id', b)})")
+                get_html = "<div style='background:#f0fdf4; padding:12px; border-radius:8px; border:1px solid #bbf7d0; max-height: 180px; overflow-y: auto;'><ul style='margin:0; padding-right:15px; font-size:13px; line-height:1.6;'>"
+                has_items_y = False
+                for p in get_obj.get('products', []):
+                    p_id = p.get('id', p) if isinstance(p, dict) else p
+                    p_name = p.get('name', 'بدون اسم') if isinstance(p, dict) else 'منتج'
+                    p_sku = p.get('sku', 'لا يوجد') if isinstance(p, dict) else 'لا يوجد'
+                    get_html += f"<li style='margin-bottom:8px;'>📦 <b>{p_name}</b><br><span style='color:#166534; font-size:11px; background:#dcfce7; padding:2px 6px; border-radius:4px;'>SKU: {p_sku}</span> <span style='color:#166534; font-size:11px; background:#dcfce7; padding:2px 6px; border-radius:4px;'>ID: {p_id}</span></li>"
+                    has_items_y = True
+                for c in get_obj.get('categories', []):
+                    c_id = c.get('id', c) if isinstance(c, dict) else c
+                    c_name = c.get('name', 'بدون اسم') if isinstance(c, dict) else 'تصنيف'
+                    get_html += f"<li style='margin-bottom:8px;'>📁 <b>{c_name}</b><br><span style='color:#166534; font-size:11px; background:#dcfce7; padding:2px 6px; border-radius:4px;'>ID: {c_id}</span></li>"
+                    has_items_y = True
+                for b in get_obj.get('brands', []):
+                    b_id = b.get('id', b) if isinstance(b, dict) else b
+                    b_name = b.get('name', 'بدون اسم') if isinstance(b, dict) else 'ماركة'
+                    get_html += f"<li style='margin-bottom:8px;'>🏢 <b>{b_name}</b><br><span style='color:#166534; font-size:11px; background:#dcfce7; padding:2px 6px; border-radius:4px;'>ID: {b_id}</span></li>"
+                    has_items_y = True
+                get_html += "</ul></div>"
                 
-                if get_elems: st.success("\n".join(get_elems))
+                if has_items_y: st.markdown(get_html, unsafe_allow_html=True)
                 else: st.success("جميع الأصناف المشمولة")
                 
                 st.caption(f"كمية المنح/الخصم: {get_obj.get('quantity', 1)} قطعة")
