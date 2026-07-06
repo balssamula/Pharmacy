@@ -16,21 +16,34 @@ def render_offers_page():
     
     headers = get_headers()
     if not headers: return
+
+    # ✅ دالة جلب شاملة لتفادي أخطاء per_page <= 60
+    def fetch_all_pages(url_base):
+        all_data = []
+        page = 1
+        while True:
+            url = f"{url_base}?per_page=60&page={page}" if "?" not in url_base else f"{url_base}&per_page=60&page={page}"
+            res = safe_api_request("GET", url, headers)
+            if not res or not res.get("data"): break
+            all_data.extend(res["data"])
+            if page >= res.get("pagination", {}).get("totalPages", 1): break
+            page += 1
+        return all_data
     
     # ==========================================
-    # ⚙️ تهيئة القوائم المنسدلة الذكية (منتجات، تصنيفات، ماركات)
+    # ⚙️ تهيئة وجلب البيانات المساعدة تلقائياً
     # ==========================================
     if "all_products" not in st.session_state: st.session_state["all_products"] = []
     if "all_categories" not in st.session_state: st.session_state["all_categories"] = []
     if "all_brands" not in st.session_state: st.session_state["all_brands"] = []
     
-    with st.spinner("جاري تهيئة البيانات المساعدة (التصنيفات والماركات)..."):
+    with st.spinner("🔄 جاري تهيئة البيانات المساعدة (المنتجات، التصنيفات، والماركات) للعروض..."):
         if not st.session_state["all_categories"]:
-            res_cat = safe_api_request("GET", "https://api.salla.dev/admin/v2/categories?per_page=100", headers)
-            if res_cat and res_cat.get("data"): st.session_state["all_categories"] = res_cat["data"]
+            st.session_state["all_categories"] = fetch_all_pages("https://api.salla.dev/admin/v2/categories")
         if not st.session_state["all_brands"]:
-            res_br = safe_api_request("GET", "https://api.salla.dev/admin/v2/brands?per_page=100", headers)
-            if res_br and res_br.get("data"): st.session_state["all_brands"] = res_br["data"]
+            st.session_state["all_brands"] = fetch_all_pages("https://api.salla.dev/admin/v2/brands")
+        if not st.session_state["all_products"]:
+            st.session_state["all_products"] = fetch_all_pages("https://api.salla.dev/admin/v2/products")
 
     def render_dynamic_selection(label, selection_type, existing_ids, key_prefix):
         options = {}
@@ -109,14 +122,7 @@ def render_offers_page():
         st.download_button("📥 تنزيل نموذج استيراد العروض الترويجية", data=generate_salla_excel_template(), file_name="Salla_Offers_Template.xlsx", mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", use_container_width=True)
         
     with st.spinner("🔄 جاري جلب كافة العروض (نشطة وغير نشطة) من سلة..."):
-        raw_offers = []
-        page = 1
-        while True:
-            res_all = safe_api_request("GET", f"{SALLA_API_URL}?per_page=100&page={page}", headers)
-            if not res_all or not res_all.get("data"): break
-            raw_offers.extend(res_all["data"])
-            if page >= res_all.get("pagination", {}).get("totalPages", 1): break
-            page += 1
+        raw_offers = fetch_all_pages(SALLA_API_URL)
         
     with col_ex:
         if raw_offers:
@@ -439,6 +445,8 @@ def render_offers_page():
     # --- عرض بطاقات العروض ---
     # ==========================================
     inv_type_map = {"product": "منتجات", "category": "تصنيفات", "brand": "ماركات"}
+    type_options_ar = ["منتجات", "تصنيفات", "ماركات"]
+    type_map = {"منتجات": "product", "تصنيفات": "category", "ماركات": "brand"}
     
     for idx, offer in enumerate(filtered_offers):
         offer_id = offer.get('id', 'N/A')
