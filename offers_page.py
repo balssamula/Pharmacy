@@ -110,7 +110,7 @@ def render_offers_page():
         status_text.empty()
         return all_data
     
-    # ⚙️ تهيئة وجلب البيانات المساعدة تلقائياً (فقط إذا لم تكن موجودة لتسريع الصفحة)
+    # ⚙️ تهيئة وجلب البيانات المساعدة تلقائياً (لتسريع الصفحة)
     if "all_products" not in st.session_state: st.session_state["all_products"] = []
     if "all_categories" not in st.session_state: st.session_state["all_categories"] = []
     if "all_brands" not in st.session_state: st.session_state["all_brands"] = []
@@ -542,13 +542,16 @@ def render_offers_page():
     type_options_ar = ["منتجات", "تصنيفات", "ماركات"]
     type_map = {"منتجات": "product", "تصنيفات": "category", "ماركات": "brand"}
     
-    # ✅ تم نقل الدالة المساعدة هنا خارج الحلقة لتجنب خطأ المسافات (IndentationError)
+    # ✅ دالة استخراج شارة العنوان الترويجي من المنتجات المحملة بالذاكرة
     def get_promo_badge(pid):
         for pr in st.session_state.get("all_products", []):
             if str(pr.get('id')) == str(pid):
-                promo = pr.get('promotion_title') or pr.get('promotion', {}).get('title') or ""
-                if promo:
-                    return f"<span style='color:#b45309; font-size:11px; background:#fef3c7; padding:2px 6px; border-radius:4px; margin-right:4px;'>🔖 {promo}</span>"
+                promo_obj = pr.get('promotion')
+                promo_title = pr.get('promotion_title', "")
+                if isinstance(promo_obj, dict):
+                    promo_title = promo_obj.get('title', promo_title)
+                if promo_title:
+                    return f"<span style='color:#b45309; font-size:11px; background:#fef3c7; padding:2px 6px; border-radius:4px; margin-right:4px;'>🔖 {promo_title}</span>"
         return ""
     
     for idx, offer in enumerate(filtered_offers):
@@ -601,15 +604,6 @@ def render_offers_page():
             st.markdown("<hr style='margin: 15px 0; border-top: 1px dashed #e2e8f0;'>", unsafe_allow_html=True)
             col_x, col_y = st.columns(2)
             
-            # دالة صغيرة سريعة لجلب العنوان الترويجي للمنتج من الذاكرة
-            def get_promo_badge(pid):
-                for pr in st.session_state.get("all_products", []):
-                    if str(pr.get('id')) == str(pid):
-                        promo = pr.get('promotion_title') or pr.get('promotion', {}).get('title') or ""
-                        if promo:
-                            return f"<span style='color:#b45309; font-size:11px; background:#fef3c7; padding:2px 6px; border-radius:4px; margin-right:4px;'>🔖 {promo}</span>"
-                return ""
-
             with col_x:
                 st.markdown("<b style='color:#0f1c2e;'>🛒 مجموعة الشراء (X) - [إذا اشترى العميل]:</b>", unsafe_allow_html=True)
                 buy_obj = offer_data.get('buy', {})
