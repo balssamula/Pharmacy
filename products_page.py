@@ -410,8 +410,27 @@ def render_product_card(idx: int, p: Dict, headers: Dict[str, str]):
             c_img, c_info, c_prc, c_act = st.columns([1.5, 2.5, 2.5, 2])
             
             with c_img:
-                if p_image: st.image(p_image, use_container_width=True)
-                else: st.markdown("<div style='text-align:center; padding:30px; background:#eee; border-radius:8px;'>🚫 بدون صورة</div>", unsafe_allow_html=True)
+                if p_image:
+                    st.image(p_image, use_container_width=True)
+                else:
+                    st.markdown("<div style='text-align:center; padding:30px; background:#eee; border-radius:8px;'>🚫 بدون صورة</div>", unsafe_allow_html=True)
+                
+                with st.popover("🖼️ إرفاق وتحديث الصورة"):
+                    upload_type = st.radio("طريقة الإرفاق:", ["رفع ملف من الجهاز", "استخدام رابط URL"], key=f"img_mode_{p_id}_{idx}")
+                    if upload_type == "رفع ملف من الجهاز":
+                        uploaded_img = st.file_uploader("اختر صورة للمنتج:", type=['png', 'jpg', 'jpeg'], key=f"img_up_{p_id}_{idx}")
+                        if uploaded_img is not None and st.button("🚀 رفع الصورة للمنتج", key=f"btn_up_{p_id}_{idx}", type="primary"):
+                            with st.spinner("جاري الرفع..."):
+                                if attach_product_image_api(p_id, image_bytes=uploaded_img.getvalue(), filename=uploaded_img.name):
+                                    st.success("✅ تم رفع وإرفاق الصورة بنجاح!")
+                                    st.rerun()
+                    else:
+                        img_url_input = st.text_input("أدخل الرابط المباشر للصورة:", placeholder="https://example.com/image.jpg", key=f"img_url_{p_id}_{idx}")
+                        if img_url_input and st.button("🚀 ربط الصورة عبر الرابط", key=f"btn_link_{p_id}_{idx}", type="primary"):
+                            with st.spinner("جاري الربط..."):
+                                if attach_product_image_api(p_id, image_url=img_url_input):
+                                    st.success("✅ تم ربط الصورة بنجاح!")
+                                    st.rerun()
                 
             with c_info:
                 st.markdown(f"🆔 **المعرف:** `{p_id}` | 🔢 **SKU:** `{p_sku}`")
@@ -429,6 +448,8 @@ def render_product_card(idx: int, p: Dict, headers: Dict[str, str]):
                             <span style="background:#c0392b; color:#fff; padding:2px 5px; border-radius:4px; font-size:10px;">وفرت {discount_pct}%</span>
                         </div>
                     """, unsafe_allow_html=True)
+                    st.markdown(f"📅 بداية التخفيض: `{sale_start_date}`")
+                    st.markdown(f"📅 نهاية التخفيض: `{sale_end_date}`")
                 else:
                     st.markdown(f"<div style='background:#e2e8f0; padding:10px; border-radius:8px; border-right:5px solid #4a5568;'><b style='color:#2d3748; font-size:14px;'>سعر ثابت: {base_price:,.2f} SAR</b></div>", unsafe_allow_html=True)
                 
@@ -460,7 +481,76 @@ def render_product_card(idx: int, p: Dict, headers: Dict[str, str]):
                     if st.button("حفظ", key=f"svt_{p_id}_{idx}", type="primary"):
                         if update_product_promotions_secure(p_id, n_pr, n_su, headers): st.rerun()
             st.markdown("</div>", unsafe_allow_html=True)
-            
+
+                # ✅ إضافة زر حذف المنتج
+                with st.popover("حذف المنتج", icon="🗑️", type="primary"):
+                    st.warning("⚠️ تحذير: حذف المنتج نهائي ولا يمكن استرجاعه!")
+                    st.write(f"**المنتج:** {p_name}")
+                    st.write(f"**المعرف:** `{p_id}`")
+                    
+                    confirm_delete = st.checkbox("☑️ أوافق على حذف هذا المنتج نهائياً", key=f"confirm_delete_{p_id}_{idx}")
+                    
+                    if st.button("🗑️ حذف المنتج نهائياً", key=f"delete_{p_id}_{idx}", type="primary", disabled=not confirm_delete, use_container_width=True):
+                        with st.spinner("جاري حذف المنتج..."):
+                            if delete_product(int(p_id)):
+                                st.success("✅ تم حذف المنتج بنجاح!")
+                                # إزالة المنتج من القائمة المعروضة
+                                if p in filtered_products:
+                                    filtered_products.remove(p)
+                                if p in all_products:
+                                    all_products.remove(p)
+                                st.rerun()
+                            else:
+                                st.error("❌ فشل حذف المنتج")
+
+                with st.popover("📗 إعدادات الضريبة"):
+                    is_taxed = st.checkbox("خاضع للضريبة", value=p.get('with_tax', True), key=f"tax_chk_{p_id}_{idx}")
+                    ex_cause = p.get('tax_exemption_cause', '')
+                    if not is_taxed:
+                        cause_idx = TAX_EXEMPTION_CAUSES.index(ex_cause) if ex_cause in TAX_EXEMPTION_CAUSES else 0
+                        selected_cause = st.selectbox("سبب الإعفاء من الضريبة:", TAX_EXEMPTION_CAUSES, index=cause_idx, key=f"tax_cause_{p_id}_{idx}")
+                    else:
+                        selected_cause = ""
+                        
+                    if st.button("💾 حفظ حالة الضريبة", key=f"save_tax_{p_id}_{idx}", type="primary", use_container_width=True):
+                        with st.spinner("جاري التحديث..."):
+                            if update_product_tax_secure(p_id, is_taxed, selected_cause, headers):
+                                st.success("✅ تم تحديث حالة الضريبة بنجاح!")
+                                st.rerun()
+                
+                with st.popover("🏢 كميات الفروع"):
+                    if not branches:
+                        st.warning("لا توجد فروع مسجلة، أو فشل الجلب.")
+                    else:
+                        st.markdown("**أدخل الكمية الجديدة للفرع (سيتم استبدال الكمية الحالية):**")
+                        branch_updates = []
+                        for b in branches:
+                            new_q = st.number_input(f"تحديث الكمية في: {b['name']}", min_value=0, value=0, step=1, key=f"bq_{p_id}_{b['id']}_{idx}")
+                            if new_q > 0:
+                                branch_updates.append({
+                                    "identifer": p_sku, 
+                                    "identifer_type": "sku", 
+                                    "branch_id": b['id'], 
+                                    "quantity": new_q, 
+                                    "mode": "overwrite"
+                                })
+                        
+                        if st.button("💾 حفظ كميات الفروع (للقيم المضافة)", key=f"save_bq_{p_id}_{idx}", type="primary", use_container_width=True):
+                            if branch_updates:
+                                with st.spinner("جاري التوزيع في سلة..."):
+                                    res = safe_api_request(
+                                        "POST", 
+                                        "https://api.salla.dev/admin/v2/products/quantities/bulk", 
+                                        headers, 
+                                        json={"products": branch_updates}
+                                    )
+                                    if res:
+                                        st.success("✅ تم تحديث وتوزيع الكميات!")
+                                        st.rerun()
+                            else:
+                                st.warning("الرجاء إدخال كميات أكبر من صفر للتحديث.")
+                pass
+
             # ✅ قسم عرض المجموعات (يعمل بذكاء)
             if product_type == 'group_products':
                 render_group_product_section(p_id, p_name, idx, headers)
