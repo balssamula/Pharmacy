@@ -590,8 +590,17 @@ def render_offers_page():
                 st.markdown(f"**📢 نص رسالة العرض:** *{offer_data.get('message', 'لا توجد رسالة مرفقة')}*")
                 
             st.markdown("<hr style='margin: 15px 0; border-top: 1px dashed #e2e8f0;'>", unsafe_allow_html=True)
-            col_x, col_y = st.columns(2)
+col_x, col_y = st.columns(2)
             
+            # دالة صغيرة سريعة لجلب العنوان الترويجي للمنتج من الذاكرة
+            def get_promo_badge(pid):
+                for pr in st.session_state.get("all_products", []):
+                    if str(pr.get('id')) == str(pid):
+                        promo = pr.get('promotion_title') or pr.get('promotion', {}).get('title') or ""
+                        if promo:
+                            return f"<span style='color:#b45309; font-size:11px; background:#fef3c7; padding:2px 6px; border-radius:4px; margin-right:4px;'>🔖 {promo}</span>"
+                return ""
+
             with col_x:
                 st.markdown("<b style='color:#0f1c2e;'>🛒 مجموعة الشراء (X) - [إذا اشترى العميل]:</b>", unsafe_allow_html=True)
                 buy_obj = offer_data.get('buy', {})
@@ -605,7 +614,8 @@ def render_offers_page():
                     p_id = p.get('id', p) if isinstance(p, dict) else p
                     p_name = p.get('name', 'بدون اسم') if isinstance(p, dict) else 'منتج'
                     p_sku = p.get('sku', 'لا يوجد') if isinstance(p, dict) else 'لا يوجد'
-                    buy_html += f"<li style='margin-bottom:8px;'>📦 <b>{p_name}</b><br><span style='color:#64748b; font-size:11px; background:#e2e8f0; padding:2px 6px; border-radius:4px;'>SKU: {p_sku}</span> <span style='color:#64748b; font-size:11px; background:#e2e8f0; padding:2px 6px; border-radius:4px;'>ID: {p_id}</span></li>"
+                    promo_badge = get_promo_badge(p_id) # جلب الشارة
+                    buy_html += f"<li style='margin-bottom:8px;'>📦 <b>{p_name}</b><br><span style='color:#64748b; font-size:11px; background:#e2e8f0; padding:2px 6px; border-radius:4px;'>SKU: {p_sku}</span> <span style='color:#64748b; font-size:11px; background:#e2e8f0; padding:2px 6px; border-radius:4px;'>ID: {p_id}</span> {promo_badge}</li>"
                     has_items = True
                 for c in buy_obj.get('categories', []):
                     c_id = c.get('id', c) if isinstance(c, dict) else c
@@ -635,7 +645,8 @@ def render_offers_page():
                     p_id = p.get('id', p) if isinstance(p, dict) else p
                     p_name = p.get('name', 'بدون اسم') if isinstance(p, dict) else 'منتج'
                     p_sku = p.get('sku', 'لا يوجد') if isinstance(p, dict) else 'لا يوجد'
-                    get_html += f"<li style='margin-bottom:8px;'>📦 <b>{p_name}</b><br><span style='color:#166534; font-size:11px; background:#dcfce7; padding:2px 6px; border-radius:4px;'>SKU: {p_sku}</span> <span style='color:#166534; font-size:11px; background:#dcfce7; padding:2px 6px; border-radius:4px;'>ID: {p_id}</span></li>"
+                    promo_badge = get_promo_badge(p_id) # جلب الشارة
+                    get_html += f"<li style='margin-bottom:8px;'>📦 <b>{p_name}</b><br><span style='color:#166534; font-size:11px; background:#dcfce7; padding:2px 6px; border-radius:4px;'>SKU: {p_sku}</span> <span style='color:#166534; font-size:11px; background:#dcfce7; padding:2px 6px; border-radius:4px;'>ID: {p_id}</span> {promo_badge}</li>"
                     has_items_y = True
                 for c in get_obj.get('categories', []):
                     c_id = c.get('id', c) if isinstance(c, dict) else c
