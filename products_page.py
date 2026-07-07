@@ -403,17 +403,7 @@ def render_product_card(idx: int, p: Dict, headers: Dict[str, str]):
         offer_badge = f"<span style='background: rgba(255, 193, 7, 0.25); color: #b45309; padding: 4px 12px; border-radius: 20px; font-size: 11px; font-weight: 600;'>🎁 مشمول في ({len(p_offers)}) عروض</span>" if p_offers else ""
 
         # ✅ رسم شريط العنوان (يظهر دائماً للجميع)
-        st.markdown(f"""
-        <div style='background: linear-gradient(135deg, #243b55 0%, #141e30 100%); padding: 14px 20px; border-radius: 12px 12px 0px 0px; margin-top: 25px; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 10px; border-bottom: 3px solid {border_color};'>
-            <span style='color: #ffffff; font-weight: bold; font-size: 15px;'>📦 {p_name}</span>
-            <div style='display: flex; gap: 8px; flex-wrap: wrap; align-items: center;'>
-                <span style='background: rgba(255,255,255,0.2); color: #fff; padding: 4px 12px; border-radius: 20px; font-size: 11px; font-weight:600;'>{disp_status}</span>
-                <span style='background: rgba(0, 235, 207, 0.2); color: #00EBCF; padding: 4px 12px; border-radius: 20px; font-size: 11px; font-weight:600;'>{tax_status}</span>
-                {type_badge}
-                {offer_badge}
-            </div>
-        </div>
-        """, unsafe_allow_html=True)
+        st.markdown(f"<div style='background: linear-gradient(135deg, #243b55 0%, #141e30 100%); padding: 14px 20px; border-radius: 12px 12px 0px 0px; margin-top: 25px; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 10px; border-bottom: 3px solid {border_color};'><span style='color: #ffffff; font-weight: bold; font-size: 15px;'>📦 {p_name}</span><div style='display: flex; gap: 8px; flex-wrap: wrap; align-items: center;'><span style='background: rgba(255,255,255,0.2); color: #fff; padding: 4px 12px; border-radius: 20px; font-size: 11px; font-weight:600;'>{disp_status}</span><span style='background: rgba(0, 235, 207, 0.2); color: #00EBCF; padding: 4px 12px; border-radius: 20px; font-size: 11px; font-weight:600;'>{tax_status}</span>{type_badge}{offer_badge}</div></div>", unsafe_allow_html=True)
 
         with st.container(border=True):
             st.markdown("""<div style="background-color: #fafbfc; padding: 20px; border-radius: 0px 0px 12px 12px; border: 1px solid #e1e8ed; border-top: none; margin-bottom: 20px;">""", unsafe_allow_html=True)
