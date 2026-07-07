@@ -20,70 +20,69 @@ def render_offers_page():
     if not headers: return
 
     # ==========================================
-    # 🌟 CSS القائمة الجانبية العائمة للإجراءات السريعة (يمين الشاشة)
+    # 🌟 CSS هندسة الأزرار الجانبية الفردية والمستقلة 100%
     # ==========================================
     st.markdown("""
     <style>
-        /* تنسيق الحاوية العائمة للإجراءات السريعة */
-        div[data-testid="stVerticalBlock"]:has(#quick-action-menu) {
-            position: fixed !important;
-            right: -285px; /* إخفاء معظم القائمة */
-            top: 25%;
-            width: 320px;
-            background: linear-gradient(135deg, #1E293B 0%, #0F1C2E 100%);
-            padding: 20px;
-            border-radius: 15px 0 0 15px;
-            border: 2px solid #00EBCF;
-            border-right: none;
-            z-index: 999999;
-            transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
-            box-shadow: -5px 5px 15px rgba(0,0,0,0.4);
+        /* إخفاء علامات الربط تماماً لعدم شغل مساحة */
+        div[data-testid="stElementContainer"]:has(span[id^="qa-marker-"]) {
+            display: none !important;
         }
-        
-        /* تمدد القائمة عند التمرير أو عند النقر داخلها */
-        div[data-testid="stVerticalBlock"]:has(#quick-action-menu):hover,
-        div[data-testid="stVerticalBlock"]:has(#quick-action-menu):focus-within {
+
+        /* التصميم الأساسي لكل زر بشكل منفصل */
+        div[data-testid="stElementContainer"]:has(span[id="qa-marker-1"]) + div[data-testid="stElementContainer"],
+        div[data-testid="stElementContainer"]:has(span[id="qa-marker-2"]) + div[data-testid="stElementContainer"],
+        div[data-testid="stElementContainer"]:has(span[id="qa-marker-3"]) + div[data-testid="stElementContainer"],
+        div[data-testid="stElementContainer"]:has(span[id="qa-marker-4"]) + div[data-testid="stElementContainer"],
+        div[data-testid="stElementContainer"]:has(span[id="qa-marker-5"]) + div[data-testid="stElementContainer"] {
+            position: fixed !important;
+            right: -250px !important; /* إخفاء معظم مساحة الزر */
+            width: 290px !important;
+            background: linear-gradient(135deg, #1E293B 0%, #0F1C2E 100%) !important;
+            padding: 8px 15px !important;
+            border-radius: 20px 0 0 20px !important;
+            border: 2px solid #00EBCF !important;
+            border-right: none !important;
+            z-index: 999999 !important;
+            transition: right 0.4s cubic-bezier(0.4, 0, 0.2, 1) !important;
+            box-shadow: -4px 4px 12px rgba(0,0,0,0.3) !important;
+        }
+
+        /* خروج الزر لوحده عند المرور عليه أو عند فتحه */
+        div[data-testid="stElementContainer"]:has(span[id^="qa-marker-"]) + div[data-testid="stElementContainer"]:hover,
+        div[data-testid="stElementContainer"]:has(span[id^="qa-marker-"]) + div[data-testid="stElementContainer"]:focus-within,
+        div[data-testid="stElementContainer"]:has(span[id^="qa-marker-"]) + div[data-testid="stElementContainer"]:has(button[aria-expanded="true"]) {
             right: 0px !important;
         }
 
-        /* المؤشر الجانبي المرئي (Tab) */
-        #quick-action-menu::before {
-            content: "⚡ إجراءات سريعة 👈";
-            position: absolute;
-            left: -42px;
-            top: 50%;
-            transform: translateY(-50%) rotate(-90deg);
-            color: #00EBCF;
-            font-family: 'Cairo', sans-serif !important;
-            font-weight: bold;
-            font-size: 15px;
-            background: #1E293B;
-            padding: 6px 16px;
-            border-radius: 12px 12px 0 0;
-            border: 2px solid #00EBCF;
-            border-bottom: none;
-            pointer-events: none;
-            letter-spacing: 1px;
-            box-shadow: 0 -3px 8px rgba(0,0,0,0.2);
+        /* توزيع الأزرار بشكل ثابت عمودياً لتجنب التداخل */
+        div[data-testid="stElementContainer"]:has(span[id="qa-marker-1"]) + div[data-testid="stElementContainer"] { top: 150px; }
+        div[data-testid="stElementContainer"]:has(span[id="qa-marker-2"]) + div[data-testid="stElementContainer"] { top: 220px; }
+        div[data-testid="stElementContainer"]:has(span[id="qa-marker-3"]) + div[data-testid="stElementContainer"] { top: 290px; }
+        div[data-testid="stElementContainer"]:has(span[id="qa-marker-4"]) + div[data-testid="stElementContainer"] { top: 360px; }
+        div[data-testid="stElementContainer"]:has(span[id="qa-marker-5"]) + div[data-testid="stElementContainer"] { top: 430px; }
+
+        /* تنسيق شكل الزر الداخلي ليتماشى مع السحب والظهور */
+        div[data-testid="stElementContainer"]:has(span[id^="qa-marker-"]) + div[data-testid="stElementContainer"] button {
+            width: 100% !important;
+            text-align: right !important;
+            padding-right: 35px !important; 
+            font-size: 14px !important;
+            font-weight: bold !important;
+            background: transparent !important;
+            border: none !important;
+            color: white !important;
         }
         
-        /* تنسيقات داخلية للأزرار في القائمة العائمة */
-        div[data-testid="stVerticalBlock"]:has(#quick-action-menu) button {
-            margin-bottom: 8px;
-            border-radius: 8px !important;
-            font-size: 14px !important;
-        }
-        div[data-testid="stVerticalBlock"]:has(#quick-action-menu) [data-testid="stPopover"] {
-            width: 100%;
-        }
-        div[data-testid="stVerticalBlock"]:has(#quick-action-menu) h3 {
-            color: #00EBCF !important;
-            font-size: 16px !important;
-            text-align: center;
-            border-bottom: 1px solid #334155;
-            padding-bottom: 10px;
-            margin-top: -10px;
-            margin-bottom: 15px;
+        /* مؤشر جانبي لكل زر ليظهر عندما يكون الزر مخفياً */
+        div[data-testid="stElementContainer"]:has(span[id^="qa-marker-"]) + div[data-testid="stElementContainer"]::before {
+            content: "👈";
+            position: absolute;
+            left: 10px;
+            top: 50%;
+            transform: translateY(-50%);
+            font-size: 20px;
+            pointer-events: none;
         }
     </style>
     """, unsafe_allow_html=True)
@@ -179,111 +178,114 @@ def render_offers_page():
         raw_offers = fetch_all_pages(SALLA_API_URL, "جاري سحب العروض من متجرك...")
 
     # ==========================================
-    # ⚡ القائمة العائمة اليمنى للإجراءات السريعة ⚡
+    # ⚡ الأزرار الفردية المنفصلة (تنساب بشكل مستقل)
     # ==========================================
-    with st.container():
-        st.markdown('<div id="quick-action-menu"></div>', unsafe_allow_html=True)
-        st.markdown("### ⚙️ لوحة التحكم السريعة")
+    
+    # الزر 1
+    st.markdown('<span id="qa-marker-1"></span>', unsafe_allow_html=True)
+    if st.button("⏹️ إيقاف جميع العروض المفعلة"):
+        active_offers = [o for o in raw_offers if o.get('status') == 'active']
+        if not active_offers: st.warning("لا توجد عروض مفعلة")
+        else:
+            with st.spinner(f"جاري الإيقاف..."):
+                c = sum(1 for o in active_offers if safe_api_request("PUT", f"{SALLA_API_URL}/{o.get('id')}/status", headers, json={"status": "inactive"}))
+                st.success(f"تم إيقاف {c} عرض!")
+                st.rerun()
+
+    # الزر 2
+    st.markdown('<span id="qa-marker-2"></span>', unsafe_allow_html=True)
+    with st.popover("📅 إدارة تواريخ الانتهاء"):
+        target_scope_end = st.radio("استهداف العروض للتمديد/الإنهاء:", ["تنتهي في تاريخ محدد", "جميع العروض المتاحة"], key="b_end_scope")
+        if target_scope_end == "تنتهي في تاريخ محدد":
+            col_date1, col_time1 = st.columns(2)
+            with col_date1: target_date = st.date_input("تاريخ الانتهاء الحالي:", value=datetime.now().date(), key="be_t_date")
+            with col_time1: target_time = st.time_input("الوقت:", value=datetime.now().time().replace(minute=59, second=59), key="be_t_time")
+            target_str = datetime.combine(target_date, target_time).strftime('%Y-%m-%d')
+            matching_offers_end = [o for o in raw_offers if o.get('expiry_date', '') and o.get('expiry_date', '').startswith(target_str)]
+        else:
+            matching_offers_end = raw_offers
+
+        action_type = st.radio("الإجراء المطلوب:", ["تاريخ جديد للتمديد", "إلغاء التفعيل"], key="be_action")
+        if action_type == "تاريخ جديد للتمديد":
+            col_date2, col_time2 = st.columns(2)
+            with col_date2: new_date = st.date_input("التاريخ الجديد:", value=datetime.now().date() + timedelta(days=30), key="be_n_date")
+            with col_time2: new_time = st.time_input("الوقت الجديد:", value=datetime.now().time().replace(minute=59, second=59), key="be_n_time")
+            new_expiry_str = datetime.combine(new_date, new_time).strftime('%Y-%m-%d %H:%M:%S')
+            btn_lbl = "🔄 تطبيق التمديد"
+        else:
+            btn_lbl = "🛑 تطبيق الإيقاف"
         
-        if st.button("⏹️ إيقاف جميع العروض المفعلة", use_container_width=True, type="primary"):
-            active_offers = [o for o in raw_offers if o.get('status') == 'active']
-            if not active_offers: st.warning("لا توجد عروض مفعلة")
+        if st.button(btn_lbl, use_container_width=True, type="primary"):
+            if not matching_offers_end: st.warning("لا توجد عروض مطابقة")
             else:
-                with st.spinner(f"جاري الإيقاف..."):
-                    c = sum(1 for o in active_offers if safe_api_request("PUT", f"{SALLA_API_URL}/{o.get('id')}/status", headers, json={"status": "inactive"}))
-                    st.success(f"تم إيقاف {c} عرض!")
-                    st.rerun()
-
-        with st.popover("📅 إدارة تواريخ الانتهاء", use_container_width=True):
-            target_scope_end = st.radio("استهداف العروض للتمديد/الإنهاء:", ["تنتهي في تاريخ محدد", "جميع العروض المتاحة"], key="b_end_scope")
-            if target_scope_end == "تنتهي في تاريخ محدد":
-                col_date1, col_time1 = st.columns(2)
-                with col_date1: target_date = st.date_input("تاريخ الانتهاء الحالي:", value=datetime.now().date(), key="be_t_date")
-                with col_time1: target_time = st.time_input("الوقت:", value=datetime.now().time().replace(minute=59, second=59), key="be_t_time")
-                target_str = datetime.combine(target_date, target_time).strftime('%Y-%m-%d')
-                matching_offers_end = [o for o in raw_offers if o.get('expiry_date', '') and o.get('expiry_date', '').startswith(target_str)]
-            else:
-                matching_offers_end = raw_offers
-
-            action_type = st.radio("الإجراء المطلوب:", ["تاريخ جديد للتمديد", "إلغاء التفعيل"], key="be_action")
-            if action_type == "تاريخ جديد للتمديد":
-                col_date2, col_time2 = st.columns(2)
-                with col_date2: new_date = st.date_input("التاريخ الجديد:", value=datetime.now().date() + timedelta(days=30), key="be_n_date")
-                with col_time2: new_time = st.time_input("الوقت الجديد:", value=datetime.now().time().replace(minute=59, second=59), key="be_n_time")
-                new_expiry_str = datetime.combine(new_date, new_time).strftime('%Y-%m-%d %H:%M:%S')
-                btn_lbl = "🔄 تطبيق التمديد"
-            else:
-                btn_lbl = "🛑 تطبيق الإيقاف"
-            
-            if st.button(btn_lbl, use_container_width=True, type="primary"):
-                if not matching_offers_end: st.warning("لا توجد عروض مطابقة")
-                else:
-                    with st.spinner("جاري المعالجة..."):
-                        c = 0
-                        for offer in matching_offers_end:
-                            offer_id = offer.get('id')
-                            if action_type == "إلغاء التفعيل":
-                                if safe_api_request("PUT", f"{SALLA_API_URL}/{offer_id}/status", headers, json={"status": "inactive"}): c += 1
-                            else:
-                                full_res = safe_api_request("GET", f"{SALLA_API_URL}/{offer_id}", headers)
-                                if full_res and full_res.get('data'):
-                                    payload = rebuild_offer_payload(full_res['data'], {"expiry_date": new_expiry_str})
-                                    if safe_api_request("PUT", f"{SALLA_API_URL}/{offer_id}", headers, json=payload): c += 1
-                        st.success(f"تم تنفيذ الإجراء لـ {c} عرض!")
-                        st.rerun()
-
-        with st.popover("📅 إدارة تواريخ البداية", use_container_width=True):
-            target_scope_start = st.radio("استهداف العروض للبدء:", ["تبدأ في تاريخ محدد", "جميع العروض المتاحة"], key="bs_scope")
-            if target_scope_start == "تبدأ في تاريخ محدد":
-                col_sd1, col_st1 = st.columns(2)
-                with col_sd1: target_s_date = st.date_input("تاريخ البداية الحالي:", value=datetime.now().date(), key="bs_t_date")
-                with col_st1: target_s_time = st.time_input("الوقت:", value=datetime.now().time().replace(minute=0, second=0), key="bs_t_time")
-                target_s_str = datetime.combine(target_s_date, target_s_time).strftime('%Y-%m-%d')
-                matching_offers_start = [o for o in raw_offers if o.get('start_date', '') and o.get('start_date', '').startswith(target_s_str)]
-            else:
-                matching_offers_start = raw_offers
-            
-            if st.button("🕒 تعيين الوقت الحالي", key="btn_now_start_bulk"):
-                st.session_state["bs_n_date"] = (datetime.now() + timedelta(hours=3)).date()
-                st.session_state["bs_n_time"] = (datetime.now() + timedelta(hours=3)).time()
-            col_nsd, col_nst = st.columns(2)
-            with col_nsd: new_s_date = st.date_input("تاريخ البداية الجديد:", value=st.session_state.get("bs_n_date", datetime.now().date()), key="bs_n_date")
-            with col_nst: new_s_time = st.time_input("الوقت الجديد:", value=st.session_state.get("bs_n_time", datetime.now().time().replace(minute=0, second=0)), key="bs_n_time")
-            new_start_str = datetime.combine(new_s_date, new_s_time).strftime('%Y-%m-%d %H:%M:%S')
-            
-            if st.button("🚀 تطبيق تاريخ البداية", use_container_width=True, type="primary"):
-                if not matching_offers_start: st.warning("لا توجد عروض مطابقة")
-                else:
-                    with st.spinner("جاري التعديل..."):
-                        c = 0
-                        for offer in matching_offers_start:
-                            offer_id = offer.get('id')
+                with st.spinner("جاري المعالجة..."):
+                    c = 0
+                    for offer in matching_offers_end:
+                        offer_id = offer.get('id')
+                        if action_type == "إلغاء التفعيل":
+                            if safe_api_request("PUT", f"{SALLA_API_URL}/{offer_id}/status", headers, json={"status": "inactive"}): c += 1
+                        else:
                             full_res = safe_api_request("GET", f"{SALLA_API_URL}/{offer_id}", headers)
                             if full_res and full_res.get('data'):
-                                payload = rebuild_offer_payload(full_res['data'], {"start_date": new_start_str})
+                                payload = rebuild_offer_payload(full_res['data'], {"expiry_date": new_expiry_str})
                                 if safe_api_request("PUT", f"{SALLA_API_URL}/{offer_id}", headers, json=payload): c += 1
-                        st.success(f"تم تعديل البداية لـ {c} عرض!")
-                        st.rerun()
+                    st.success(f"تم تنفيذ الإجراء لـ {c} عرض!")
+                    st.rerun()
 
-        if st.button("🚀 تطبيق العرض مع كوبون (الكل)", type="primary", use_container_width=True):
-            with st.spinner("جاري تحديث كافة العروض..."):
-                active_offers = [o for o in raw_offers if o.get("status") == "active"]
-                c = 0
-                for offer_summary in active_offers:
-                    offer_id = offer_summary.get("id")
-                    full_offer_res = safe_api_request("GET", f"{SALLA_API_URL}/{offer_id}", headers)
-                    if not full_offer_res or not full_offer_res.get("data"): continue
-                    payload = rebuild_offer_payload(full_offer_res["data"], {"applied_with_coupon": True})
-                    if safe_api_request("PUT", f"{SALLA_API_URL}/{offer_id}", headers, json=payload): c += 1
-                st.success(f"تم تفعيل دمج الكوبونات لـ {c} عرض!")
-
-    # ==========================================
-    # ⚙️ مسودة تأسيس العروض (التصنيع الآلي)
-    # ==========================================
-    with st.expander("📝 مصنع ومسودة تأسيس العروض (استيراد وإعداد ذكي)", expanded=False):
-        st.info("استخدم هذه الأداة لرفع ملف المسودة (ملف قراءة العروض) وسيقوم النظام بتصنيع ملف إكسيل جاهز للاستيراد في سلة مبني على قوانين وخصومات معقدة.")
+    # الزر 3
+    st.markdown('<span id="qa-marker-3"></span>', unsafe_allow_html=True)
+    with st.popover("📅 إدارة تواريخ البداية"):
+        target_scope_start = st.radio("استهداف العروض للبدء:", ["تبدأ في تاريخ محدد", "جميع العروض المتاحة"], key="bs_scope")
+        if target_scope_start == "تبدأ في تاريخ محدد":
+            col_sd1, col_st1 = st.columns(2)
+            with col_sd1: target_s_date = st.date_input("تاريخ البداية الحالي:", value=datetime.now().date(), key="bs_t_date")
+            with col_st1: target_s_time = st.time_input("الوقت:", value=datetime.now().time().replace(minute=0, second=0), key="bs_t_time")
+            target_s_str = datetime.combine(target_s_date, target_s_time).strftime('%Y-%m-%d')
+            matching_offers_start = [o for o in raw_offers if o.get('start_date', '') and o.get('start_date', '').startswith(target_s_str)]
+        else:
+            matching_offers_start = raw_offers
         
-        # إنشاء نموذج المسودة الفارغ للتنزيل
+        if st.button("🕒 تعيين الوقت الحالي", key="btn_now_start_bulk"):
+            st.session_state["bs_n_date"] = (datetime.now() + timedelta(hours=3)).date()
+            st.session_state["bs_n_time"] = (datetime.now() + timedelta(hours=3)).time()
+        col_nsd, col_nst = st.columns(2)
+        with col_nsd: new_s_date = st.date_input("تاريخ البداية الجديد:", value=st.session_state.get("bs_n_date", datetime.now().date()), key="bs_n_date")
+        with col_nst: new_s_time = st.time_input("الوقت الجديد:", value=st.session_state.get("bs_n_time", datetime.now().time().replace(minute=0, second=0)), key="bs_n_time")
+        new_start_str = datetime.combine(new_s_date, new_s_time).strftime('%Y-%m-%d %H:%M:%S')
+        
+        if st.button("🚀 تطبيق تاريخ البداية", use_container_width=True, type="primary"):
+            if not matching_offers_start: st.warning("لا توجد عروض مطابقة")
+            else:
+                with st.spinner("جاري التعديل..."):
+                    c = 0
+                    for offer in matching_offers_start:
+                        offer_id = offer.get('id')
+                        full_res = safe_api_request("GET", f"{SALLA_API_URL}/{offer_id}", headers)
+                        if full_res and full_res.get('data'):
+                            payload = rebuild_offer_payload(full_res['data'], {"start_date": new_start_str})
+                            if safe_api_request("PUT", f"{SALLA_API_URL}/{offer_id}", headers, json=payload): c += 1
+                    st.success(f"تم تعديل البداية لـ {c} عرض!")
+                    st.rerun()
+
+    # الزر 4
+    st.markdown('<span id="qa-marker-4"></span>', unsafe_allow_html=True)
+    if st.button("🚀 تطبيق العرض مع كوبون (الكل)"):
+        with st.spinner("جاري تحديث كافة العروض..."):
+            active_offers = [o for o in raw_offers if o.get("status") == "active"]
+            c = 0
+            for offer_summary in active_offers:
+                offer_id = offer_summary.get("id")
+                full_offer_res = safe_api_request("GET", f"{SALLA_API_URL}/{offer_id}", headers)
+                if not full_offer_res or not full_offer_res.get("data"): continue
+                payload = rebuild_offer_payload(full_offer_res["data"], {"applied_with_coupon": True})
+                if safe_api_request("PUT", f"{SALLA_API_URL}/{offer_id}", headers, json=payload): c += 1
+            st.success(f"تم تفعيل دمج الكوبونات لـ {c} عرض!")
+
+    # الزر 5 (مسودة التأسيس)
+    st.markdown('<span id="qa-marker-5"></span>', unsafe_allow_html=True)
+    with st.popover("📝 مسودة تأسيس العروض"):
+        st.info("ارفع ملف المسودة لتصنيع ملف إكسيل جاهز للاستيراد في سلة مبني على قوانين ذكية.")
+        
         def get_draft_template():
             draft_headers = [
                 "رقم المنتج sku", "اسم المنتج", "سعر بيع المنتج", "نسبة الضريبة", "العللامة التجارية", "Agent", 
@@ -295,25 +297,21 @@ def render_offers_page():
             df.to_excel(buf, index=False)
             return buf.getvalue()
 
-        st.download_button("📥 تنزيل نموذج مسودة التأسيس (فارغ)", data=get_draft_template(), file_name="Draft_Offers_Template.xlsx", mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
-        
-        uploaded_draft = st.file_uploader("📂 رفع ملف مسودة العروض المعبأ:", type=["xlsx", "csv"], key="draft_up")
+        st.download_button("📥 تنزيل نموذج المسودة (فارغ)", data=get_draft_template(), file_name="Draft_Offers_Template.xlsx", mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", use_container_width=True)
+        uploaded_draft = st.file_uploader("📂 رفع ملف المسودة المعبأ:", type=["xlsx", "csv"], key="draft_up")
         
         if uploaded_draft:
-            if st.button("⚙️ معالجة المسودة وتوليد ملف العروض الجاهز لرفعه", type="primary"):
+            if st.button("⚙️ معالجة وتوليد ملف العروض", type="primary", use_container_width=True):
                 try:
                     df_draft = pd.read_excel(uploaded_draft) if uploaded_draft.name.endswith('.xlsx') else pd.read_csv(uploaded_draft)
-                    
                     sku_map = {str(p.get('sku', '')).strip(): str(p.get('id', '')) for p in st.session_state["all_products"] if p.get('sku')}
                     offer_name_map = {str(o.get('name', '')).strip(): str(o.get('id', '')) for o in raw_offers}
                     
                     output_rows = []
-                    # تجهيز عمود التجميع لتفادي مشاكل الفراغات
                     df_draft['عرض مجمع'] = df_draft['عرض مجمع'].fillna(df_draft.index.astype(str) + "_single_offer")
                     
                     for group_name, group_df in df_draft.groupby('عرض مجمع'):
                         first_row = group_df.iloc[0]
-                        
                         skus = [str(x).strip() for x in group_df['رقم المنتج sku'].tolist() if pd.notna(x)]
                         ids = [sku_map.get(s, '') for s in skus]
                         ids = [i for i in ids if i]
@@ -373,17 +371,12 @@ def render_offers_page():
                         output_rows.append(row)
                         
                     df_out = pd.DataFrame(output_rows)
-                    st.success("✅ تمت المعالجة بنجاح! راجع النتائج بالأسفل ثم قم بتحميل الملف الجاهز لرفعه لسلة.")
-                    st.dataframe(df_out, use_container_width=True)
-                    
+                    st.success("✅ تمت المعالجة بنجاح! حمل الملف:")
                     buf = io.BytesIO()
                     df_out.to_excel(buf, index=False)
-                    st.download_button("📥 تحميل ملف العروض الجاهز للرفع 🚀", data=buf.getvalue(), file_name="Generated_Salla_Offers.xlsx", mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", type="primary")
-
+                    st.download_button("📥 تحميل العروض الجاهزة للرفع 🚀", data=buf.getvalue(), file_name="Generated_Salla_Offers.xlsx", mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", type="primary", use_container_width=True)
                 except Exception as e:
                     st.error(f"خطأ أثناء معالجة المسودة: {str(e)}")
-
-    st.divider()
 
     # ==========================================
     # --- رفع واستيراد ملف العروض الجاهز للسلة ---
@@ -413,7 +406,7 @@ def render_offers_page():
     st.markdown(" 🔍 أدوات التصفية والبحث المتقدمة عن العروض")
     f1, f2, f3, f4 = st.columns(4)
     with f1: search_offer = st.text_input("🔎 ابحث باسم العرض أو بالمعرف:", key="filter_search_input")
-    with f2: status_filter = st.selectbox("📌 حالة نشاط العرض:", ["الكل", "نشط", "غير نشط"], key="filter_status_select", help="يتجاهل البحث بالاسم هذا الفلتر")
+    with f2: status_filter = st.selectbox("📌 حالة نشاط العرض:", ["الكل", "نشط", "غير نشط"], key="filter_status_select")
     with f3: filter_date = st.date_input("📅 ابحث عن تاريخ الانتهاء:", value=None, key="filter_date_input")
     with f4: filter_overlap = st.checkbox("🔄 فحص التداخل (منتجات مكررة)", key="f_overlap")
 
