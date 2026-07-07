@@ -314,7 +314,7 @@ def render_offers_page():
                     
                     draft_headers = [
                         "رقم المنتج sku", "اسم المنتج", "سعر بيع المنتج", "نسبة الضريبة", "العلامة التجارية", "Agent", 
-                        "التصنيفات", "المعتمد لمجلة شهر 6", "كمية المنتجات لتطبيق العرض", "نسبة الخصم", "قيمة الخصم شامل", 
+                        "التصنيفات", "اسم العرض", "كمية المنتجات لتطبيق العرض", "نسبة الخصم", "قيمة الخصم شامل", 
                         "السعر قبل شامل", "السعر بعد شامل", "عرض مجمع", "تاريخ البدء", "تاريخ الانتهاء", "نوع الخصم"
                     ]
                     example_row = [
@@ -370,7 +370,7 @@ def render_offers_page():
                                 
                                 sku_str = "-".join(skus) if skus else "UnknownSKU"
                                 id_str = ",".join(ids)
-                                offer_msg = str(first_row.get('المعتمد لمجلة شهر 6', ''))
+                                offer_msg = str(first_row.get('اسم العرض', ''))
                                 offer_name = f"{sku_str} / {offer_msg}"
                                 
                                 action = "تحديث" if offer_name in offer_name_map else "إنشاء"
