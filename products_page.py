@@ -497,7 +497,7 @@ def render_product_card(idx: int, p: Dict, headers: Dict[str, str]):
             with c_act:
                 # ✅ زر العروض التفاعلي الآمن المستقل
                 if p_offers:
-                    with st.popover(f"🎁 استعراض عروض المنتج ({len(p_offers)})", use_container_width=True):
+                    with st.popover(f"🎁 استعراض العروض الخاصة للمنتج ({len(p_offers)})", use_container_width=True):
                         st.markdown("<b style='color:#b45309;'>العروض النشطة المشمول بها:</b>", unsafe_allow_html=True)
                         for off in p_offers:
                             st.markdown(f"- 🎯 **{off['name']}** `(ID: {off['id']})`")
@@ -516,7 +516,7 @@ def render_product_card(idx: int, p: Dict, headers: Dict[str, str]):
                                 st.success("✅ تم تحديث العناوين!"); st.rerun()
 
                 # ✅ زر حذف المنتج
-                with st.popover("🗑️ حذف المنتج", icon="🗑️", use_container_width=True):
+                with st.popover("حذف المنتج", icon="🗑️"):
                     st.warning("⚠️ تحذير: حذف المنتج نهائي ولا يمكن استرجاعه!")
                     st.write(f"**المنتج:** {p_name}")
                     st.write(f"**المعرف:** `{p_id}`")
