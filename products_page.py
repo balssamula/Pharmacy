@@ -753,12 +753,14 @@ def render_products_page():
                             st.success("تم التحديث!")
                             st.rerun()
 
-                # 🎁 الزر التفاعلي الجديد لاستعراض العروض المشمول بها المنتج
-                if p_offers_list:
-                    with st.popover(f"🎁 استعراض عروض المنتج ({len(p_offers_list)})", use_container_width=True):
-                        st.markdown("<b style='color:#b45309;'>العروض النشطة المشمول بها هذا المنتج:</b>", unsafe_allow_html=True)
-                        for off in p_offers_list:
-                            st.markdown(f"- 🎯 **{off['name']}** `(ID: {off['id']})`")
+                        # 🎁 الزر التفاعلي الجديد لاستعراض العروض المشمول بها المنتج
+                        # ✅ جلب البيانات هنا مباشرة لتفادي خطأ (UnboundLocalError) وضمان وجودها
+                        current_p_offers = st.session_state.get("product_offers_map", {}).get(str(p.get('id', '')), [])
+                        if current_p_offers:
+                            with st.popover(f"🎁 استعراض عروض المنتج ({len(current_p_offers)})", use_container_width=True):
+                                st.markdown("<b style='color:#b45309;'>العروض النشطة المشمول بها هذا المنتج:</b>", unsafe_allow_html=True)
+                                for off in current_p_offers:
+                                    st.markdown(f"- 🎯 **{off['name']}** `(ID: {off['id']})`")
                                     
                 # ✅ إضافة زر حذف المنتج
                 with st.popover("حذف المنتج", icon="🗑️", type="primary"):
