@@ -6,7 +6,8 @@ import re
 from utils import (
     get_headers, safe_api_request, SALLA_API_URL, generate_salla_excel_template,
     process_excel_import, export_offers_to_excel, safe_parse_date,
-    OFFER_TYPES_MAP, CHANNELS_MAP, APPLIED_TO_MAP, safe_float
+    OFFER_TYPES_MAP, CHANNELS_MAP, APPLIED_TO_MAP, safe_float,
+    update_product_promotions_secure # دالة التحديث الآمن للعناوين
 )
 
 def render_offers_page():
@@ -191,7 +192,7 @@ def render_offers_page():
                 st.success(f"تم إيقاف {c} عرض!")
         st.session_state.qa_action = None
 
-    # 2. تواريخ الانتهاء
+    # 2. تواريخ الانتهاء وإزالة العناوين
     st.markdown('<span id="qa-marker-2"></span>', unsafe_allow_html=True)
     if st.button("📅 إدارة تواريخ الانتهاء", key="btn_qa_2"):
         st.session_state.qa_action = "end_dates"
@@ -246,30 +247,60 @@ def render_offers_page():
                     matching_offers_end = [o for o in raw_offers if o.get('expiry_date', '') and o.get('expiry_date', '').startswith(target_str)]
                 else: matching_offers_end = raw_offers
 
-                action_type = st.radio("الإجراء المطلوب:", ["تاريخ جديد للتمديد", "إلغاء التفعيل"], key="be_action")
+                action_type = st.radio("الإجراء المطلوب تنفيذه:", ["تاريخ جديد للتمديد", "إلغاء التفعيل", "مسح العناوين الترويجية لمنتجاتها"], key="be_action")
+                
                 if action_type == "تاريخ جديد للتمديد":
                     col_date2, col_time2 = st.columns(2)
                     with col_date2: new_date = st.date_input("التاريخ الجديد:", value=datetime.now().date() + timedelta(days=30), key="be_n_date")
                     with col_time2: new_time = st.time_input("الوقت الجديد:", value=datetime.now().time().replace(minute=59, second=59), key="be_n_time")
                     new_expiry_str = datetime.combine(new_date, new_time).strftime('%Y-%m-%d %H:%M:%S')
                     btn_lbl = "🔄 تطبيق التمديد"
-                else: btn_lbl = "🛑 تطبيق الإيقاف"
+                elif action_type == "إلغاء التفعيل":
+                    btn_lbl = "🛑 تطبيق الإيقاف"
+                else:
+                    btn_lbl = "🧹 مسح العناوين الترويجية للمنتجات"
                 
                 if st.button(btn_lbl, use_container_width=True, type="primary"):
                     if not matching_offers_end: st.warning("لا توجد عروض مطابقة")
                     else:
                         with st.spinner("جاري المعالجة..."):
-                            c = 0
-                            for offer in matching_offers_end:
-                                offer_id = offer.get('id')
-                                if action_type == "إلغاء التفعيل":
-                                    if safe_api_request("PUT", f"{SALLA_API_URL}/{offer_id}/status", headers, json={"status": "inactive"}): c += 1
-                                else:
+                            # ✅ آلية مسح العناوين الترويجية
+                            if action_type == "مسح العناوين الترويجية لمنتجاتها":
+                                product_ids = set()
+                                st.info("جاري استخراج المنتجات المشمولة من العروض...")
+                                for offer in matching_offers_end:
+                                    offer_id = offer.get('id')
                                     full_res = safe_api_request("GET", f"{SALLA_API_URL}/{offer_id}", headers)
                                     if full_res and full_res.get('data'):
-                                        payload = rebuild_offer_payload(full_res['data'], {"expiry_date": new_expiry_str})
-                                        if safe_api_request("PUT", f"{SALLA_API_URL}/{offer_id}", headers, json=payload): c += 1
-                            st.success(f"تم تنفيذ الإجراء لـ {c} عرض!")
+                                        off_data = full_res['data']
+                                        # استخراج المنتجات من سلة الشراء
+                                        for p in off_data.get('buy', {}).get('products', []):
+                                            pid = p.get('id', p) if isinstance(p, dict) else p
+                                            if str(pid).isdigit(): product_ids.add(str(pid))
+                                        # استخراج المنتجات من سلة المنح/الهدية
+                                        for p in off_data.get('get', {}).get('products', []):
+                                            pid = p.get('id', p) if isinstance(p, dict) else p
+                                            if str(pid).isdigit(): product_ids.add(str(pid))
+                                
+                                c_prods = 0
+                                st.info(f"تم العثور على {len(product_ids)} منتج مختلف. جاري التحديث الآمن وإزالة العناوين...")
+                                for pid in product_ids:
+                                    if update_product_promotions_secure(int(pid), "", "", headers):
+                                        c_prods += 1
+                                st.success(f"✅ تم مسح وإفراغ العناوين الترويجية لـ {c_prods} منتج بنجاح!")
+                            else:
+                                c = 0
+                                for offer in matching_offers_end:
+                                    offer_id = offer.get('id')
+                                    if action_type == "إلغاء التفعيل":
+                                        if safe_api_request("PUT", f"{SALLA_API_URL}/{offer_id}/status", headers, json={"status": "inactive"}): c += 1
+                                    else:
+                                        full_res = safe_api_request("GET", f"{SALLA_API_URL}/{offer_id}", headers)
+                                        if full_res and full_res.get('data'):
+                                            payload = rebuild_offer_payload(full_res['data'], {"expiry_date": new_expiry_str})
+                                            if safe_api_request("PUT", f"{SALLA_API_URL}/{offer_id}", headers, json=payload): c += 1
+                                action_word = "إيقاف" if action_type == "إلغاء التفعيل" else "تمديد"
+                                st.success(f"✅ تم تنفيذ إجراء الـ {action_word} لـ {c} عرض بنجاح!")
 
             elif st.session_state.qa_action == "start_dates":
                 with col_t: st.markdown("### 📅 إدارة وتعديل تواريخ البداية")
@@ -314,7 +345,7 @@ def render_offers_page():
                     
                     draft_headers = [
                         "رقم المنتج sku", "اسم المنتج", "سعر بيع المنتج", "نسبة الضريبة", "العلامة التجارية", "Agent", 
-                        "التصنيفات", "اسم العرض", "كمية المنتجات لتطبيق العرض", "نسبة الخصم", "قيمة الخصم شامل", 
+                        "التصنيفات", "المعتمد لمجلة شهر 6", "كمية المنتجات لتطبيق العرض", "نسبة الخصم", "قيمة الخصم شامل", 
                         "السعر قبل شامل", "السعر بعد شامل", "عرض مجمع", "تاريخ البدء", "تاريخ الانتهاء", "نوع الخصم"
                     ]
                     example_row = [
@@ -370,7 +401,7 @@ def render_offers_page():
                                 
                                 sku_str = "-".join(skus) if skus else "UnknownSKU"
                                 id_str = ",".join(ids)
-                                offer_msg = str(first_row.get('اسم العرض', ''))
+                                offer_msg = str(first_row.get('المعتمد لمجلة شهر 6', ''))
                                 offer_name = f"{sku_str} / {offer_msg}"
                                 
                                 action = "تحديث" if offer_name in offer_name_map else "إنشاء"
@@ -674,6 +705,7 @@ def render_offers_page():
                         ed_buy_qty = st.number_input("كمية الشراء (X):", min_value=1, value=int(buy_obj.get('quantity', 1)), key=f"ed_bq_{offer_id}_{idx}")
                         existing_buy_ids = [i.get('id', i) if isinstance(i, dict) else i for i in buy_obj.get({'product':'products','category':'categories','brand':'brands'}.get(ed_buy_type), [])]
                         ed_buy_selected_ids = render_dynamic_selection(f"تعديل {ed_buy_type_ar} الشراء (X):", ed_buy_type, existing_buy_ids, f"ed_buy_X_{offer_id}_{idx}")
+                    
                     with eq2:
                         ed_get_type_ar = st.selectbox("نوع عرض Y:", type_options_ar, index=type_options_ar.index(inv_type_map.get(g_type_raw, "منتجات")), key=f"ed_gt_{offer_id}_{idx}")
                         ed_get_type = type_map[ed_get_type_ar]
