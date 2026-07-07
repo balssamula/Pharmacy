@@ -108,7 +108,7 @@ def render_products_page():
 
     c_title, c_btn = st.columns([3, 1])
     with c_btn:
-        if st.button("🔄 مزامنة وجلب كافة المنتجات", use_container_width=True, type="primary"):
+        if st.button("🔄 مزامنة وجلب كافة المنتجات (إلزامي للمطابقة والقوالب)", use_container_width=True, type="primary"):
             with st.spinner("⏳ جاري سحب وتصنيف كافة المنتجات والعروض النشطة..."):
                 
                 # 1. تحديث الفروع
