@@ -378,6 +378,7 @@ def render_product_card(idx: int, p: Dict, headers: Dict[str, str]):
         p_url = p.get('url', '#')
         p_image = p.get('thumbnail') or p.get('main_image')
         product_type = p.get('type', 'product')
+        branches = st.session_state.get("branches", [])
         
         promo = p.get('promotion', {})
         p_promotion = p.get('promotion_title') or (promo.get('title') if isinstance(promo, dict) else '') or "-"
@@ -391,6 +392,9 @@ def render_product_card(idx: int, p: Dict, headers: Dict[str, str]):
         display_sale_price = sale_val if (sale_val > 0 and sale_val < base_price) else (price_val if has_disc else base_price)
         discount_pct = int(((base_price - display_sale_price) / base_price) * 100) if has_disc and base_price > 0 else 0
         
+        sale_start_date = p.get('sale_start') or "غير محدد"
+        sale_end_date = p.get('sale_end') or "غير محدد"
+        
         disp_status = "🟢 معروض بالمتجر" if status == "sale" else "🔴 مخفي في المسودات"
         tax_status = "📗 خاضع للضريبة" if p.get('with_tax', True) else f"⚪ معفى ({p.get('tax_exemption_cause', '')})"
 
@@ -400,7 +404,7 @@ def render_product_card(idx: int, p: Dict, headers: Dict[str, str]):
 
         # استخراج العروض المربوطة بالمنتج من الذاكرة
         p_offers = st.session_state.get("product_offers_map", {}).get(p_id, [])
-        offer_badge = f"<span style='background: rgba(255, 193, 7, 0.25); color: #b45309; padding: 4px 12px; border-radius: 20px; font-size: 11px; font-weight: 600;'>🎁 مشمول في ({len(p_offers)}) عروض</span>" if p_offers else ""
+        offer_badge = f"<span style='background: linear-gradient(135deg, #F7971E 0%, #FFD200 100%); color: #1a1a2e; padding: 4px 12px; border-radius: 20px; font-size: 11px; font-weight: 700; border: 2px solid #FFD700; box-shadow: 0 2px 8px rgba(255, 215, 0, 0.4);'>🎁 مشمول في ({len(p_offers)}) عروض</span>" if p_offers else ""
 
         # ✅ رسم شريط العنوان (يظهر دائماً للجميع)
         st.markdown(f"<div style='background: linear-gradient(135deg, #243b55 0%, #141e30 100%); padding: 14px 20px; border-radius: 12px 12px 0px 0px; margin-top: 25px; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 10px; border-bottom: 3px solid {border_color};'><span style='color: #ffffff; font-weight: bold; font-size: 15px;'>📦 {p_name}</span><div style='display: flex; gap: 8px; flex-wrap: wrap; align-items: center;'><span style='background: rgba(255,255,255,0.2); color: #fff; padding: 4px 12px; border-radius: 20px; font-size: 11px; font-weight:600;'>{disp_status}</span><span style='background: rgba(0, 235, 207, 0.2); color: #00EBCF; padding: 4px 12px; border-radius: 20px; font-size: 11px; font-weight:600;'>{tax_status}</span>{type_badge}{offer_badge}</div></div>", unsafe_allow_html=True)
@@ -451,17 +455,44 @@ def render_product_card(idx: int, p: Dict, headers: Dict[str, str]):
                     st.markdown(f"📅 بداية التخفيض: `{sale_start_date}`")
                     st.markdown(f"📅 نهاية التخفيض: `{sale_end_date}`")
                 else:
-                    st.markdown(f"<div style='background:#e2e8f0; padding:10px; border-radius:8px; border-right:5px solid #4a5568;'><b style='color:#2d3748; font-size:14px;'>سعر ثابت: {base_price:,.2f} SAR</b></div>", unsafe_allow_html=True)
+                    st.markdown(f"""
+                        <div style="background:#e2e8f0; padding:10px; border-radius:8px; border-right:5px solid #4a5568;">
+                            <b style="color:#2d3748; font-size:14px;">سعر ثابت: {base_price:,.2f} SAR</b>
+                        </div>
+                    """, unsafe_allow_html=True)
                 
                 with st.expander("💰 تحديث الأسعار"):
                     np = st.number_input("أصلي (SAR):", min_value=0.0, value=float(base_price), key=f"np_{p_id}_{idx}")
                     nsp = st.number_input("مخفض (SAR) [0 للإلغاء]:", min_value=0.0, value=float(display_sale_price) if has_disc else 0.0, key=f"nsp_{p_id}_{idx}")
-                    sd = st.date_input("بداية:", value=None, key=f"sd_{p_id}_{idx}")
-                    ed = st.date_input("نهاية:", value=None, key=f"ed_{p_id}_{idx}")
-                    if st.button("💾 حفظ التخفيض", key=f"sv_p_{p_id}_{idx}", use_container_width=True, type="primary"):
-                        with st.spinner("تحديث..."):
-                            if update_product_sale_price(int(p_id), nsp, sd.strftime("%Y-%m-%d") if sd else None, ed.strftime("%Y-%m-%d") if ed else None):
-                                st.success("✅ تم!"); st.rerun()
+                    
+                    col_date1, col_date2 = st.columns(2)
+                    with col_date1:
+                        if sale_start_date != "غير محدد":
+                            try: default_start = datetime.strptime(sale_start_date, "%Y-%m-%d")
+                            except: default_start = None
+                        else: default_start = None
+                        sd = st.date_input("بداية:", value=default_start, key=f"sd_{p_id}_{idx}")
+                    with col_date2:
+                        if sale_end_date != "غير محدد":
+                            try: default_end = datetime.strptime(sale_end_date, "%Y-%m-%d")
+                            except: default_end = None
+                        else: default_end = None
+                        ed = st.date_input("نهاية:", value=default_end, key=f"ed_{p_id}_{idx}")
+                    
+                    col_btn1, col_btn2 = st.columns(2)
+                    with col_btn1:
+                        if st.button("💾 تحديث السعر الأصلي", key=f"sv_p_{p_id}_{idx}", use_container_width=True):
+                            with st.spinner("تحديث..."):
+                                if update_product_price(int(p_id), np):
+                                    st.success("✅ تم تحديث السعر الأصلي!"); st.rerun()
+                                else: st.error("❌ فشل التحديث")
+                    
+                    with col_btn2:
+                        if st.button("💾 تحديث السعر المخفض", key=f"sv_s_{p_id}_{idx}", use_container_width=True):
+                            with st.spinner("تحديث..."):
+                                if update_product_sale_price(int(p_id), nsp, sd.strftime("%Y-%m-%d") if sd else None, ed.strftime("%Y-%m-%d") if ed else None):
+                                    st.success("✅ تم تحديث السعر المخفض!"); st.rerun()
+                                else: st.error("❌ فشل التحديث")
 
             with c_act:
                 # ✅ زر العروض التفاعلي الآمن المستقل
@@ -473,32 +504,29 @@ def render_product_card(idx: int, p: Dict, headers: Dict[str, str]):
                 
                 t_st = "hidden" if status == "sale" else "sale"
                 if st.button("👁️ إخفاء" if status == "sale" else "👁️ إظهار", key=f"sh_{p_id}_{idx}", type="secondary" if status == "sale" else "primary", use_container_width=True):
-                    if update_product_status(p_id, t_st): st.rerun()
+                    with st.spinner("جاري التحديث..."):
+                        if update_product_status(p_id, t_st): st.rerun()
 
                 with st.popover("✏️ تحديث العناوين"):
                     n_pr = st.text_input("ترويجي:", value="" if p_promotion=="-" else p_promotion, key=f"npr_{p_id}_{idx}")
                     n_su = st.text_input("فرعي:", value="" if p_sub_title=="-" else p_sub_title, key=f"nsu_{p_id}_{idx}")
-                    if st.button("حفظ", key=f"svt_{p_id}_{idx}", type="primary"):
-                        if update_product_promotions_secure(p_id, n_pr, n_su, headers): st.rerun()
-            st.markdown("</div>", unsafe_allow_html=True)
+                    if st.button("💾 حفظ العناوين", key=f"svt_{p_id}_{idx}", type="primary", use_container_width=True):
+                        with st.spinner("جاري الحفظ..."):
+                            if update_product_promotions_secure(p_id, n_pr, n_su, headers): 
+                                st.success("✅ تم تحديث العناوين!"); st.rerun()
 
-                # ✅ إضافة زر حذف المنتج
-                with st.popover("حذف المنتج", icon="🗑️", type="primary"):
+                # ✅ زر حذف المنتج
+                with st.popover("🗑️ حذف المنتج", icon="🗑️", use_container_width=True):
                     st.warning("⚠️ تحذير: حذف المنتج نهائي ولا يمكن استرجاعه!")
                     st.write(f"**المنتج:** {p_name}")
                     st.write(f"**المعرف:** `{p_id}`")
                     
-                    confirm_delete = st.checkbox("☑️ أوافق على حذف هذا المنتج نهائياً", key=f"confirm_delete_{p_id}_{idx}")
+                    confirm_delete = st.checkbox("☑️ أوافق على الحذف النهائي", key=f"confirm_delete_{p_id}_{idx}")
                     
-                    if st.button("🗑️ حذف المنتج نهائياً", key=f"delete_{p_id}_{idx}", type="primary", disabled=not confirm_delete, use_container_width=True):
+                    if st.button("🗑️ حذف نهائياً", key=f"delete_{p_id}_{idx}", type="primary", disabled=not confirm_delete, use_container_width=True):
                         with st.spinner("جاري حذف المنتج..."):
                             if delete_product(int(p_id)):
                                 st.success("✅ تم حذف المنتج بنجاح!")
-                                # إزالة المنتج من القائمة المعروضة
-                                if p in filtered_products:
-                                    filtered_products.remove(p)
-                                if p in all_products:
-                                    all_products.remove(p)
                                 st.rerun()
                             else:
                                 st.error("❌ فشل حذف المنتج")
@@ -549,7 +577,8 @@ def render_product_card(idx: int, p: Dict, headers: Dict[str, str]):
                                         st.rerun()
                             else:
                                 st.warning("الرجاء إدخال كميات أكبر من صفر للتحديث.")
-                pass
+            
+            st.markdown("</div>", unsafe_allow_html=True)
 
             # ✅ قسم عرض المجموعات (يعمل بذكاء)
             if product_type == 'group_products':
@@ -589,9 +618,9 @@ def render_products_page():
     f1, f2, f3, f4, f5 = st.columns(5)
     with f1: f_hid = st.checkbox("مخفي")
     with f2: f_img = st.checkbox("بدون صورة")
-    with f3: f_pro = st.checkbox("مُروَّج")
-    with f4: f_dis = st.checkbox("مخفض")
-    with f5: f_grp = st.checkbox("📦 مجموعات فقط")
+    with f3: f_pro = st.checkbox("له عنوان ترويجي")
+    with f4: f_dis = st.checkbox("له سعر مخفض ")
+    with f5: f_grp = st.checkbox("📦 مجموعات منتجات فقط")
 
     filtered = []
     for p in st.session_state["all_products"]:
