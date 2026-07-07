@@ -14,7 +14,7 @@ from utils import (
     process_quantities_import, create_products_template, fill_salla_template,
     generate_salla_new_products_file, delete_product, update_product_price, 
     update_product_sale_price, update_product_prices_bulk, get_product_details, 
-    get_group_products, update_group_product_quantity, remove_product_from_group, 
+    update_group_product_quantity, remove_product_from_group, 
     add_product_to_group
 )
 
@@ -49,14 +49,63 @@ def render_products_page():
     if "offer_product_ids" not in st.session_state: st.session_state["offer_product_ids"] = set()
     if "branches" not in st.session_state: st.session_state["branches"] = get_branches_list()
     if "last_sync_time" not in st.session_state: st.session_state["last_sync_time"] = None
+    if "product_offers_map" not in st.session_state: st.session_state["product_offers_map"] = {}
     
     # تعريف المتغيرات المحلية لتصبح مقروءة في كامل الصفحة
     all_products = st.session_state["all_products"]
     offer_product_ids = st.session_state["offer_product_ids"]
     branches = st.session_state["branches"]
     
-    if "product_offers_map" not in st.session_state: st.session_state["product_offers_map"] = {}
-    
+    # ==========================================
+    # 🌟 دالة ذكية وصلبة لجلب محتويات "مجموعة المنتجات"
+    # ==========================================
+    def robust_get_group_products(parent_id: int) -> List[Dict]:
+        """دالة مخصصة تتجاوز مشاكل API وتلتقط المنتجات الفرعية بكل الطرق الممكنة"""
+        url = f"https://api.salla.dev/admin/v2/products/{parent_id}"
+        res = safe_api_request("GET", url, headers)
+        items = []
+        if res and res.get('data'):
+            data = res['data']
+            # الطريقة الأولى (الحديثة): البحث في grouped_items
+            if 'grouped_items' in data and data['grouped_items']:
+                for item in data['grouped_items']:
+                    prod = item.get('product', {})
+                    if prod:
+                        items.append({
+                            'id': prod.get('id'),
+                            'name': prod.get('name', 'بدون اسم'),
+                            'sku': prod.get('sku', 'لا يوجد'),
+                            'price': get_flat_price(prod.get('price', 0)),
+                            'bundle_quantity': item.get('quantity', 1),
+                            'stock_quantity': prod.get('quantity', 0),
+                            'status': prod.get('status', 'sale'),
+                            'image': prod.get('thumbnail') or prod.get('main_image'),
+                            'url': prod.get('url'),
+                            'with_tax': prod.get('with_tax', True)
+                        })
+            # الطريقة الثانية (الكلاسيكية): البحث في skus
+            elif 'skus' in data and data['skus']:
+                for sku in data['skus']:
+                    sku_id = sku.get('id')
+                    if sku_id:
+                        # جلب التفاصيل الحية للمنتج الفرعي
+                        sub_res = safe_api_request("GET", f"https://api.salla.dev/admin/v2/products/{sku_id}", headers)
+                        if sub_res and sub_res.get('data'):
+                            sp = sub_res['data']
+                            items.append({
+                                'id': sp.get('id'),
+                                'name': sp.get('name', 'بدون اسم'),
+                                'sku': sp.get('sku', 'لا يوجد'),
+                                'price': get_flat_price(sp.get('price', 0)),
+                                'bundle_quantity': sku.get('quantity', 1),
+                                'stock_quantity': sp.get('quantity', 0),
+                                'status': sp.get('status', 'sale'),
+                                'image': sp.get('thumbnail') or sp.get('main_image'),
+                                'url': sp.get('url'),
+                                'with_tax': sp.get('with_tax', True)
+                            })
+        return items
+
     c_title, c_btn = st.columns([3, 1])
     with c_btn:
         if st.button("🔄 مزامنة وجلب كافة المنتجات (إلزامي للمطابقة والقوالب)", use_container_width=True, type="primary"):
@@ -99,6 +148,8 @@ def render_products_page():
                             if pid not in po_map: po_map[pid] = []
                             po_map[pid].append({"id": oid, "name": o.get("name")})
                 st.session_state["product_offers_map"] = po_map
+                st.session_state["all_products_fetched"] = True
+                st.session_state["last_sync_time"] = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
                 
                 st.success(f"✅ تم سحب {len(all_p)} منتج، وتحليل {len(active_offers)} عرض نشط بنجاح!")
                 st.rerun()
@@ -375,38 +426,29 @@ def render_products_page():
                 st.error(f"❌ خطأ في قراءة الملف: {str(e)}")
 
     # ==========================================
-    # ✅ 2. الفلاتر والبحث في المنتجات (تم التعديل لجلب جميع المنتجات)
+    # ✅ 2. الفلاتر والبحث في المنتجات
     # ==========================================
     st.markdown("### 🔍 أدوات التصفية والبحث في المنتجات")
     
-    # ✅ استخدام المنتجات المخزنة في Session State
     all_products = st.session_state.get("all_products", [])
     
     if not all_products:
         st.warning("⚠️ لم يتم تحميل المنتجات بعد. الرجاء الضغط على زر المزامنة أولاً.")
         return
     
-    # عرض عدد المنتجات المحملة
-    st.info(f"📊 عدد المنتجات المحملة في الذاكرة: {len(all_products)} منتج")
+    st.info(f"📊 إجمالي عدد المنتجات المحملة في الذاكرة: {len(all_products)} منتج")
     
-    # ✅ التعديل: جلب جميع المنتجات مثل زر المزامنة
-
-
-    # ✅ إضافة خيارات الأداء
     with st.expander("⚙️ إعدادات التحميل والأداء", expanded=False):
         st.info("""
         **تحسينات الأداء:**
         - عند تحديث منتج واحد، يتم تحديث البيانات في الذاكرة مباشرة
         - يتم تحميل جميع المنتجات في الذاكرة مرة واحدة فقط عند الضغط على زر المزامنة
-        - إذا قمت بإضافة أو تعديل منتجات في المتجر، اضغط على زر المزامنة لتحديث البيانات
         """)
-        
         col_perf1, col_perf2 = st.columns(2)
         with col_perf1:
             if st.button("🔄 إعادة تحميل المنتجات (كامل)", use_container_width=True):
                 st.session_state["all_products_fetched"] = False
                 st.rerun()
-        
         with col_perf2:
             if st.button("🗑️ مسح الذاكرة المؤقتة", use_container_width=True):
                 st.session_state["all_products"] = []
@@ -414,9 +456,6 @@ def render_products_page():
                 st.success("✅ تم مسح الذاكرة المؤقتة")
                 st.rerun()
             
-    # عرض عدد المنتجات الفعلي
-    st.info(f"📊 إجمالي عدد المنتجات في المتجر: {len(all_products)}")
-    
     c_search, _ = st.columns([3, 1])
     with c_search:
         search_query = st.text_input("ابحث عن منتج (اسم، SKU، ID):", placeholder="أدخل اسم المنتج، أو الرقم التعريفي...")
@@ -456,7 +495,6 @@ def render_products_page():
         actual_promo_title = p.get('promotion_title') or (promo_obj.get('title') if isinstance(promo_obj, dict) else '')
         if filter_has_promo and not actual_promo_title: continue
         if filter_out_stock and p.get('quantity', 0) > 0: continue
-        # ✅ فلتر مجموعات المنتجات
         if filter_group and p.get('type') != 'group_products': continue
             
         has_disc = False
@@ -491,10 +529,7 @@ def render_products_page():
     # ==========================================
     # ✅ 3. عرض المنتجات
     # ==========================================
-
-    # ✅ نظام الترقيم السريع (Pagination)
-
-    items_per_page = 20 # عدد المنتجات في كل صفحة
+    items_per_page = 20 
     total_pages = max(1, (len(filtered_products) + items_per_page - 1) // items_per_page)
     
     if st.session_state["prod_page"] > total_pages: 
@@ -504,7 +539,6 @@ def render_products_page():
     end_idx = start_idx + items_per_page
     displayed_products = filtered_products[start_idx:end_idx]
 
-    # أزرار التنقل بين الصفحات
     st.markdown("---")
     col_prev, col_page, col_next = st.columns([1, 2, 1])
     with col_prev:
@@ -519,7 +553,6 @@ def render_products_page():
             st.rerun()
     st.markdown("---")
 
-    # حلقة العرض تستخدم displayed_products بدلاً من filtered_products
     for idx, p in enumerate(displayed_products):
         p_id = str(p.get('id', 'N/A'))
         p_name = p.get('name', 'منتج بدون اسم')
@@ -555,7 +588,7 @@ def render_products_page():
         disp_status = "🟢 معروض بالمتجر" if status == "sale" else "🔴 مخفي في المسودات"
         tax_status_badge = "📗 خاضع للضريبة" if p.get('with_tax', True) else f"⚪ يخضع لنسبة الصفر ({p.get('tax_exemption_cause', 'بدون سبب')})"
 
-        # ✅ أيقونة مجموعة المنتجات
+        # ✅ أيقونة مجموعة المنتجات (تم إخراج العروض من الـ else)
         if product_type == 'group_products':
             type_badge = "<span style='background: linear-gradient(135deg, #6C2BD9 0%, #9B59B6 100%); color: white; padding: 4px 12px; border-radius: 20px; font-size: 11px; font-weight:600;'>📦 مجموعة منتجات</span>"
             border_color = "#9B59B6"
@@ -563,8 +596,7 @@ def render_products_page():
             type_badge = ""
             border_color = "#e67e22"
 
-        # ✅ تم إخراج هذا الكود من الـ else لكي يُطبق على المنتجات العادية والمجموعات
-        # استخراج قائمة العروض المشمول بها هذا المنتج
+        # ✅ استخراج قائمة العروض المشمول بها هذا المنتج بشكل مستقل تماماً ليظهر للجميع
         p_offers_list = st.session_state.get("product_offers_map", {}).get(str(p_id), [])
         
         offer_badge_html = "" 
@@ -610,7 +642,6 @@ def render_products_page():
                 st.markdown(f"🔗 [🌐 عرض المنتج في المتجر]({p_url})")
             
             with c_pricing:
-                # ... (كود عرض الأسعار كما هو) ...
                 if has_discount:
                     st.markdown(f"""
                         <div style="background:#fff3cd; padding:10px; border-radius:8px; border-right:5px solid #ffc107;">
@@ -628,126 +659,71 @@ def render_products_page():
                         </div>
                     """, unsafe_allow_html=True)
                 
-                # ✅ نافذة تحديث الأسعار
                 with st.expander("💰 تحديث الأسعار", expanded=False):
-                    # ✅ جلب السعر الأصلي الحقيقي من المنتج في session_state
                     current_product = None
-                    for p in st.session_state.get("all_products", []):
-                        if str(p.get('id')) == p_id:
-                            current_product = p
+                    for pr in st.session_state.get("all_products", []):
+                        if str(pr.get('id')) == p_id:
+                            current_product = pr
                             break
                     
-                    # ✅ استخدام السعر الأصلي الحقيقي من المنتج
                     real_base_price = get_flat_price(current_product.get('price', 0)) if current_product else base_price
                     real_sale_price = get_flat_price(current_product.get('sale_price', 0)) if current_product else display_sale_price
                     
-                    # ✅ عرض السعر الحقيقي الحالي
                     st.info(f"💰 السعر الأصلي الحالي: **{real_base_price:.2f} SAR** | السعر المخفض الحالي: **{real_sale_price:.2f} SAR**")
                     
-                    # السعر الأصلي
-                    new_price = st.number_input(
-                        "السعر الأصلي الجديد (SAR)", 
-                        min_value=0.0, 
-                        value=float(real_base_price),
-                        step=0.5,
-                        key=f"new_price_{p_id}_{idx}"
-                    )
+                    new_price = st.number_input("السعر الأصلي الجديد (SAR)", min_value=0.0, value=float(real_base_price), step=0.5, key=f"new_price_{p_id}_{idx}")
+                    new_sale_price = st.number_input("السعر المخفض الجديد (SAR) (اترك 0 للإزالة)", min_value=0.0, value=float(real_sale_price) if real_sale_price > 0 else 0.0, step=0.5, key=f"new_sale_price_{p_id}_{idx}")
                     
-                    # السعر المخفض
-                    new_sale_price = st.number_input(
-                        "السعر المخفض الجديد (SAR) (اترك 0 للإزالة)", 
-                        min_value=0.0, 
-                        value=float(real_sale_price) if real_sale_price > 0 else 0.0,
-                        step=0.5,
-                        key=f"new_sale_price_{p_id}_{idx}"
-                    )
-                    
-                    # ✅ تواريخ التخفيض - استخدام القيم الموجودة فقط
                     col_date1, col_date2 = st.columns(2)
                     with col_date1:
-                        # ✅ استخدام التاريخ الموجود أو تركه فارغاً
                         if sale_start_date != "غير محدد" and sale_start_date:
-                            try:
-                                default_start = datetime.strptime(sale_start_date, "%Y-%m-%d")
-                            except:
-                                default_start = None
-                        else:
-                            default_start = None
-                        
-                        sale_start_input = st.date_input(
-                            "بداية التخفيض",
-                            value=default_start,
-                            key=f"sale_start_{p_id}_{idx}",
-                            help="اترك فارغاً إذا لم يكن هناك تاريخ بداية"
-                        )
+                            try: default_start = datetime.strptime(sale_start_date, "%Y-%m-%d")
+                            except: default_start = None
+                        else: default_start = None
+                        sale_start_input = st.date_input("بداية التخفيض", value=default_start, key=f"sale_start_{p_id}_{idx}", help="اترك فارغاً إذا لم يكن هناك تاريخ بداية")
                     
                     with col_date2:
                         if sale_end_date != "غير محدد" and sale_end_date:
-                            try:
-                                default_end = datetime.strptime(sale_end_date, "%Y-%m-%d")
-                            except:
-                                default_end = None
-                        else:
-                            default_end = None
-                        
-                        sale_end_input = st.date_input(
-                            "نهاية التخفيض",
-                            value=default_end,
-                            key=f"sale_end_{p_id}_{idx}",
-                            help="اترك فارغاً إذا لم يكن هناك تاريخ نهاية"
-                        )
+                            try: default_end = datetime.strptime(sale_end_date, "%Y-%m-%d")
+                            except: default_end = None
+                        else: default_end = None
+                        sale_end_input = st.date_input("نهاية التخفيض", value=default_end, key=f"sale_end_{p_id}_{idx}", help="اترك فارغاً إذا لم يكن هناك تاريخ نهاية")
                     
-                    # أزرار التحديث
                     col_btn1, col_btn2 = st.columns(2)
                     with col_btn1:
                         if st.button("💾 تحديث السعر الأصلي", key=f"update_price_{p_id}_{idx}", use_container_width=True):
-                            if new_price <= 0:
-                                st.error("⚠️ السعر يجب أن يكون أكبر من صفر")
-                            elif new_sale_price > 0 and new_price <= new_sale_price:
-                                st.error(f"⚠️ السعر الأصلي ({new_price}) يجب أن يكون أكبر من السعر المخفض ({new_sale_price})")
+                            if new_price <= 0: st.error("⚠️ السعر يجب أن يكون أكبر من صفر")
+                            elif new_sale_price > 0 and new_price <= new_sale_price: st.error(f"⚠️ السعر الأصلي ({new_price}) يجب أن يكون أكبر من السعر المخفض ({new_sale_price})")
                             else:
                                 with st.spinner("جاري التحديث..."):
                                     if update_product_price(int(p_id), new_price):
                                         st.success("✅ تم تحديث السعر الأصلي!")
                                         st.rerun()
-                                    else:
-                                        st.error("❌ فشل تحديث السعر")
+                                    else: st.error("❌ فشل تحديث السعر")
                     
                     with col_btn2:
                         if st.button("💾 تحديث السعر المخفض", key=f"update_sale_{p_id}_{idx}", use_container_width=True):
-                            # ✅ استخدام السعر الأصلي الحقيقي للتحقق
                             if new_sale_price > 0:
-                                if new_sale_price >= new_price:
-                                    st.error(f"⚠️ السعر المخفض ({new_sale_price}) يجب أن يكون أقل من السعر الأصلي ({new_price})")
+                                if new_sale_price >= new_price: st.error(f"⚠️ السعر المخفض ({new_sale_price}) يجب أن يكون أقل من السعر الأصلي ({new_price})")
                                 else:
                                     with st.spinner("جاري التحديث..."):
-                                        # ✅ إرسال التواريخ فقط إذا تم إدخالها
                                         start_date_str = sale_start_input.strftime("%Y-%m-%d") if sale_start_input else None
                                         end_date_str = sale_end_input.strftime("%Y-%m-%d") if sale_end_input else None
-                                        
-                                        if update_product_sale_price(
-                                            int(p_id), 
-                                            new_sale_price,
-                                            start_date_str,
-                                            end_date_str
-                                        ):
+                                        if update_product_sale_price(int(p_id), new_sale_price, start_date_str, end_date_str):
                                             st.success("✅ تم تحديث السعر المخفض!")
                                             st.rerun()
-                                        else:
-                                            st.error("❌ فشل تحديث السعر المخفض")
+                                        else: st.error("❌ فشل تحديث السعر المخفض")
                             else:
-                                # إزالة التخفيض
                                 with st.spinner("جاري إزالة التخفيض..."):
                                     if update_product_sale_price(int(p_id), 0):
                                         st.success("✅ تم إزالة التخفيض!")
                                         st.rerun()
-                                    else:
-                                        st.error("❌ فشل إزالة التخفيض")
+                                    else: st.error("❌ فشل إزالة التخفيض")
                                     
             with c_action:
                 st.markdown("<br>", unsafe_allow_html=True)
                 
-                # 🎁 الزر التفاعلي الجديد لاستعراض العروض (تم وضعه في الخارج ليكون ظاهراً دائماً)
+                # 🎁 الزر التفاعلي الجديد لاستعراض العروض (منفصل ويظهر للجميع دائماً)
                 current_p_offers = st.session_state.get("product_offers_map", {}).get(str(p.get('id', '')), [])
                 if current_p_offers:
                     with st.popover(f"🎁 استعراض عروض المنتج ({len(current_p_offers)})", use_container_width=True):
@@ -763,31 +739,23 @@ def render_products_page():
                             st.success("تم التحديث!")
                             st.rerun()
 
-                # ✅ إضافة زر حذف المنتج
                 with st.popover("حذف المنتج", icon="🗑️", type="primary"):
                     st.warning("⚠️ تحذير: حذف المنتج نهائي ولا يمكن استرجاعه!")
                     st.write(f"**المنتج:** {p_name}")
                     st.write(f"**المعرف:** `{p_id}`")
-                    
                     confirm_delete = st.checkbox("☑️ أوافق على حذف هذا المنتج نهائياً", key=f"confirm_delete_{p_id}_{idx}")
-                    
                     if st.button("🗑️ حذف المنتج نهائياً", key=f"delete_{p_id}_{idx}", type="primary", disabled=not confirm_delete, use_container_width=True):
                         with st.spinner("جاري حذف المنتج..."):
                             if delete_product(int(p_id)):
                                 st.success("✅ تم حذف المنتج بنجاح!")
-                                # إزالة المنتج من القائمة المعروضة
-                                if p in filtered_products:
-                                    filtered_products.remove(p)
-                                if p in all_products:
-                                    all_products.remove(p)
+                                if p in filtered_products: filtered_products.remove(p)
+                                if p in all_products: all_products.remove(p)
                                 st.rerun()
-                            else:
-                                st.error("❌ فشل حذف المنتج")
+                            else: st.error("❌ فشل حذف المنتج")
                                 
                 with st.popover("✏️ تعديل العناوين"):
                     new_promo = st.text_input("العنوان الترويجي:", value=(p_promotion if p_promotion != "لا يوجد عنوان ترويجي" else ""), key=f"promo_in_{p_id}_{idx}")
                     new_sub = st.text_input("العنوان الفرعي:", value=(p_sub_title if p_sub_title != "لا يوجد عنوان فرعي" else ""), key=f"sub_in_{p_id}_{idx}")
-                    
                     if st.button("💾 حفظ العناوين الآمن", key=f"save_promo_{p_id}_{idx}", type="primary", use_container_width=True):
                         with st.spinner("جاري الحفظ الآمن للأسعار..."):
                             if update_product_promotions_secure(p_id, new_promo, new_sub, headers):
@@ -802,7 +770,6 @@ def render_products_page():
                         selected_cause = st.selectbox("سبب الإعفاء من الضريبة:", TAX_EXEMPTION_CAUSES, index=cause_idx, key=f"tax_cause_{p_id}_{idx}")
                     else:
                         selected_cause = ""
-                        
                     if st.button("💾 حفظ حالة الضريبة", key=f"save_tax_{p_id}_{idx}", type="primary", use_container_width=True):
                         with st.spinner("جاري التحديث..."):
                             if update_product_tax_secure(p_id, is_taxed, selected_cause, headers):
@@ -810,188 +777,95 @@ def render_products_page():
                                 st.rerun()
                 
                 with st.popover("🏢 كميات الفروع"):
-                    if not branches:
-                        st.warning("لا توجد فروع مسجلة، أو فشل الجلب.")
+                    if not branches: st.warning("لا توجد فروع مسجلة، أو فشل الجلب.")
                     else:
                         st.markdown("**أدخل الكمية الجديدة للفرع (سيتم استبدال الكمية الحالية):**")
                         branch_updates = []
                         for b in branches:
                             new_q = st.number_input(f"تحديث الكمية في: {b['name']}", min_value=0, value=0, step=1, key=f"bq_{p_id}_{b['id']}_{idx}")
                             if new_q > 0:
-                                branch_updates.append({
-                                    "identifer": p_sku, 
-                                    "identifer_type": "sku", 
-                                    "branch_id": b['id'], 
-                                    "quantity": new_q, 
-                                    "mode": "overwrite"
-                                })
-                        
+                                branch_updates.append({"identifer": p_sku, "identifer_type": "sku", "branch_id": b['id'], "quantity": new_q, "mode": "overwrite"})
                         if st.button("💾 حفظ كميات الفروع (للقيم المضافة)", key=f"save_bq_{p_id}_{idx}", type="primary", use_container_width=True):
                             if branch_updates:
                                 with st.spinner("جاري التوزيع في سلة..."):
-                                    res = safe_api_request(
-                                        "POST", 
-                                        "https://api.salla.dev/admin/v2/products/quantities/bulk", 
-                                        headers, 
-                                        json={"products": branch_updates}
-                                    )
+                                    res = safe_api_request("POST", "https://api.salla.dev/admin/v2/products/quantities/bulk", headers, json={"products": branch_updates})
                                     if res:
                                         st.success("✅ تم تحديث وتوزيع الكميات!")
                                         st.rerun()
-                            else:
-                                st.warning("الرجاء إدخال كميات أكبر من صفر للتحديث.")
-                pass
+                            else: st.warning("الرجاء إدخال كميات أكبر من صفر للتحديث.")
             
             # ==========================================
-            # ✅ عرض المنتجات داخل مجموعة المنتجات (مرة واحدة فقط)
+            # ✅ عرض المنتجات داخل مجموعة المنتجات (محمي بـ expander)
             # ==========================================
             if product_type == 'group_products':
                 st.markdown("---")
-                st.markdown("#### 📦 إدارة المنتجات داخل المجموعة")
+                with st.spinner("جاري تحميل المنتجات المضمنة..."):
+                    group_products = robust_get_group_products(int(p_id))
                 
-                with st.spinner("جاري تحميل المنتجات داخل المجموعة..."):
-                    group_products = get_group_products(int(p_id))
-                
-                if group_products:
-                    st.info(f"📊 عدد المنتجات في المجموعة: {len(group_products)}")
-                    
-                    for gp_idx, gp in enumerate(group_products):
-                        gp_id = str(gp.get('id', 'N/A'))
-                        gp_name = gp.get('name', 'منتج بدون اسم')
-                        gp_sku = gp.get('sku', 'لا يوجد')
-                        gp_price = gp.get('price', 0)
-                        gp_bundle_qty = gp.get('bundle_quantity', 1)
-                        gp_stock = gp.get('stock_quantity', 0)
-                        gp_status = gp.get('status', 'sale')
-                        gp_image = gp.get('image')
+                with st.expander(f"📦 عرض وإدارة المنتجات داخل المجموعة ({len(group_products)} منتجات)", expanded=False):
+                    if group_products:
+                        for gp_idx, gp in enumerate(group_products):
+                            gp_id = str(gp.get('id', 'N/A'))
+                            gp_name = gp.get('name', 'منتج بدون اسم')
+                            gp_sku = gp.get('sku', 'لا يوجد')
+                            gp_price = gp.get('price', 0)
+                            gp_bundle_qty = gp.get('bundle_quantity', 1)
+                            gp_stock = gp.get('stock_quantity', 0)
+                            gp_status = gp.get('status', 'sale')
+                            gp_image = gp.get('image')
+                            
+                            gp_status_text = "🟢 معروض" if gp_status == 'sale' else "🔴 مخفي"
+                            gp_tax_text = "📗 خاضع" if gp.get('with_tax', True) else "⚪ معفى"
+                            
+                            st.markdown(f"<div style='background: #f8f9fa; border-radius: 10px; padding: 15px; margin-bottom: 12px; border-right: 4px solid #6C2BD9; box-shadow: 0 2px 4px rgba(0,0,0,0.05);'><div style='display: flex; align-items: center; gap: 15px; flex-wrap: wrap;'><div style='flex: 0 0 60px;'>{f'<img src="{gp_image}" style="width: 60px; height: 60px; object-fit: cover; border-radius: 8px;">' if gp_image else '<div style="width: 60px; height: 60px; background: #e0e0e0; border-radius: 8px; display: flex; align-items: center; justify-content: center; font-size: 24px;">🚫</div>'}</div><div style='flex: 1; min-width: 150px;'><div style='font-weight: bold; font-size: 16px; color: #1a1a2e;'>{gp_name}</div><div style='font-size: 12px; color: #666;'>🆔 {gp_id} | 🔢 {gp_sku} | 💰 {gp_price:.2f} SAR</div><div style='display: flex; gap: 8px; margin-top: 5px; flex-wrap: wrap;'><span style='background: {("#2ecc71" if gp_status == "sale" else "#e74c3c")}; color: white; padding: 2px 10px; border-radius: 12px; font-size: 10px; font-weight: 600;'>{gp_status_text}</span><span style='background: {("#3498db" if gp.get("with_tax", True) else "#f39c12")}; color: white; padding: 2px 10px; border-radius: 12px; font-size: 10px; font-weight: 600;'>{gp_tax_text}</span></div></div><div style='flex: 0 0 140px;'><div style='font-size: 13px; color:#6C2BD9; font-weight:bold;'>📦 حبات بالمجموعة: {gp_bundle_qty}</div><div style='font-size: 12px; color:#555;'>مخزون المستودع: {gp_stock}</div></div></div></div>", unsafe_allow_html=True)
+                            
+                            col_gp_qty, col_gp_actions = st.columns([1, 1])
+                            with col_gp_qty:
+                                new_qty = st.number_input(f"تعديل الحبات", min_value=1, value=int(gp_bundle_qty), step=1, key=f"gp_qty_{gp_id}_{idx}_{gp_idx}", label_visibility="collapsed")
+                                if st.button(f"💾 تحديث", key=f"gp_update_qty_{gp_id}_{idx}_{gp_idx}", use_container_width=True):
+                                    with st.spinner("تحديث..."):
+                                        # تمرير معرف المجموعة ومعرف المنتج الفرعي
+                                        import utils # لضمان عمل الدالة
+                                        if utils.update_group_product_quantity(int(p_id), int(gp_id), new_qty):
+                                            st.success("✅ تم التحديث!")
+                                            st.rerun()
+                            with col_gp_actions:
+                                if gp.get('url'): st.markdown(f"[🔗 عرض]({gp.get('url')})")
+                                if st.button(f"🗑️ إزالة", key=f"gp_remove_{gp_id}_{idx}_{gp_idx}", use_container_width=True):
+                                    with st.spinner("إزالة آمنة..."):
+                                        import utils
+                                        if utils.remove_product_from_group(int(p_id), int(gp_id)):
+                                            st.success("✅ تم الإزالة!")
+                                            st.rerun()
+                            st.markdown("<hr style='margin:10px 0; border:0; border-bottom:1px dashed #ddd;'>", unsafe_allow_html=True)
+                    else:
+                        st.info("ℹ️ لا توجد منتجات مسجلة بداخل هذه المجموعة.")
                         
-                        gp_status_text = "🟢 معروض" if gp_status == 'sale' else "🔴 مخفي"
-                        gp_tax_text = "📗 خاضع" if gp.get('with_tax', True) else "⚪ معفى"
-                        
-                        # عرض المنتج الفرعي
-                        st.markdown(f"<div style='background: #f8f9fa; border-radius: 10px; padding: 15px; margin-bottom: 12px; border-right: 4px solid #6C2BD9; box-shadow: 0 2px 4px rgba(0,0,0,0.05);'><div style='display: flex; align-items: center; gap: 15px; flex-wrap: wrap;'><div style='flex: 0 0 60px;'>{f'<img src="{gp_image}" style="width: 60px; height: 60px; object-fit: cover; border-radius: 8px;">' if gp_image else '<div style="width: 60px; height: 60px; background: #e0e0e0; border-radius: 8px; display: flex; align-items: center; justify-content: center; font-size: 24px;">🚫</div>'}</div><div style='flex: 1; min-width: 150px;'><div style='font-weight: bold; font-size: 16px; color: #1a1a2e;'>{gp_name}</div><div style='font-size: 12px; color: #666;'>🆔 {gp_id} | 🔢 {gp_sku} | 💰 {gp_price:.2f} SAR</div><div style='display: flex; gap: 8px; margin-top: 5px; flex-wrap: wrap;'><span style='background: {("#2ecc71" if gp_status == "sale" else "#e74c3c")}; color: white; padding: 2px 10px; border-radius: 12px; font-size: 10px; font-weight: 600;'>{gp_status_text}</span><span style='background: {("#3498db" if gp.get("with_tax", True) else "#f39c12")}; color: white; padding: 2px 10px; border-radius: 12px; font-size: 10px; font-weight: 600;'>{gp_tax_text}</span></div></div><div style='flex: 0 0 140px;'><div style='font-size: 13px; color:#6C2BD9; font-weight:bold;'>📦 حبات بالمجموعة: {gp_bundle_qty}</div><div style='font-size: 12px; color:#555;'>مخزون المستودع: {gp_stock}</div></div></div></div>", unsafe_allow_html=True)
-                        
-                        # أزرار التحكم
-                        col_gp_qty, col_gp_actions = st.columns([1, 1])
-                        with col_gp_qty:
-                            new_qty = st.number_input(
-                                f"تعديل الحبات", 
-                                min_value=1, 
-                                value=int(gp_bundle_qty), 
-                                step=1, 
-                                key=f"gp_qty_{gp_id}_{idx}_{gp_idx}",
-                                label_visibility="collapsed"
-                            )
-                            if st.button(f"💾 تحديث", key=f"gp_update_qty_{gp_id}_{idx}_{gp_idx}", use_container_width=True):
-                                with st.spinner("تحديث..."):
-                                    if update_group_product_quantity(int(p_id), int(gp_id), new_qty):
-                                        st.success("✅ تم التحديث!")
-                                        st.rerun()
-                                    else:
-                                        st.error("❌ فشل التحديث")
-                        
-                        with col_gp_actions:
-                            if gp.get('url'):
-                                st.markdown(f"[🔗 عرض]({gp.get('url')})")
-                            if st.button(f"🗑️ إزالة", key=f"gp_remove_{gp_id}_{idx}_{gp_idx}", use_container_width=True):
-                                with st.spinner("إزالة آمنة..."):
-                                    if remove_product_from_group(int(p_id), int(gp_id)):
-                                        st.success("✅ تم إزالة المنتج من المجموعة!")
-                                        st.rerun()
-                                    else:
-                                        st.error("❌ فشل الإزالة")
-                        
-                        st.markdown("<hr style='margin:10px 0; border:0; border-bottom:1px dashed #ddd;'>", unsafe_allow_html=True)
-                    
-                    # ✅ إضافة منتج جديد للمجموعة
                     st.markdown("#### ➕ إضافة منتج للمجموعة")
-                    search_product = st.text_input(
-                        "ابحث باسم أو SKU للإضافة:",
-                        key=f"gp_search_{p_id}_{idx}"
-                    )
-                    
+                    search_product = st.text_input("ابحث باسم أو SKU للإضافة:", key=f"gp_search_{p_id}_{idx}")
                     if search_product:
-                        found_products = []
-                        for prod in st.session_state.get("all_products", []):
-                            if prod.get('id') != int(p_id):
-                                prod_name = str(prod.get('name', '')).lower()
-                                prod_sku = str(prod.get('sku', '')).lower()
-                                search = search_product.lower()
-                                if search in prod_name or search in prod_sku:
-                                    found_products.append(prod)
-                        
+                        found_products = [prod for prod in st.session_state.get("all_products", []) if prod.get('id') != int(p_id) and (search_product.lower() in str(prod.get('name', '')).lower() or search_product.lower() in str(prod.get('sku', '')).lower())]
                         if found_products:
                             for prod in found_products[:5]:
                                 prod_id = prod.get('id')
-                                prod_name = prod.get('name')
-                                prod_sku = prod.get('sku')
-                                
                                 col_find1, col_find2 = st.columns([3, 1])
-                                with col_find1:
-                                    st.markdown(f"**{prod_name}** | `{prod_sku}`")
+                                with col_find1: st.markdown(f"**{prod.get('name')}** | `{prod.get('sku')}`")
                                 with col_find2:
                                     if st.button(f"➕ إضافة", key=f"gp_add_{prod_id}_{idx}"):
                                         with st.spinner("جاري الإضافة..."):
-                                            if add_product_to_group(int(p_id), prod_id):
+                                            import utils
+                                            if utils.add_product_to_group(int(p_id), prod_id):
                                                 st.success("✅ تمت الإضافة!")
                                                 st.rerun()
-                                            else:
-                                                st.error("❌ فشل الإضافة")
-                        else:
-                            st.info("لا توجد منتجات مطابقة.")
-                else:
-                    st.info("ℹ️ لا توجد منتجات داخل هذه المجموعة")
-                    
-                    # عرض خيار إضافة منتج عندما تكون المجموعة فارغة
-                    st.markdown("#### ➕ إضافة أول منتج للمجموعة")
-                    search_product = st.text_input(
-                        "ابحث باسم أو SKU للإضافة:",
-                        key=f"gp_search_empty_{p_id}_{idx}"
-                    )
-                    
-                    if search_product:
-                        found_products = []
-                        for prod in st.session_state.get("all_products", []):
-                            if prod.get('id') != int(p_id):
-                                prod_name = str(prod.get('name', '')).lower()
-                                prod_sku = str(prod.get('sku', '')).lower()
-                                search = search_product.lower()
-                                if search in prod_name or search in prod_sku:
-                                    found_products.append(prod)
-                        
-                        if found_products:
-                            for prod in found_products[:5]:
-                                prod_id = prod.get('id')
-                                prod_name = prod.get('name')
-                                prod_sku = prod.get('sku')
-                                
-                                col_find1, col_find2 = st.columns([3, 1])
-                                with col_find1:
-                                    st.markdown(f"**{prod_name}** | `{prod_sku}`")
-                                with col_find2:
-                                    if st.button(f"➕ إضافة", key=f"gp_add_empty_{prod_id}_{idx}"):
-                                        with st.spinner("جاري الإضافة..."):
-                                            if add_product_to_group(int(p_id), prod_id):
-                                                st.success("✅ تمت الإضافة!")
-                                                st.rerun()
-                                            else:
-                                                st.error("❌ فشل الإضافة")
                         else:
                             st.info("لا توجد منتجات مطابقة.")
             
             st.markdown("</div>", unsafe_allow_html=True)
-            # ==========================================
-            # ✅ نهاية عرض مجموعة المنتجات
-            # ==========================================
 
 def update_single_product_in_session(product_id: int, updated_data: Dict):
-    """
-    تحديث بيانات منتج واحد في session_state دون إعادة تحميل الكل
-    """
     all_products = st.session_state.get("all_products", [])
     for i, p in enumerate(all_products):
         if str(p.get('id')) == str(product_id):
-            # تحديث الحقول المطلوبة فقط
             for key, value in updated_data.items():
                 all_products[i][key] = value
             break
