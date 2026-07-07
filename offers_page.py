@@ -542,6 +542,15 @@ def render_offers_page():
     type_options_ar = ["منتجات", "تصنيفات", "ماركات"]
     type_map = {"منتجات": "product", "تصنيفات": "category", "ماركات": "brand"}
     
+    # ✅ تم نقل الدالة المساعدة هنا خارج الحلقة لتجنب خطأ المسافات (IndentationError)
+    def get_promo_badge(pid):
+        for pr in st.session_state.get("all_products", []):
+            if str(pr.get('id')) == str(pid):
+                promo = pr.get('promotion_title') or pr.get('promotion', {}).get('title') or ""
+                if promo:
+                    return f"<span style='color:#b45309; font-size:11px; background:#fef3c7; padding:2px 6px; border-radius:4px; margin-right:4px;'>🔖 {promo}</span>"
+        return ""
+    
     for idx, offer in enumerate(filtered_offers):
         offer_id = offer.get('id', 'N/A')
         offer_name = offer.get('name', 'عرض بدون اسم')
@@ -590,7 +599,7 @@ def render_offers_page():
                 st.markdown(f"**📢 نص رسالة العرض:** *{offer_data.get('message', 'لا توجد رسالة مرفقة')}*")
                 
             st.markdown("<hr style='margin: 15px 0; border-top: 1px dashed #e2e8f0;'>", unsafe_allow_html=True)
-col_x, col_y = st.columns(2)
+            col_x, col_y = st.columns(2)
             
             # دالة صغيرة سريعة لجلب العنوان الترويجي للمنتج من الذاكرة
             def get_promo_badge(pid):
