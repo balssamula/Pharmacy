@@ -55,61 +55,52 @@ def render_products_page():
     offer_product_ids = st.session_state["offer_product_ids"]
     branches = st.session_state["branches"]
     
+    if "product_offers_map" not in st.session_state: st.session_state["product_offers_map"] = {}
+    
     c_title, c_btn = st.columns([3, 1])
     with c_btn:
-        if st.button("🔄 مزامنة كافة المنتجات", use_container_width=True, type="primary"):
-            with st.spinner("⏳ جاري سحب كافة المنتجات والعروض..."):
-                progress_bar = st.progress(0)
-                all_p = []
-                page = 1
-                total_pages = None
-        
-                while True:
-                    res = safe_api_request("GET", f"https://api.salla.dev/admin/v2/products?per_page=100&page={page}", headers)
-                    if not res or not res.get("data"):
-                        break
-            
-                    if total_pages is None:
-                        total_pages = res.get("pagination", {}).get("totalPages", 1)
-            
-                    all_p.extend(res["data"])
-                    progress_bar.progress(page / total_pages)
-            
-                    if page >= total_pages:
-                        break
-                    page += 1
-        
-                progress_bar.empty()
+        if st.button("🔄 مزامنة وجلب كافة المنتجات (إلزامي للمطابقة والقوالب)", use_container_width=True, type="primary"):
+            with st.spinner("⏳ جاري سحب وتصنيف كافة المنتجات والعروض النشطة..."):
                 
-                # تحديث بيانات الفروع
+                # 1. تحديث الفروع
                 st.session_state["branches"] = get_branches_list()
-                branches = st.session_state["branches"]
                 
-                # جلب العروض النشطة
-                offers_res = safe_api_request("GET", "https://api.salla.dev/admin/v2/specialoffers", headers)
-                active_offers = offers_res.get("data", []) if offers_res else []
-                offer_ids = set()
-                for offer in active_offers:
-                    if offer.get("status") == "active":
-                        for op in offer.get("buy", {}).get("products", []): 
-                            offer_ids.add(str(op.get("id", op) if isinstance(op, dict) else op))
-                        for op in offer.get("get", {}).get("products", []): 
-                            offer_ids.add(str(op.get("id", op) if isinstance(op, dict) else op))
-                st.session_state["offer_product_ids"] = offer_ids
-
-                # جلب المنتجات بالترقيم
+                # 2. سحب المنتجات
                 all_p = []
                 page = 1
                 while True:
-                    res = safe_api_request("GET", f"https://api.salla.dev/admin/v2/products?per_page=100&page={page}", headers)
+                    res = safe_api_request("GET", f"https://api.salla.dev/admin/v2/products?per_page=60&page={page}", headers)
                     if not res or not res.get("data"): break
                     all_p.extend(res["data"])
                     if page >= res.get("pagination", {}).get("totalPages", 1): break
                     page += 1
                 st.session_state["all_products"] = all_p
-                st.session_state["all_products_fetched"] = True
-                st.session_state["last_sync_time"] = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-                st.success(f"✅ تم سحب {len(all_p)} منتج بنجاح!")
+                
+                # 3. سحب وتصنيف العروض النشطة (لإظهار الشارات بالمنتجات)
+                all_o = []
+                o_page = 1
+                while True:
+                    ores = safe_api_request("GET", f"https://api.salla.dev/admin/v2/specialoffers?per_page=60&page={o_page}", headers)
+                    if not ores or not ores.get("data"): break
+                    all_o.extend(ores["data"])
+                    if o_page >= ores.get("pagination", {}).get("totalPages", 1): break
+                    o_page += 1
+                
+                active_offers = [o for o in all_o if o.get("status") == "active"]
+                po_map = {}
+                for o in active_offers:
+                    oid = o.get("id")
+                    full_o = safe_api_request("GET", f"https://api.salla.dev/admin/v2/specialoffers/{oid}", headers)
+                    if full_o and full_o.get("data"):
+                        pids = set()
+                        for px in full_o["data"].get("buy", {}).get("products", []): pids.add(str(px.get("id", px) if isinstance(px, dict) else px))
+                        for px in full_o["data"].get("get", {}).get("products", []): pids.add(str(px.get("id", px) if isinstance(px, dict) else px))
+                        for pid in pids:
+                            if pid not in po_map: po_map[pid] = []
+                            po_map[pid].append({"id": oid, "name": o.get("name")})
+                st.session_state["product_offers_map"] = po_map
+                
+                st.success(f"✅ تم سحب {len(all_p)} منتج، وتحليل {len(active_offers)} عرض نشط بنجاح!")
                 st.rerun()
 
     # ✅ عرض حالة المنتجات
@@ -572,10 +563,9 @@ def render_products_page():
             type_badge = ""
             border_color = "#e67e22"
 
-        if p_id in offer_product_ids:
-            offer_badge_html = "<span style='background: rgba(255, 193, 7, 0.3); color: #FFC107; padding: 4px 12px; border-radius: 20px; font-size: 11px; font-weight:600;'>🎁 مشمول في عرض خاص</span>"
-        else:
-            offer_badge_html = ""
+            # استخراج قائمة العروض المشمول بها هذا المنتج
+            p_offers_list = st.session_state.get("product_offers_map", {}).get(str(p_id), [])
+            offer_badge_html = f"<span style='background: rgba(255, 193, 7, 0.25); color: #b45309; padding: 2px 10px; border-radius: 12px; font-size: 10px; font-weight: 600;'>🎁 مشمول في عروض خاصة ({len(p_offers_list)})</span>" if p_offers_list else ""
 
         # ✅ شريط عنوان المنتج (تم إصلاحه ووضعه خارج شرط offer)
         st.markdown(f"<div style='background: linear-gradient(135deg, #243b55 0%, #141e30 100%); padding: 14px 20px; border-radius: 12px 12px 0px 0px; margin-top: 25px; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 10px; border-bottom: 3px solid {border_color};'><span style='color: #ffffff; font-weight: bold; font-size: 15px;'>📦 {p_name}</span><div style='display: flex; gap: 8px; flex-wrap: wrap;'><span style='background: rgba(255,255,255,0.2); color: #fff; padding: 4px 12px; border-radius: 20px; font-size: 11px; font-weight:600;'>{disp_status}</span><span style='background: rgba(0, 235, 207, 0.2); color: #00EBCF; padding: 4px 12px; border-radius: 20px; font-size: 11px; font-weight:600;'>{tax_status_badge}</span>{type_badge}{offer_badge_html}</div></div>", unsafe_allow_html=True)
@@ -760,6 +750,13 @@ def render_products_page():
                             st.success("تم التحديث!")
                             st.rerun()
 
+                # 🎁 الزر التفاعلي الجديد لاستعراض العروض المشمول بها المنتج
+                if p_offers_list:
+                    with st.popover(f"🎁 استعراض عروض المنتج ({len(p_offers_list)})", use_container_width=True):
+                        st.markdown("<b style='color:#b45309;'>العروض النشطة المشمول بها هذا المنتج:</b>", unsafe_allow_html=True)
+                        for off in p_offers_list:
+                            st.markdown(f"- 🎯 **{off['name']}** `(ID: {off['id']})`")
+                                    
                 # ✅ إضافة زر حذف المنتج
                 with st.popover("حذف المنتج", icon="🗑️", type="primary"):
                     st.warning("⚠️ تحذير: حذف المنتج نهائي ولا يمكن استرجاعه!")
