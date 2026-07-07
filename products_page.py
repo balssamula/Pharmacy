@@ -516,7 +516,7 @@ def render_product_card(idx: int, p: Dict, headers: Dict[str, str]):
                                 st.success("✅ تم تحديث العناوين!"); st.rerun()
 
                 # ✅ زر حذف المنتج
-                with st.popover("حذف المنتج", icon="🗑️"):
+                with st.popover("حذف المنتج", icon="🗑️", type="primary"):
                     st.warning("⚠️ تحذير: حذف المنتج نهائي ولا يمكن استرجاعه!")
                     st.write(f"**المنتج:** {p_name}")
                     st.write(f"**المعرف:** `{p_id}`")
