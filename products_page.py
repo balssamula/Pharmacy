@@ -404,23 +404,7 @@ def render_group_product_section(p_id: str, p_name: str, idx: int, headers: Dict
                 gp_stock = gp.get('stock_quantity', 0)
                 gp_image = gp.get('image')
                 
-                st.markdown(f"""
-                <div style='background: #f8f9fa; border-radius: 10px; padding: 15px; margin-bottom: 12px; border-right: 4px solid #6C2BD9;'>
-                    <div style='display: flex; gap: 15px; align-items: center;'>
-                        <div style='flex: 0 0 60px;'>
-                            {f"<img src='{gp_image}' style='width: 60px; height: 60px; border-radius: 8px;'>" if gp_image else "🚫"}
-                        </div>
-                        <div style='flex: 1;'>
-                            <b>{gp_name_sub}</b><br>
-                            <span style='font-size: 12px; color: #666;'>🆔 {gp_id} | 🔢 {gp_sku} | 💰 {gp_price:.2f} SAR</span>
-                        </div>
-                        <div style='flex: 0 0 120px; font-size: 12px; font-weight: bold;'>
-                            حبات: <span style='color:#6C2BD9;'>{gp_bundle_qty}</span><br>
-                            مخزون: {gp_stock}
-                        </div>
-                    </div>
-                </div>
-                """, unsafe_allow_html=True)
+                st.markdown(f"<div style='background: #f8f9fa; border-radius: 10px; padding: 15px; margin-bottom: 12px; border-right: 4px solid #6C2BD9;'><div style='display: flex; gap: 15px; align-items: center;'><div style='flex: 0 0 60px;'>{f"<img src='{gp_image}' style='width: 60px; height: 60px; border-radius: 8px;'>" if gp_image else "🚫"}</div><div style='flex: 1;'> <b>{gp_name_sub}</b><br><span style='font-size: 12px; color: #666;'>🆔 {gp_id} | 🔢 {gp_sku} | 💰 {gp_price:.2f} SAR</span></div><div style='flex: 0 0 120px; font-size: 12px; font-weight: bold;'>حبات: <span style='color:#6C2BD9;'>{gp_bundle_qty}</span><br>مخزون: {gp_stock}</div></div></div>", unsafe_allow_html=True)
                 
                 c_q, c_act = st.columns(2)
                 with c_q:
@@ -492,32 +476,7 @@ def render_product_card(idx: int, p: Dict, headers: Dict[str, str]):
         offer_badge = f"<span style='background: linear-gradient(135deg, #F7971E 0%, #FFD200 100%); color: #1a1a2e; padding: 4px 12px; border-radius: 20px; font-size: 11px; font-weight: 700; border: 2px solid #FFD700; box-shadow: 0 2px 8px rgba(255, 215, 0, 0.4);'>🎁 مشمول في ({len(p_offers)}) عروض</span>" if p_offers else ""
 
         # ✅ رسم شريط العنوان (يظهر دائماً للجميع)
-        st.markdown(f"""
-        <div style='background: linear-gradient(135deg, #243b55 0%, #141e30 100%); 
-            padding: 14px 20px; 
-            border-radius: 12px 12px 0px 0px; 
-            margin-top: 25px; 
-            display: flex; 
-            justify-content: space-between; 
-            align-items: center; 
-            flex-wrap: wrap; 
-            gap: 10px; 
-            border-bottom: 3px solid {border_color};'>
-            <span style='color: #ffffff; font-weight: bold; font-size: 15px;'>
-                📦 {p_name}
-            </span>
-            <div style='display: flex; gap: 8px; flex-wrap: wrap; align-items: center;'>
-                <span style='background: rgba(255,255,255,0.2); color: #fff; padding: 4px 12px; border-radius: 20px; font-size: 11px; font-weight:600;'>
-                    {disp_status}
-                </span>
-                <span style='background: rgba(0, 235, 207, 0.2); color: #00EBCF; padding: 4px 12px; border-radius: 20px; font-size: 11px; font-weight:600;'>
-                    {tax_status}
-                </span>
-                {type_badge}
-                {offer_badge}
-            </div>
-        </div>
-        """, unsafe_allow_html=True)
+        st.markdown(f"<div style='background: linear-gradient(135deg, #243b55 0%, #141e30 100%); padding: 14px 20px; border-radius: 12px 12px 0px 0px; margin-top: 25px; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 10px; border-bottom: 3px solid {border_color};'><span style='color: #ffffff; font-weight: bold; font-size: 15px;'>📦 {p_name}</span><div style='display: flex; gap: 8px; flex-wrap: wrap; align-items: center;'><span style='background: rgba(255,255,255,0.2); color: #fff; padding: 4px 12px; border-radius: 20px; font-size: 11px; font-weight:600;'>{disp_status}</span><span style='background: rgba(0, 235, 207, 0.2); color: #00EBCF; padding: 4px 12px; border-radius: 20px; font-size: 11px; font-weight:600;'>{tax_status}</span>{type_badge}{offer_badge}</div></div>", unsafe_allow_html=True)
 
         with st.container(border=True):
             st.markdown("""<div style="background-color: #fafbfc; padding: 20px; border-radius: 0px 0px 12px 12px; border: 1px solid #e1e8ed; border-top: none; margin-bottom: 20px;">""", unsafe_allow_html=True)
@@ -548,28 +507,18 @@ def render_product_card(idx: int, p: Dict, headers: Dict[str, str]):
                 
             with c_info:
                 st.markdown(f"🆔 **المعرف:** `{p_id}` | 🔢 **SKU:** `{p_sku}`")
-                st.markdown(f"📢 **ترويجي:** <span style='color:#e67e22; font-weight:bold;'>{p_promotion}</span>", unsafe_allow_html=True)
-                st.markdown(f"🏷️ **فرعي:** `{p_sub_title}`")
+                st.markdown(📢 **ترويجي:** <span style='color:#e67e22; font-weight:bold;'>{p_promotion}</span>", unsafe_allow_html=True)
+                st.markdown(🏷️ **فرعي:** `{p_sub_title}`")
                 st.markdown(f"📦 **المخزون الإجمالي:** `{p.get('quantity', 0)}` | 📈 **المبيعات:** `{p.get('sold_quantity', 0)}`")
                 st.markdown(f"🔗 [🌐 عرض في المتجر]({p_url})")
 
             with c_prc:
                 if has_disc:
-                    st.markdown(f"""
-                        <div style="background:#fff3cd; padding:10px; border-radius:8px; border-right:5px solid #ffc107;">
-                            <span style="text-decoration: line-through; color: #7f8c8d; font-size:12px;">أصلي: {base_price:,.2f} SAR</span><br>
-                            <b style="color: #c0392b; font-size:15px;">مخفض: {display_sale_price:,.2f} SAR</b>
-                            <span style="background:#c0392b; color:#fff; padding:2px 5px; border-radius:4px; font-size:10px;">وفرت {discount_pct}%</span>
-                        </div>
-                    """, unsafe_allow_html=True)
+                    st.markdown(f"<div style="background:#fff3cd; padding:10px; border-radius:8px; border-right:5px solid #ffc107;"><span style="text-decoration: line-through; color: #7f8c8d; font-size:12px;">أصلي: {base_price:,.2f} SAR</span><br><b style="color: #c0392b; font-size:15px;">مخفض: {display_sale_price:,.2f} SAR</b><span style="background:#c0392b; color:#fff; padding:2px 5px; border-radius:4px; font-size:10px;">وفرت {discount_pct}%</span></div>", unsafe_allow_html=True)
                     st.markdown(f"📅 بداية التخفيض: `{sale_start_date}`")
                     st.markdown(f"📅 نهاية التخفيض: `{sale_end_date}`")
                 else:
-                    st.markdown(f"""
-                        <div style="background:#e2e8f0; padding:10px; border-radius:8px; border-right:5px solid #4a5568;">
-                            <b style="color:#2d3748; font-size:14px;">سعر ثابت: {base_price:,.2f} SAR</b>
-                        </div>
-                    """, unsafe_allow_html=True)
+                    st.markdown(f"<div style="background:#e2e8f0; padding:10px; border-radius:8px; border-right:5px solid #4a5568;"><b style="color:#2d3748; font-size:14px;">سعر ثابت: {base_price:,.2f} SAR</b></div>", unsafe_allow_html=True)
                 
                 with st.expander("💰 تحديث الأسعار"):
                     np = st.number_input("أصلي (SAR):", min_value=0.0, value=float(base_price), key=f"np_{p_id}_{idx}")
