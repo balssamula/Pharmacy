@@ -17,6 +17,12 @@ from utils import (
     get_product_details, get_group_products
 )
 
+TAX_EXEMPTION_CAUSES = [
+    "الخدمات المالية", "عقد تأمين على الحياة", "التوريدات العقارية المعفاة", 
+    "صادرات السلع من المملكة", "صادرات الخدمات من المملكة", "النقل الدولي للسلع", 
+    "النقل الدولي للركاب", "توريد وسائل النقل", "الأدوية والمعدات الطبية"
+]
+
 # ==========================================
 # 🌐 دوال المزامنة العامة (مشتركة بين الصفحات)
 # ==========================================
@@ -34,8 +40,52 @@ def initialize_global_products():
     if "branches" not in st.session_state:
         st.session_state["branches"] = []
 
+# ==========================================
+# 🌟 دالة السحب الذكية مع شريط التقدم المرئي
+# ==========================================
+def fetch_all_pages_with_progress(url_base, headers, loading_text="جاري التحميل..."):
+    """
+    جلب جميع الصفحات من API مع شريط تقدم وعداد المنتجات
+    """
+    all_data = []
+    page = 1
+    total_pages = 1
+    status_text = st.empty()
+    progress_bar = st.progress(0)
+    
+    while True:
+        # عرض حالة التقدم
+        status_text.info(f"📥 {loading_text} (صفحة {page} من {total_pages if page > 1 else '...'}) | تم تحميل {len(all_data)} عنصر")
+        
+        # بناء الـ URL
+        if "?" not in url_base:
+            url = f"{url_base}?per_page=100&page={page}"
+        else:
+            url = f"{url_base}&per_page=100&page={page}"
+        
+        res = safe_api_request("GET", url, headers)
+        if not res or not res.get("data"):
+            break
+        
+        # تحديث عدد الصفحات الكلي
+        if page == 1:
+            total_pages = res.get("pagination", {}).get("totalPages", 1)
+        
+        all_data.extend(res["data"])
+        
+        # تحديث شريط التقدم
+        progress_bar.progress(min(page / total_pages, 1.0))
+        
+        if page >= total_pages:
+            break
+        page += 1
+    
+    progress_bar.empty()
+    status_text.empty()
+    return all_data
+
 def perform_global_sync():
-    """مزامنة عامة لجميع الصفحات (تُستدعى مرة واحدة)"""
+    """مزامنة عامة لجميع الصفحات مع شريط تقدم"""
     headers = get_headers()
     if not headers:
         return
@@ -45,46 +95,43 @@ def perform_global_sync():
     
     with st.spinner("⏳ جاري التحميل الأولي للمنتجات والعروض..."):
         try:
-            # جلب المنتجات
-            all_p = []
-            page = 1
-            progress_bar = st.progress(0)
-            status_text = st.empty()
+            # ✅ جلب المنتجات مع شريط تقدم
+            st.session_state["all_products"] = fetch_all_pages_with_progress(
+                "https://api.salla.dev/admin/v2/products",
+                headers,
+                "جاري سحب قائمة المنتجات"
+            )
             
-            while True:
-                res = safe_api_request("GET", f"https://api.salla.dev/admin/v2/products?per_page=100&page={page}", headers)
-                if not res or not res.get("data"): 
-                    break
-                all_p.extend(res["data"])
-                
-                total_pages = res.get("pagination", {}).get("totalPages", 1)
-                progress_bar.progress(page / total_pages)
-                status_text.info(f"📥 تحميل المنتجات: صفحة {page} من {total_pages} | تم تحميل {len(all_p)} منتج")
-                
-                if page >= total_pages: 
-                    break
-                page += 1
-            
-            st.session_state["all_products"] = all_p
-            
-            # جلب الفروع
+            # ✅ جلب الفروع
             st.session_state["branches"] = get_branches_list()
             
-            # جلب العروض
-            all_o = []
-            o_page = 1
-            while True:
-                ores = safe_api_request("GET", f"https://api.salla.dev/admin/v2/specialoffers?per_page=100&page={o_page}", headers)
-                if not ores or not ores.get("data"): 
-                    break
-                all_o.extend(ores["data"])
-                if o_page >= ores.get("pagination", {}).get("totalPages", 1): 
-                    break
-                o_page += 1
+            # ✅ جلب التصنيفات (للأغراض المساعدة)
+            if "all_categories" not in st.session_state:
+                st.session_state["all_categories"] = fetch_all_pages_with_progress(
+                    "https://api.salla.dev/admin/v2/categories",
+                    headers,
+                    "جاري سحب التصنيفات"
+                )
             
+            # ✅ جلب الماركات (للأغراض المساعدة)
+            if "all_brands" not in st.session_state:
+                st.session_state["all_brands"] = fetch_all_pages_with_progress(
+                    "https://api.salla.dev/admin/v2/brands",
+                    headers,
+                    "جاري سحب الماركات التجارية"
+                )
+            
+            # ✅ جلب العروض مع شريط تقدم
+            all_o = fetch_all_pages_with_progress(
+                "https://api.salla.dev/admin/v2/specialoffers",
+                headers,
+                "جاري سحب العروض"
+            )
+            
+            # تحليل العروض وربطها بالمنتجات
             po_map = {}
             for o in all_o:
-                if o.get("status") != "active": 
+                if o.get("status") != "active":
                     continue
                 oid = o.get("id")
                 full_o = safe_api_request("GET", f"https://api.salla.dev/admin/v2/specialoffers/{oid}", headers)
@@ -92,14 +139,14 @@ def perform_global_sync():
                     pids = set()
                     for px in full_o["data"].get("buy", {}).get("products", []):
                         pid = str(px.get("id", px) if isinstance(px, dict) else px)
-                        if pid.isdigit(): 
+                        if pid.isdigit():
                             pids.add(pid)
                     for px in full_o["data"].get("get", {}).get("products", []):
                         pid = str(px.get("id", px) if isinstance(px, dict) else px)
-                        if pid.isdigit(): 
+                        if pid.isdigit():
                             pids.add(pid)
                     for pid in pids:
-                        if pid not in po_map: 
+                        if pid not in po_map:
                             po_map[pid] = []
                         po_map[pid].append({"id": oid, "name": o.get("name")})
             
@@ -107,18 +154,10 @@ def perform_global_sync():
             st.session_state["all_products_fetched"] = True
             st.session_state["last_sync_time"] = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
             
-            progress_bar.empty()
-            status_text.empty()
-            st.success(f"✅ تم تحميل {len(all_p)} منتج و {len(all_o)} عرض بنجاح!")
+            st.success(f"✅ تم تحميل {len(st.session_state['all_products'])} منتج، {len(all_o)} عرض، {len(st.session_state.get('all_categories', []))} تصنيف، {len(st.session_state.get('all_brands', []))} ماركة بنجاح!")
             
         except Exception as e:
             st.error(f"❌ فشل المزامنة: {str(e)}")
-            
-TAX_EXEMPTION_CAUSES = [
-    "الخدمات المالية", "عقد تأمين على الحياة", "التوريدات العقارية المعفاة", 
-    "صادرات السلع من المملكة", "صادرات الخدمات من المملكة", "النقل الدولي للسلع", 
-    "النقل الدولي للركاب", "توريد وسائل النقل", "الأدوية والمعدات الطبية"
-]
 
 # ==========================================
 # ⚙️ 1. دوال التهيئة والمزامنة وجلب البيانات (Clean Code)
@@ -132,7 +171,9 @@ def initialize_session():
         "prod_page": 1,
         "branches": [],
         "last_sync_time": None,
-        "product_offers_map": {}
+        "product_offers_map": {},
+        "all_categories": [],
+        "all_brands": []
     }
     for key, val in defaults.items():
         if key not in st.session_state:
@@ -183,7 +224,6 @@ def perform_sync(headers: Dict[str, str]):
             for o in all_o:
                 if o.get("status") != "active": continue
                 oid = o.get("id")
-                # قراءة التفاصيل العميقة لكل عرض نشط
                 full_o = safe_api_request("GET", f"https://api.salla.dev/admin/v2/specialoffers/{oid}", headers)
                 if full_o and full_o.get("data"):
                     pids = set()
@@ -193,7 +233,6 @@ def perform_sync(headers: Dict[str, str]):
                     for px in full_o["data"].get("get", {}).get("products", []):
                         pid = str(px.get("id", px) if isinstance(px, dict) else px)
                         if pid.isdigit(): pids.add(pid)
-                    # تسجيل المنتج كجزء من هذا العرض
                     for pid in pids:
                         if pid not in po_map: po_map[pid] = []
                         po_map[pid].append({"id": oid, "name": o.get("name")})
@@ -207,106 +246,7 @@ def perform_sync(headers: Dict[str, str]):
             
         except Exception as e:
             st.error(f"❌ حدث خطأ غير متوقع أثناء المزامنة: {str(e)}")
-            
-def fetch_group_products(parent_id: int, headers: Dict[str, str]) -> List[Dict]:
-    """جلب المنتجات الفرعية لمجموعة بذكاء مع التعامل مع تباينات الـ API"""
-    items = []
-    try:
-        res = safe_api_request("GET", f"https://api.salla.dev/admin/v2/products/{parent_id}", headers)
-        if not res or not res.get('data'): return items
-        
-        data = res['data']
-        # الطريقة 1: مصفوفة grouped_items (الأحدث)
-        if data.get('grouped_items'):
-            for item in data['grouped_items']:
-                prod = item.get('product', {})
-                if prod:
-                    items.append({
-                        'id': prod.get('id'), 'name': prod.get('name', 'بدون اسم'), 'sku': prod.get('sku', 'لا يوجد'),
-                        'price': get_flat_price(prod.get('price', 0)), 'bundle_quantity': item.get('quantity', 1),
-                        'stock_quantity': prod.get('quantity', 0), 'status': prod.get('status', 'sale'),
-                        'image': prod.get('thumbnail') or prod.get('main_image'), 'url': prod.get('url'),
-                        'with_tax': prod.get('with_tax', True)
-                    })
-        # الطريقة 2: مصفوفة skus (الأساسية)
-        elif data.get('skus'):
-            for sku in data['skus']:
-                sku_id = sku.get('id')
-                if not sku_id: continue
-                items.append({
-                    'id': sku_id, 'name': sku.get('name', 'بدون اسم'), 'sku': sku.get('sku', 'لا يوجد'),
-                    'price': get_flat_price(sku.get('price', 0)), 'bundle_quantity': sku.get('quantity', 1),
-                    'stock_quantity': sku.get('stock_quantity', 0), 'status': sku.get('status', 'sale'),
-                    'image': "", 'url': "", 'with_tax': True
-                })
-    except Exception as e:
-        st.error(f"❌ خطأ أثناء جلب تفاصيل المجموعة: {str(e)}")
-    return items
 
-def fetch_group_products_v2(parent_id: int, headers: Dict[str, str]) -> List[Dict]:
-    """جلب المنتجات الفرعية لمجموعة باستخدام API سلة الصحيح"""
-    items = []
-    try:
-        # ✅ جلب تفاصيل المنتج الأب
-        res = safe_api_request("GET", f"https://api.salla.dev/admin/v2/products/{parent_id}", headers)
-        if not res or not res.get('data'): return items
-        
-        data = res['data']
-        
-        # ✅ الطريقة الصحيحة: سلة تستخدم 'skus' مع بيانات كاملة
-        skus = data.get('skus', [])
-        
-        for sku in skus:
-            sku_id = sku.get('id')
-            if not sku_id:
-                continue
-            
-            # ✅ جلب تفاصيل المنتج الفرعي الكاملة
-            sub_res = safe_api_request("GET", f"https://api.salla.dev/admin/v2/products/{sku_id}", headers)
-            if sub_res and sub_res.get('data'):
-                sp = sub_res['data']
-                items.append({
-                    'id': sp.get('id'),
-                    'name': sp.get('name', 'منتج بدون اسم'),
-                    'sku': sp.get('sku', 'لا يوجد'),
-                    'price': get_flat_price(sp.get('price', 0)),
-                    'bundle_quantity': sku.get('quantity', 1),
-                    'stock_quantity': sp.get('quantity', 0),
-                    'sold_quantity': sp.get('sold_quantity', 0),
-                    'status': sp.get('status', 'sale'),
-                    'image': sp.get('thumbnail') or sp.get('main_image'),
-                    'url': sp.get('url'),
-                    'with_tax': sp.get('with_tax', True)
-                })
-        
-        # ✅ إذا لم يتم العثور على منتجات، جرب طريقة grouped_items
-        if not items:
-            grouped_items = data.get('grouped_items', [])
-            for item in grouped_items:
-                prod = item.get('product', {})
-                if prod and prod.get('id'):
-                    sub_res = safe_api_request("GET", f"https://api.salla.dev/admin/v2/products/{prod.get('id')}", headers)
-                    if sub_res and sub_res.get('data'):
-                        sp = sub_res['data']
-                        items.append({
-                            'id': sp.get('id'),
-                            'name': sp.get('name', 'منتج بدون اسم'),
-                            'sku': sp.get('sku', 'لا يوجد'),
-                            'price': get_flat_price(sp.get('price', 0)),
-                            'bundle_quantity': item.get('quantity', 1),
-                            'stock_quantity': sp.get('quantity', 0),
-                            'sold_quantity': sp.get('sold_quantity', 0),
-                            'status': sp.get('status', 'sale'),
-                            'image': sp.get('thumbnail') or sp.get('main_image'),
-                            'url': sp.get('url'),
-                            'with_tax': sp.get('with_tax', True)
-                        })
-        
-    except Exception as e:
-        st.error(f"❌ خطأ: {str(e)}")
-    
-    return items
-    
 # ==========================================
 # 🎨 2. مكونات واجهة المستخدم (UI Components)
 # ==========================================
@@ -321,11 +261,102 @@ def render_sync_and_status(headers: Dict[str, str]):
 
     if st.session_state["all_products_fetched"]:
         col_info1, col_info2 = st.columns(2)
-        with col_info1: st.success(f"✅ تم تحميل {len(st.session_state['all_products'])} منتج في الذاكرة")
+        with col_info1: 
+            st.success(f"✅ تم تحميل {len(st.session_state['all_products'])} منتج في الذاكرة")
         with col_info2:
-            if st.session_state["last_sync_time"]: st.info(f"🕐 آخر مزامنة: {st.session_state['last_sync_time']}")
+            if st.session_state["last_sync_time"]: 
+                st.info(f"🕐 آخر مزامنة: {st.session_state['last_sync_time']}")
     else:
         st.warning("⚠️ يرجى الضغط على زر 'مزامنة وجلب كافة المنتجات' أولاً ليتم تحميل كامل منتجات المتجر.")
+
+def render_products_page():
+    st.markdown("""
+    <div style="background: linear-gradient(135deg, #0F1C2E 0%, #00EBCF 100%); padding: 15px 25px; border-radius: 12px; color: white; margin-bottom: 20px; box-shadow: 0 4px 6px rgba(0,0,0,0.1);">
+        <h2 style="color: white; margin: 0;">📦 مركز إدارة المنتجات الذكي والمتقدم</h2>
+    </div>
+    """, unsafe_allow_html=True)
+    
+    headers = get_headers()
+    if not headers: 
+        return
+
+    # ✅ تهيئة المتغيرات العامة
+    initialize_global_products()
+    
+    # ✅ المزامنة العامة (مرة واحدة فقط)
+    if not st.session_state.get("all_products_fetched", False):
+        perform_global_sync()
+        st.rerun()
+    
+    # ✅ تهيئة المتغيرات المحلية
+    initialize_session()
+    render_sync_and_status(headers)
+    st.divider()
+    
+    if not st.session_state["all_products_fetched"]: 
+        return
+
+    render_settings_and_templates(headers)
+    render_matching_section(headers)
+    st.divider()
+
+    # --- الفلاتر والعرض ---
+    st.markdown("### 🔍 أدوات التصفية والبحث في المنتجات")
+    sq = st.text_input("ابحث باسم أو SKU:").lower()
+    
+    f1, f2, f3, f4, f5 = st.columns(5)
+    with f1: f_hid = st.checkbox("مخفي")
+    with f2: f_img = st.checkbox("بدون صورة")
+    with f3: f_pro = st.checkbox("له عنوان ترويجي")
+    with f4: f_dis = st.checkbox("له سعر مخفض ")
+    with f5: f_grp = st.checkbox("📦 مجموعات منتجات فقط")
+
+    filtered = []
+    for p in st.session_state["all_products"]:
+        if sq and sq not in str(p.get('name', '')).lower() and sq not in str(p.get('sku', '')).lower(): 
+            continue
+        if f_hid and p.get('status') != 'hidden': 
+            continue
+        if f_img and p.get('thumbnail'): 
+            continue
+        if f_pro and not p.get('promotion_title'): 
+            continue
+        if f_grp and p.get('type') != 'group_products': 
+            continue
+        
+        # فلتر المخفض
+        pr = get_flat_price(p.get('price', 0))
+        reg = get_flat_price(p.get('regular_price', 0))
+        sal = get_flat_price(p.get('sale_price', 0))
+        if f_dis and not (sal > 0 and sal < (reg if reg > 0 else pr)): 
+            continue
+            
+        filtered.append(p)
+        
+    st.info(f"📊 النتائج: {len(filtered)} منتج")
+
+    # Pagination
+    limit = 20
+    pages = max(1, (len(filtered) + limit - 1) // limit)
+    if st.session_state["prod_page"] > pages: 
+        st.session_state["prod_page"] = pages
+    start = (st.session_state["prod_page"] - 1) * limit
+    
+    cp, cc, cn = st.columns([1,2,1])
+    with cp:
+        if st.button("⬅️", disabled=st.session_state["prod_page"]==1, use_container_width=True): 
+            st.session_state["prod_page"] -= 1
+            st.rerun()
+    with cc: 
+        st.markdown(f"<h4 style='text-align:center;'>📄 صفحة {st.session_state['prod_page']} من {pages}</h4>", unsafe_allow_html=True)
+    with cn:
+        if st.button("➡️", disabled=st.session_state["prod_page"]==pages, use_container_width=True): 
+            st.session_state["prod_page"] += 1
+            st.rerun()
+
+    for idx, p in enumerate(filtered[start:start+limit]):
+        render_product_card(start + idx, p, headers)
+
 
 def render_settings_and_templates(headers: Dict[str, str]):
     """يعرض إعدادات الربط وتحميل القوالب والكميات"""
@@ -819,94 +850,6 @@ def render_product_card(idx: int, p: Dict, headers: Dict[str, str]):
 # ==========================================
 # 🚀 4. الدالة الرئيسية للملف
 # ==========================================
-
-def render_products_page():
-    st.markdown("""
-    <div style="background: linear-gradient(135deg, #0F1C2E 0%, #00EBCF 100%); padding: 15px 25px; border-radius: 12px; color: white; margin-bottom: 20px; box-shadow: 0 4px 6px rgba(0,0,0,0.1);">
-        <h2 style="color: white; margin: 0;">📦 مركز إدارة المنتجات الذكي والمتقدم</h2>
-    </div>
-    """, unsafe_allow_html=True)
-    
-    headers = get_headers()
-    if not headers: 
-        return
-
-    # ✅ تهيئة المتغيرات العامة
-    initialize_global_products()
-    
-    # ✅ المزامنة العامة (مرة واحدة فقط)
-    if not st.session_state.get("all_products_fetched", False):
-        perform_global_sync()
-        st.rerun()
-    
-    # ✅ تهيئة المتغيرات المحلية
-    initialize_session()
-    render_sync_and_status(headers)
-    st.divider()
-    
-    if not st.session_state["all_products_fetched"]: 
-        return
-    
-    render_settings_and_templates(headers)
-    render_matching_section(headers)
-    st.divider()
-
-    # --- الفلاتر والعرض ---
-    st.markdown("### 🔍 أدوات التصفية والبحث في المنتجات")
-    sq = st.text_input("ابحث باسم أو SKU:").lower()
-    
-    f1, f2, f3, f4, f5 = st.columns(5)
-    with f1: f_hid = st.checkbox("مخفي")
-    with f2: f_img = st.checkbox("بدون صورة")
-    with f3: f_pro = st.checkbox("له عنوان ترويجي")
-    with f4: f_dis = st.checkbox("له سعر مخفض ")
-    with f5: f_grp = st.checkbox("📦 مجموعات منتجات فقط")
-
-    filtered = []
-    for p in st.session_state["all_products"]:
-        if sq and sq not in str(p.get('name', '')).lower() and sq not in str(p.get('sku', '')).lower(): 
-            continue
-        if f_hid and p.get('status') != 'hidden': 
-            continue
-        if f_img and p.get('thumbnail'): 
-            continue
-        if f_pro and not p.get('promotion_title'): 
-            continue
-        if f_grp and p.get('type') != 'group_products': 
-            continue
-        
-        # فلتر المخفض
-        pr = get_flat_price(p.get('price', 0))
-        reg = get_flat_price(p.get('regular_price', 0))
-        sal = get_flat_price(p.get('sale_price', 0))
-        if f_dis and not (sal > 0 and sal < (reg if reg > 0 else pr)): 
-            continue
-            
-        filtered.append(p)
-        
-    st.info(f"📊 النتائج: {len(filtered)} منتج")
-
-    # Pagination
-    limit = 20
-    pages = max(1, (len(filtered) + limit - 1) // limit)
-    if st.session_state["prod_page"] > pages: 
-        st.session_state["prod_page"] = pages
-    start = (st.session_state["prod_page"] - 1) * limit
-    
-    cp, cc, cn = st.columns([1,2,1])
-    with cp:
-        if st.button("⬅️", disabled=st.session_state["prod_page"]==1, use_container_width=True): 
-            st.session_state["prod_page"] -= 1
-            st.rerun()
-    with cc: 
-        st.markdown(f"<h4 style='text-align:center;'>📄 صفحة {st.session_state['prod_page']} من {pages}</h4>", unsafe_allow_html=True)
-    with cn:
-        if st.button("➡️", disabled=st.session_state["prod_page"]==pages, use_container_width=True): 
-            st.session_state["prod_page"] += 1
-            st.rerun()
-
-    for idx, p in enumerate(filtered[start:start+limit]):
-        render_product_card(start + idx, p, headers)
 
 def get_branch_quantities(product_id: int) -> Dict:
     """جلب كميات المنتج في جميع الفروع"""
