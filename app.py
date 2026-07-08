@@ -13,6 +13,17 @@ from offers_page import render_offers_page
 from products_page import render_products_page
 from customers_page import render_customers_page
 
+def initialize_global_products():
+    """تهيئة المنتجات بشكل عام لجميع الصفحات"""
+    if "all_products" not in st.session_state:
+        st.session_state["all_products"] = []
+    if "all_products_fetched" not in st.session_state:
+        st.session_state["all_products_fetched"] = False
+    if "last_sync_time" not in st.session_state:
+        st.session_state["last_sync_time"] = None
+    if "product_offers_map" not in st.session_state:
+        st.session_state["product_offers_map"] = {}
+        
 # ==============================================================================================
 # CSS الاحترافي الحاسم لعزل خط كايرو عن عناصر الرموز والـ Ligatures (expand_more و arrow_down)
 # وتصميم القائمة الجانبية المائلة الديناميكية
