@@ -13,9 +13,107 @@ from utils import (
     update_product_tax_secure, get_branches_list, generate_quantities_template, 
     process_quantities_import, fill_salla_template, generate_salla_new_products_file, 
     delete_product, update_product_price, update_product_sale_price, 
-    update_group_product_quantity, remove_product_from_group, add_product_to_group
+    update_group_product_quantity, remove_product_from_group, add_product_to_group,
+    get_product_details, get_group_products
 )
 
+# ==========================================
+# 🌐 دوال المزامنة العامة (مشتركة بين الصفحات)
+# ==========================================
+
+def initialize_global_products():
+    """تهيئة المنتجات بشكل عام لجميع الصفحات"""
+    if "all_products" not in st.session_state:
+        st.session_state["all_products"] = []
+    if "all_products_fetched" not in st.session_state:
+        st.session_state["all_products_fetched"] = False
+    if "last_sync_time" not in st.session_state:
+        st.session_state["last_sync_time"] = None
+    if "product_offers_map" not in st.session_state:
+        st.session_state["product_offers_map"] = {}
+    if "branches" not in st.session_state:
+        st.session_state["branches"] = []
+
+def perform_global_sync():
+    """مزامنة عامة لجميع الصفحات (تُستدعى مرة واحدة)"""
+    headers = get_headers()
+    if not headers:
+        return
+    
+    if st.session_state.get("all_products_fetched", False):
+        return  # تم التحميل مسبقاً
+    
+    with st.spinner("⏳ جاري التحميل الأولي للمنتجات والعروض..."):
+        try:
+            # جلب المنتجات
+            all_p = []
+            page = 1
+            progress_bar = st.progress(0)
+            status_text = st.empty()
+            
+            while True:
+                res = safe_api_request("GET", f"https://api.salla.dev/admin/v2/products?per_page=100&page={page}", headers)
+                if not res or not res.get("data"): 
+                    break
+                all_p.extend(res["data"])
+                
+                total_pages = res.get("pagination", {}).get("totalPages", 1)
+                progress_bar.progress(page / total_pages)
+                status_text.info(f"📥 تحميل المنتجات: صفحة {page} من {total_pages} | تم تحميل {len(all_p)} منتج")
+                
+                if page >= total_pages: 
+                    break
+                page += 1
+            
+            st.session_state["all_products"] = all_p
+            
+            # جلب الفروع
+            st.session_state["branches"] = get_branches_list()
+            
+            # جلب العروض
+            all_o = []
+            o_page = 1
+            while True:
+                ores = safe_api_request("GET", f"https://api.salla.dev/admin/v2/specialoffers?per_page=100&page={o_page}", headers)
+                if not ores or not ores.get("data"): 
+                    break
+                all_o.extend(ores["data"])
+                if o_page >= ores.get("pagination", {}).get("totalPages", 1): 
+                    break
+                o_page += 1
+            
+            po_map = {}
+            for o in all_o:
+                if o.get("status") != "active": 
+                    continue
+                oid = o.get("id")
+                full_o = safe_api_request("GET", f"https://api.salla.dev/admin/v2/specialoffers/{oid}", headers)
+                if full_o and full_o.get("data"):
+                    pids = set()
+                    for px in full_o["data"].get("buy", {}).get("products", []):
+                        pid = str(px.get("id", px) if isinstance(px, dict) else px)
+                        if pid.isdigit(): 
+                            pids.add(pid)
+                    for px in full_o["data"].get("get", {}).get("products", []):
+                        pid = str(px.get("id", px) if isinstance(px, dict) else px)
+                        if pid.isdigit(): 
+                            pids.add(pid)
+                    for pid in pids:
+                        if pid not in po_map: 
+                            po_map[pid] = []
+                        po_map[pid].append({"id": oid, "name": o.get("name")})
+            
+            st.session_state["product_offers_map"] = po_map
+            st.session_state["all_products_fetched"] = True
+            st.session_state["last_sync_time"] = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+            
+            progress_bar.empty()
+            status_text.empty()
+            st.success(f"✅ تم تحميل {len(all_p)} منتج و {len(all_o)} عرض بنجاح!")
+            
+        except Exception as e:
+            st.error(f"❌ فشل المزامنة: {str(e)}")
+            
 TAX_EXEMPTION_CAUSES = [
     "الخدمات المالية", "عقد تأمين على الحياة", "التوريدات العقارية المعفاة", 
     "صادرات السلع من المملكة", "صادرات الخدمات من المملكة", "النقل الدولي للسلع", 
@@ -109,7 +207,7 @@ def perform_sync(headers: Dict[str, str]):
             
         except Exception as e:
             st.error(f"❌ حدث خطأ غير متوقع أثناء المزامنة: {str(e)}")
-
+            
 def fetch_group_products(parent_id: int, headers: Dict[str, str]) -> List[Dict]:
     """جلب المنتجات الفرعية لمجموعة بذكاء مع التعامل مع تباينات الـ API"""
     items = []
@@ -730,18 +828,24 @@ def render_products_page():
     """, unsafe_allow_html=True)
     
     headers = get_headers()
-    if not headers: return
+    if not headers: 
+        return
 
-    initialize_global_products()  # تأكد من وجودها
+    # ✅ تهيئة المتغيرات العامة
+    initialize_global_products()
+    
+    # ✅ المزامنة العامة (مرة واحدة فقط)
     if not st.session_state.get("all_products_fetched", False):
         perform_global_sync()
         st.rerun()
-        
+    
+    # ✅ تهيئة المتغيرات المحلية
     initialize_session()
     render_sync_and_status(headers)
     st.divider()
     
-    if not st.session_state["all_products_fetched"]: return
+    if not st.session_state["all_products_fetched"]: 
+        return
     
     render_settings_and_templates(headers)
     render_matching_section(headers)
@@ -760,17 +864,23 @@ def render_products_page():
 
     filtered = []
     for p in st.session_state["all_products"]:
-        if sq and sq not in str(p.get('name', '')).lower() and sq not in str(p.get('sku', '')).lower(): continue
-        if f_hid and p.get('status') != 'hidden': continue
-        if f_img and p.get('thumbnail'): continue
-        if f_pro and not p.get('promotion_title'): continue
-        if f_grp and p.get('type') != 'group_products': continue
+        if sq and sq not in str(p.get('name', '')).lower() and sq not in str(p.get('sku', '')).lower(): 
+            continue
+        if f_hid and p.get('status') != 'hidden': 
+            continue
+        if f_img and p.get('thumbnail'): 
+            continue
+        if f_pro and not p.get('promotion_title'): 
+            continue
+        if f_grp and p.get('type') != 'group_products': 
+            continue
         
         # فلتر المخفض
         pr = get_flat_price(p.get('price', 0))
         reg = get_flat_price(p.get('regular_price', 0))
         sal = get_flat_price(p.get('sale_price', 0))
-        if f_dis and not (sal > 0 and sal < (reg if reg > 0 else pr)): continue
+        if f_dis and not (sal > 0 and sal < (reg if reg > 0 else pr)): 
+            continue
             
         filtered.append(p)
         
@@ -779,17 +889,21 @@ def render_products_page():
     # Pagination
     limit = 20
     pages = max(1, (len(filtered) + limit - 1) // limit)
-    if st.session_state["prod_page"] > pages: st.session_state["prod_page"] = pages
+    if st.session_state["prod_page"] > pages: 
+        st.session_state["prod_page"] = pages
     start = (st.session_state["prod_page"] - 1) * limit
     
     cp, cc, cn = st.columns([1,2,1])
     with cp:
         if st.button("⬅️", disabled=st.session_state["prod_page"]==1, use_container_width=True): 
-            st.session_state["prod_page"] -= 1; st.rerun()
-    with cc: st.markdown(f"<h4 style='text-align:center;'>📄 صفحة {st.session_state['prod_page']} من {pages}</h4>", unsafe_allow_html=True)
+            st.session_state["prod_page"] -= 1
+            st.rerun()
+    with cc: 
+        st.markdown(f"<h4 style='text-align:center;'>📄 صفحة {st.session_state['prod_page']} من {pages}</h4>", unsafe_allow_html=True)
     with cn:
         if st.button("➡️", disabled=st.session_state["prod_page"]==pages, use_container_width=True): 
-            st.session_state["prod_page"] += 1; st.rerun()
+            st.session_state["prod_page"] += 1
+            st.rerun()
 
     for idx, p in enumerate(filtered[start:start+limit]):
         render_product_card(start + idx, p, headers)
