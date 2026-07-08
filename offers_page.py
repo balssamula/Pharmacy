@@ -7,7 +7,7 @@ from utils import (
     get_headers, safe_api_request, SALLA_API_URL, generate_salla_excel_template,
     process_excel_import, export_offers_to_excel, safe_parse_date,
     OFFER_TYPES_MAP, CHANNELS_MAP, APPLIED_TO_MAP, safe_float,
-    update_product_promotions_secure # دالة التحديث الآمن للعناوين
+    update_product_promotions_secure
 )
 
 def render_offers_page():
@@ -35,7 +35,7 @@ def render_offers_page():
         /* التصميم الأساسي لكل زر بشكل منفصل */
         div[data-testid="stElementContainer"]:has(span[id^="qa-marker-"]) + div[data-testid="stElementContainer"] {
             position: fixed !important;
-            right: -240px !important; /* إخفاء معظم مساحة الزر */
+            right: -240px !important;
             width: 280px !important;
             background: linear-gradient(135deg, #1E293B 0%, #0F1C2E 100%) !important;
             padding: 5px 10px !important;
@@ -86,7 +86,7 @@ def render_offers_page():
     """, unsafe_allow_html=True)
 
     # ==========================================
-    # 🌟 دالة السحب الذكية مع شريط التقدم المرئي
+    # 🌟 دالة السحب الذكية مع شريط التقدم المرئي (مُصححة)
     # ==========================================
     def fetch_all_pages(url_base, loading_text="جاري التحميل..."):
         all_data = []
@@ -96,44 +96,80 @@ def render_offers_page():
         progress_bar = st.progress(0)
         
         while True:
-            status_text.info(f"📥 تحميل الصفحة {page} من {total_pages} | تم تحميل {len(all_p)} منتج")
-            url = f"{url_base}?per_page=60&page={page}" if "?" not in url_base else f"{url_base}&per_page=60&page={page}"
-            res = safe_api_request("GET", url, headers)
-            if not res or not res.get("data"): break
-            if page == 1: total_pages = res.get("pagination", {}).get("totalPages", 1)
-            all_data.extend(res["data"])
-            progress_bar.progress(min(page / total_pages, 1.0))
-            if page >= total_pages: break
-            page += 1
+            # ✅ عرض عداد العناصر المحملة (تم إصلاح المتغير من all_p إلى all_data)
+            status_text.info(f"📥 {loading_text} (صفحة {page} من {total_pages if page > 1 else '...'}) | تم تحميل {len(all_data)} عنصر")
             
+            # بناء الـ URL
+            if "?" not in url_base:
+                url = f"{url_base}?per_page=100&page={page}"
+            else:
+                url = f"{url_base}&per_page=100&page={page}"
+            
+            res = safe_api_request("GET", url, headers)
+            if not res or not res.get("data"):
+                break
+            
+            # تحديث عدد الصفحات الكلي
+            if page == 1:
+                total_pages = res.get("pagination", {}).get("totalPages", 1)
+            
+            all_data.extend(res["data"])
+            
+            # ✅ تحديث شريط التقدم
+            progress_bar.progress(min(page / total_pages, 1.0))
+            
+            if page >= total_pages:
+                break
+            page += 1
+        
         progress_bar.empty()
         status_text.empty()
         return all_data
     
     # ⚙️ تهيئة وجلب البيانات المساعدة تلقائياً (لتسريع الصفحة)
-    if "all_products" not in st.session_state: st.session_state["all_products"] = []
-    if "all_categories" not in st.session_state: st.session_state["all_categories"] = []
-    if "all_brands" not in st.session_state: st.session_state["all_brands"] = []
+    if "all_products" not in st.session_state: 
+        st.session_state["all_products"] = []
+    if "all_categories" not in st.session_state: 
+        st.session_state["all_categories"] = []
+    if "all_brands" not in st.session_state: 
+        st.session_state["all_brands"] = []
     
+    # ✅ جلب البيانات المساعدة مع شريط تقدم وعداد
     if not st.session_state["all_products"] or not st.session_state["all_categories"] or not st.session_state["all_brands"]:
         with st.spinner("🔄 جاري تهيئة البيانات المساعدة للعروض..."):
-            if not st.session_state["all_categories"]: st.session_state["all_categories"] = fetch_all_pages("https://api.salla.dev/admin/v2/categories", "جاري سحب التصنيفات...")
-            if not st.session_state["all_brands"]: st.session_state["all_brands"] = fetch_all_pages("https://api.salla.dev/admin/v2/brands", "جاري سحب الماركات التجارية...")
-            if not st.session_state["all_products"]: st.session_state["all_products"] = fetch_all_pages("https://api.salla.dev/admin/v2/products", "جاري سحب قائمة المنتجات...")
+            if not st.session_state["all_categories"]: 
+                st.session_state["all_categories"] = fetch_all_pages(
+                    "https://api.salla.dev/admin/v2/categories", 
+                    "جاري سحب التصنيفات"
+                )
+            if not st.session_state["all_brands"]: 
+                st.session_state["all_brands"] = fetch_all_pages(
+                    "https://api.salla.dev/admin/v2/brands", 
+                    "جاري سحب الماركات التجارية"
+                )
+            if not st.session_state["all_products"]: 
+                st.session_state["all_products"] = fetch_all_pages(
+                    "https://api.salla.dev/admin/v2/products", 
+                    "جاري سحب قائمة المنتجات"
+                )
 
     def render_dynamic_selection(label, selection_type, existing_ids, key_prefix):
         options = {}
         if selection_type == "product":
-            for p in st.session_state.get("all_products", []): options[f"🆔 {p.get('id')} - SKU:{p.get('sku','')} - {p.get('name','')}"] = p.get('id')
+            for p in st.session_state.get("all_products", []): 
+                options[f"🆔 {p.get('id')} - SKU:{p.get('sku','')} - {p.get('name','')}"] = p.get('id')
         elif selection_type == "category":
-            for c in st.session_state.get("all_categories", []): options[f"📁 {c.get('name','')} - (ID:{c.get('id')})"] = c.get('id')
+            for c in st.session_state.get("all_categories", []): 
+                options[f"📁 {c.get('name','')} - (ID:{c.get('id')})"] = c.get('id')
         elif selection_type == "brand":
-            for b in st.session_state.get("all_brands", []): options[f"🏢 {b.get('name','')} - (ID:{b.get('id')})"] = b.get('id')
+            for b in st.session_state.get("all_brands", []): 
+                options[f"🏢 {b.get('name','')} - (ID:{b.get('id')})"] = b.get('id')
                 
         selected_labels = []
         options_inv = {v: k for k, v in options.items()}
         for eid in existing_ids:
-            if eid in options_inv: selected_labels.append(options_inv[eid])
+            if eid in options_inv: 
+                selected_labels.append(options_inv[eid])
             else:
                 fallback = f"ID: {eid} (غير متوفر)"
                 options[fallback] = eid
@@ -143,49 +179,74 @@ def render_offers_page():
         return [options[s] for s in selected]
 
     def rebuild_offer_payload(full_offer: dict, overrides: dict) -> dict:
-        def get_id(field_name): return full_offer.get(field_name).get("id") if isinstance(full_offer.get(field_name), dict) else full_offer.get(field_name)
+        def get_id(field_name): 
+            return full_offer.get(field_name).get("id") if isinstance(full_offer.get(field_name), dict) else full_offer.get(field_name)
+        
         payload = {
-            "name": full_offer.get("name", "عرض خاص"), "status": get_id("status") or "active",
-            "offer_type": get_id("offer_type") or "buy_x_get_y", "applied_channel": get_id("applied_channel") or "browser",
-            "applied_to": get_id("applied_to") or "all", "applied_with_coupon": full_offer.get("applied_with_coupon", False)
+            "name": full_offer.get("name", "عرض خاص"), 
+            "status": get_id("status") or "active",
+            "offer_type": get_id("offer_type") or "buy_x_get_y", 
+            "applied_channel": get_id("applied_channel") or "browser",
+            "applied_to": get_id("applied_to") or "all", 
+            "applied_with_coupon": full_offer.get("applied_with_coupon", False)
         }
-        if full_offer.get("start_date"): payload["start_date"] = full_offer["start_date"]
-        if full_offer.get("expiry_date"): payload["expiry_date"] = full_offer["expiry_date"]
-        elif full_offer.get("end_date"): payload["expiry_date"] = full_offer["end_date"]
+        if full_offer.get("start_date"): 
+            payload["start_date"] = full_offer["start_date"]
+        if full_offer.get("expiry_date"): 
+            payload["expiry_date"] = full_offer["expiry_date"]
+        elif full_offer.get("end_date"): 
+            payload["expiry_date"] = full_offer["end_date"]
+        
         for key in ["max_discount_amount", "min_purchase_amount", "min_items_count"]:
-            if full_offer.get(key) is not None: payload[key] = safe_float(full_offer[key]) if "amount" in key else int(safe_float(full_offer[key]))
-        if full_offer.get("customer_groups"): payload["customer_groups"] = [g.get("id", g) if isinstance(g, dict) else g for g in full_offer["customer_groups"]]
+            if full_offer.get(key) is not None: 
+                payload[key] = safe_float(full_offer[key]) if "amount" in key else int(safe_float(full_offer[key]))
+        
+        if full_offer.get("customer_groups"): 
+            payload["customer_groups"] = [g.get("id", g) if isinstance(g, dict) else g for g in full_offer["customer_groups"]]
+        
         if full_offer.get("buy"):
             buy = full_offer["buy"]
             b_type = buy.get("type", {}).get("id") if isinstance(buy.get("type"), dict) else buy.get("type")
             payload["buy"] = {"type": b_type or "quantity", "quantity": int(buy.get("quantity", 1))}
             for cat in ["products", "categories", "brands"]:
-                if buy.get(cat): payload["buy"][cat] = [i.get("id", i) if isinstance(i, dict) else i for i in buy[cat]]
+                if buy.get(cat): 
+                    payload["buy"][cat] = [i.get("id", i) if isinstance(i, dict) else i for i in buy[cat]]
+        
         if full_offer.get("get"):
             get_obj = full_offer["get"]
             g_type = get_obj.get("type", {}).get("id") if isinstance(get_obj.get("type"), dict) else get_obj.get("type")
             g_disc_type = get_obj.get("discount_type", {}).get("id") if isinstance(get_obj.get("discount_type"), dict) else get_obj.get("discount_type")
-            payload["get"] = {"type": g_type or "quantity", "quantity": int(get_obj.get("quantity", 1)), "discount_type": g_disc_type or "percentage"}
-            if get_obj.get("discount_amount") is not None: payload["get"]["discount_amount"] = safe_float(get_obj["discount_amount"])
+            payload["get"] = {
+                "type": g_type or "quantity", 
+                "quantity": int(get_obj.get("quantity", 1)), 
+                "discount_type": g_disc_type or "percentage"
+            }
+            if get_obj.get("discount_amount") is not None: 
+                payload["get"]["discount_amount"] = safe_float(get_obj["discount_amount"])
             for cat in ["products", "categories", "brands"]:
-                if get_obj.get(cat): payload["get"][cat] = [i.get("id", i) if isinstance(i, dict) else i for i in get_obj[cat]]
+                if get_obj.get(cat): 
+                    payload["get"][cat] = [i.get("id", i) if isinstance(i, dict) else i for i in get_obj[cat]]
 
-        for k, v in overrides.items(): payload[k] = v
+        for k, v in overrides.items(): 
+            payload[k] = v
         return payload
 
     # ==========================================
     # ⚡ نظام الإجراءات السريعة الجانبية (الأزرار واللوحات)
     # ==========================================
-    if "qa_action" not in st.session_state: st.session_state.qa_action = None
+    if "qa_action" not in st.session_state: 
+        st.session_state.qa_action = None
 
+    # ✅ جلب العروض مع شريط تقدم وعداد
     with st.spinner("🔄 جاري جلب كافة العروض الحالية من المتجر..."):
-        raw_offers = fetch_all_pages(SALLA_API_URL, "جاري سحب العروض من متجرك...")
+        raw_offers = fetch_all_pages(SALLA_API_URL, "جاري سحب العروض من متجرك")
 
     # 1. إيقاف العروض
     st.markdown('<span id="qa-marker-1"></span>', unsafe_allow_html=True)
     if st.button("⏹️ إيقاف جميع العروض المفعلة", key="btn_qa_1"):
         active_offers = [o for o in raw_offers if o.get('status') == 'active']
-        if not active_offers: st.warning("لا توجد عروض مفعلة")
+        if not active_offers: 
+            st.warning("لا توجد عروض مفعلة")
         else:
             with st.spinner("جاري الإيقاف..."):
                 c = sum(1 for o in active_offers if safe_api_request("PUT", f"{SALLA_API_URL}/{o.get('id')}/status", headers, json={"status": "inactive"}))
@@ -213,9 +274,11 @@ def render_offers_page():
             for offer_summary in active_offers:
                 offer_id = offer_summary.get("id")
                 full_offer_res = safe_api_request("GET", f"{SALLA_API_URL}/{offer_id}", headers)
-                if not full_offer_res or not full_offer_res.get("data"): continue
+                if not full_offer_res or not full_offer_res.get("data"): 
+                    continue
                 payload = rebuild_offer_payload(full_offer_res["data"], {"applied_with_coupon": True})
-                if safe_api_request("PUT", f"{SALLA_API_URL}/{offer_id}", headers, json=payload): c += 1
+                if safe_api_request("PUT", f"{SALLA_API_URL}/{offer_id}", headers, json=payload): 
+                    c += 1
             st.success(f"تم تفعيل دمج الكوبونات لـ {c} عرض!")
         st.session_state.qa_action = None
 
@@ -237,22 +300,28 @@ def render_offers_page():
                     st.rerun()
 
             if st.session_state.qa_action == "end_dates":
-                with col_t: st.markdown("### 📅 إدارة وتمديد تواريخ الانتهاء")
+                with col_t: 
+                    st.markdown("### 📅 إدارة وتمديد تواريخ الانتهاء")
                 target_scope_end = st.radio("استهداف العروض للتمديد/الإنهاء:", ["تنتهي في تاريخ محدد", "جميع العروض المتاحة"], key="b_end_scope")
                 if target_scope_end == "تنتهي في تاريخ محدد":
                     col_date1, col_time1 = st.columns(2)
-                    with col_date1: target_date = st.date_input("تاريخ الانتهاء الحالي:", value=datetime.now().date(), key="be_t_date")
-                    with col_time1: target_time = st.time_input("الوقت:", value=datetime.now().time().replace(minute=59, second=59), key="be_t_time")
+                    with col_date1: 
+                        target_date = st.date_input("تاريخ الانتهاء الحالي:", value=datetime.now().date(), key="be_t_date")
+                    with col_time1: 
+                        target_time = st.time_input("الوقت:", value=datetime.now().time().replace(minute=59, second=59), key="be_t_time")
                     target_str = datetime.combine(target_date, target_time).strftime('%Y-%m-%d')
                     matching_offers_end = [o for o in raw_offers if o.get('expiry_date', '') and o.get('expiry_date', '').startswith(target_str)]
-                else: matching_offers_end = raw_offers
+                else: 
+                    matching_offers_end = raw_offers
 
                 action_type = st.radio("الإجراء المطلوب تنفيذه:", ["تاريخ جديد للتمديد", "إلغاء التفعيل", "مسح العناوين الترويجية لمنتجاتها"], key="be_action")
                 
                 if action_type == "تاريخ جديد للتمديد":
                     col_date2, col_time2 = st.columns(2)
-                    with col_date2: new_date = st.date_input("التاريخ الجديد:", value=datetime.now().date() + timedelta(days=30), key="be_n_date")
-                    with col_time2: new_time = st.time_input("الوقت الجديد:", value=datetime.now().time().replace(minute=59, second=59), key="be_n_time")
+                    with col_date2: 
+                        new_date = st.date_input("التاريخ الجديد:", value=datetime.now().date() + timedelta(days=30), key="be_n_date")
+                    with col_time2: 
+                        new_time = st.time_input("الوقت الجديد:", value=datetime.now().time().replace(minute=59, second=59), key="be_n_time")
                     new_expiry_str = datetime.combine(new_date, new_time).strftime('%Y-%m-%d %H:%M:%S')
                     btn_lbl = "🔄 تطبيق التمديد"
                 elif action_type == "إلغاء التفعيل":
@@ -261,10 +330,10 @@ def render_offers_page():
                     btn_lbl = "🧹 مسح العناوين الترويجية للمنتجات"
                 
                 if st.button(btn_lbl, use_container_width=True, type="primary"):
-                    if not matching_offers_end: st.warning("لا توجد عروض مطابقة")
+                    if not matching_offers_end: 
+                        st.warning("لا توجد عروض مطابقة")
                     else:
                         with st.spinner("جاري المعالجة..."):
-                            # ✅ آلية مسح العناوين الترويجية
                             if action_type == "مسح العناوين الترويجية لمنتجاتها":
                                 product_ids = set()
                                 st.info("جاري استخراج المنتجات المشمولة من العروض...")
@@ -273,14 +342,14 @@ def render_offers_page():
                                     full_res = safe_api_request("GET", f"{SALLA_API_URL}/{offer_id}", headers)
                                     if full_res and full_res.get('data'):
                                         off_data = full_res['data']
-                                        # استخراج المنتجات من سلة الشراء
                                         for p in off_data.get('buy', {}).get('products', []):
                                             pid = p.get('id', p) if isinstance(p, dict) else p
-                                            if str(pid).isdigit(): product_ids.add(str(pid))
-                                        # استخراج المنتجات من سلة المنح/الهدية
+                                            if str(pid).isdigit(): 
+                                                product_ids.add(str(pid))
                                         for p in off_data.get('get', {}).get('products', []):
                                             pid = p.get('id', p) if isinstance(p, dict) else p
-                                            if str(pid).isdigit(): product_ids.add(str(pid))
+                                            if str(pid).isdigit(): 
+                                                product_ids.add(str(pid))
                                 
                                 c_prods = 0
                                 st.info(f"تم العثور على {len(product_ids)} منتج مختلف. جاري التحديث الآمن وإزالة العناوين...")
@@ -293,36 +362,45 @@ def render_offers_page():
                                 for offer in matching_offers_end:
                                     offer_id = offer.get('id')
                                     if action_type == "إلغاء التفعيل":
-                                        if safe_api_request("PUT", f"{SALLA_API_URL}/{offer_id}/status", headers, json={"status": "inactive"}): c += 1
+                                        if safe_api_request("PUT", f"{SALLA_API_URL}/{offer_id}/status", headers, json={"status": "inactive"}): 
+                                            c += 1
                                     else:
                                         full_res = safe_api_request("GET", f"{SALLA_API_URL}/{offer_id}", headers)
                                         if full_res and full_res.get('data'):
                                             payload = rebuild_offer_payload(full_res['data'], {"expiry_date": new_expiry_str})
-                                            if safe_api_request("PUT", f"{SALLA_API_URL}/{offer_id}", headers, json=payload): c += 1
+                                            if safe_api_request("PUT", f"{SALLA_API_URL}/{offer_id}", headers, json=payload): 
+                                                c += 1
                                 action_word = "إيقاف" if action_type == "إلغاء التفعيل" else "تمديد"
                                 st.success(f"✅ تم تنفيذ إجراء الـ {action_word} لـ {c} عرض بنجاح!")
 
             elif st.session_state.qa_action == "start_dates":
-                with col_t: st.markdown("### 📅 إدارة وتعديل تواريخ البداية")
+                with col_t: 
+                    st.markdown("### 📅 إدارة وتعديل تواريخ البداية")
                 target_scope_start = st.radio("استهداف العروض للبدء:", ["تبدأ في تاريخ محدد", "جميع العروض المتاحة"], key="bs_scope")
                 if target_scope_start == "تبدأ في تاريخ محدد":
                     col_sd1, col_st1 = st.columns(2)
-                    with col_sd1: target_s_date = st.date_input("تاريخ البداية الحالي:", value=datetime.now().date(), key="bs_t_date")
-                    with col_st1: target_s_time = st.time_input("الوقت:", value=datetime.now().time().replace(minute=0, second=0), key="bs_t_time")
+                    with col_sd1: 
+                        target_s_date = st.date_input("تاريخ البداية الحالي:", value=datetime.now().date(), key="bs_t_date")
+                    with col_st1: 
+                        target_s_time = st.time_input("الوقت:", value=datetime.now().time().replace(minute=0, second=0), key="bs_t_time")
                     target_s_str = datetime.combine(target_s_date, target_s_time).strftime('%Y-%m-%d')
                     matching_offers_start = [o for o in raw_offers if o.get('start_date', '') and o.get('start_date', '').startswith(target_s_str)]
-                else: matching_offers_start = raw_offers
+                else: 
+                    matching_offers_start = raw_offers
                 
                 if st.button("🕒 تعيين الوقت الحالي", key="btn_now_start_bulk"):
                     st.session_state["bs_n_date"] = (datetime.now() + timedelta(hours=3)).date()
                     st.session_state["bs_n_time"] = (datetime.now() + timedelta(hours=3)).time()
                 col_nsd, col_nst = st.columns(2)
-                with col_nsd: new_s_date = st.date_input("تاريخ البداية الجديد:", value=st.session_state.get("bs_n_date", datetime.now().date()), key="bs_n_date")
-                with col_nst: new_s_time = st.time_input("الوقت الجديد:", value=st.session_state.get("bs_n_time", datetime.now().time().replace(minute=0, second=0)), key="bs_n_time")
+                with col_nsd: 
+                    new_s_date = st.date_input("تاريخ البداية الجديد:", value=st.session_state.get("bs_n_date", datetime.now().date()), key="bs_n_date")
+                with col_nst: 
+                    new_s_time = st.time_input("الوقت الجديد:", value=st.session_state.get("bs_n_time", datetime.now().time().replace(minute=0, second=0)), key="bs_n_time")
                 new_start_str = datetime.combine(new_s_date, new_s_time).strftime('%Y-%m-%d %H:%M:%S')
                 
                 if st.button("🚀 تطبيق تاريخ البداية", use_container_width=True, type="primary"):
-                    if not matching_offers_start: st.warning("لا توجد عروض مطابقة")
+                    if not matching_offers_start: 
+                        st.warning("لا توجد عروض مطابقة")
                     else:
                         with st.spinner("جاري التعديل..."):
                             c = 0
@@ -331,11 +409,13 @@ def render_offers_page():
                                 full_res = safe_api_request("GET", f"{SALLA_API_URL}/{offer_id}", headers)
                                 if full_res and full_res.get('data'):
                                     payload = rebuild_offer_payload(full_res['data'], {"start_date": new_start_str})
-                                    if safe_api_request("PUT", f"{SALLA_API_URL}/{offer_id}", headers, json=payload): c += 1
+                                    if safe_api_request("PUT", f"{SALLA_API_URL}/{offer_id}", headers, json=payload): 
+                                        c += 1
                             st.success(f"تم تعديل البداية لـ {c} عرض!")
 
             elif st.session_state.qa_action == "draft":
-                with col_t: st.markdown("### 📝 مصنع ومسودة تأسيس العروض")
+                with col_t: 
+                    st.markdown("### 📝 مصنع ومسودة تأسيس العروض")
                 st.info("استخدم هذه الأداة لرفع ملف المسودة (ملف قراءة العروض) وسيقوم النظام بتصنيع ملف إكسيل جاهز للاستيراد في سلة مبني على قوانين وخصومات معقدة.")
                 
                 def get_draft_template():
@@ -412,11 +492,14 @@ def render_offers_page():
                                 discount_type_raw = str(first_row.get('نوع الخصم', '')).strip()
                                 salla_discount_type = "منتج مجاني" if discount_type_raw == "منتج مجاني" else "خصم بنسبة"
                                 discount_amount = 0.0
-                                buy_qty = 1; get_qty = 1
+                                buy_qty = 1
+                                get_qty = 1
                                 
                                 if salla_discount_type == "منتج مجاني":
                                     match = re.search(r'(\d+)\s*(?:حبة)?\s*\+\s*(\d+)', offer_msg)
-                                    if match: buy_qty = int(match.group(1)); get_qty = int(match.group(2))
+                                    if match: 
+                                        buy_qty = int(match.group(1))
+                                        get_qty = int(match.group(2))
                                 else:
                                     match_price = re.search(r'(\d+)\s*حبة بسعر', offer_msg)
                                     if match_price:
@@ -426,22 +509,41 @@ def render_offers_page():
                                         L = float(first_row.get('السعر قبل شامل', 0)) if pd.notna(first_row.get('السعر قبل شامل')) else 0
                                         M = float(first_row.get('السعر بعد شامل', 0)) if pd.notna(first_row.get('السعر بعد شامل')) else 0
                                         C = float(first_row.get('سعر بيع المنتج', 0)) if pd.notna(first_row.get('سعر بيع المنتج')) else 0
-                                        if C > 0: discount_amount = round(((L - M) / C) * 100, 2)
+                                        if C > 0: 
+                                            discount_amount = round(((L - M) / C) * 100, 2)
                                     else:
                                         match_pct = re.search(r'خصم\s*(\d+(\.\d+)?)%', offer_msg)
-                                        if match_pct: discount_amount = float(match_pct.group(1))
+                                        if match_pct: 
+                                            discount_amount = float(match_pct.group(1))
                                         match_buy_get = re.search(r'على الحبة (الثانية|الثالثة|الرابعة)', offer_msg)
                                         if match_buy_get:
                                             buy_qty = {"الثانية": 1, "الثالثة": 2, "الرابعة": 3}.get(match_buy_get.group(1), 1)
                                             get_qty = 1
 
                                 row = {
-                                    "الإجراء": action, "معرف العرض": offer_id, "اسم العرض": offer_name, "نوع العرض": "اذا اشترى العميل X يحصل على Y",
-                                    "المنصة": "متصفح وتطبيق المتجر", "تطبيق على": "منتجات مختارة", "تاريخ البدء": start_date, "تاريخ الانتهاء": end_date,
-                                    "تطبيق مع كوبون": "نعم", "الحد الأقصى للخصم": 0, "الحد الأدنى للشراء": 0, "الحد الأدنى للكمية": 0,
-                                    "مجموعات العملاء": "", "نوع شراء X": "منتج", "كمية شراء X": buy_qty, "عناصر شراء X (IDs)": id_str,
-                                    "نوع عرض Y": "منتج", "كمية عرض Y": get_qty, "عناصر عرض Y (IDs)": id_str,
-                                    "نوع الخصم": salla_discount_type, "قيمة الخصم": discount_amount, "رسالة العرض": offer_msg, "حالة العرض": "نشط"
+                                    "الإجراء": action, 
+                                    "معرف العرض": offer_id, 
+                                    "اسم العرض": offer_name, 
+                                    "نوع العرض": "اذا اشترى العميل X يحصل على Y",
+                                    "المنصة": "متصفح وتطبيق المتجر", 
+                                    "تطبيق على": "منتجات مختارة", 
+                                    "تاريخ البدء": start_date, 
+                                    "تاريخ الانتهاء": end_date,
+                                    "تطبيق مع كوبون": "نعم", 
+                                    "الحد الأقصى للخصم": 0, 
+                                    "الحد الأدنى للشراء": 0, 
+                                    "الحد الأدنى للكمية": 0,
+                                    "مجموعات العملاء": "", 
+                                    "نوع شراء X": "منتج", 
+                                    "كمية شراء X": buy_qty, 
+                                    "عناصر شراء X (IDs)": id_str,
+                                    "نوع عرض Y": "منتج", 
+                                    "كمية عرض Y": get_qty, 
+                                    "عناصر عرض Y (IDs)": id_str,
+                                    "نوع الخصم": salla_discount_type, 
+                                    "قيمة الخصم": discount_amount, 
+                                    "رسالة العرض": offer_msg, 
+                                    "حالة العرض": "نشط"
                                 }
                                 output_rows.append(row)
                                 
@@ -452,7 +554,8 @@ def render_offers_page():
                             buf = io.BytesIO()
                             df_out.to_excel(buf, index=False)
                             st.download_button("📥 تحميل ملف العروض الجاهز للرفع 🚀", data=buf.getvalue(), file_name="Generated_Salla_Offers.xlsx", mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", type="primary")
-                        except Exception as e: st.error(f"خطأ أثناء معالجة المسودة: {str(e)}")
+                        except Exception as e: 
+                            st.error(f"خطأ أثناء معالجة المسودة: {str(e)}")
 
     st.divider()
 
@@ -460,9 +563,24 @@ def render_offers_page():
     # --- رفع واستيراد ملف العروض الجاهز للسلة ---
     # ==========================================
     col_dl, col_ex = st.columns([1, 1])
-    with col_dl: st.download_button("📥 تنزيل قالب سلة الافتراضي للعروض", data=generate_salla_excel_template(), file_name="Salla_Offers_Template.xlsx", mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", use_container_width=True)
+    with col_dl: 
+        st.download_button(
+            "📥 تنزيل قالب سلة الافتراضي للعروض", 
+            data=generate_salla_excel_template(), 
+            file_name="Salla_Offers_Template.xlsx", 
+            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", 
+            use_container_width=True
+        )
     with col_ex:
-        if raw_offers: st.download_button("📥 تصدير قائمة العروض الحالية", data=export_offers_to_excel(raw_offers), file_name=f"Offers_Export_{datetime.now().strftime('%Y%m%d')}.xlsx", mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", use_container_width=True, type="primary")
+        if raw_offers: 
+            st.download_button(
+                "📥 تصدير قائمة العروض الحالية", 
+                data=export_offers_to_excel(raw_offers), 
+                file_name=f"Offers_Export_{datetime.now().strftime('%Y%m%d')}.xlsx", 
+                mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", 
+                use_container_width=True, 
+                type="primary"
+            )
 
     uploaded_file = st.file_uploader("📂 رفع ملف العروض الجاهز (XLSX) لرفعه للمتجر مباشرة:", type=["xlsx"])
     if uploaded_file:
@@ -471,10 +589,13 @@ def render_offers_page():
             st.dataframe(df_user, use_container_width=True)
             if st.button("🚀 تأكيد معالجة ونشر ملف العروض المرفوعة", use_container_width=True):
                 res = process_excel_import(df_user)
-                for m in res["success"]: st.success(m)
-                for m in res["errors"]: st.error(m)
+                for m in res["success"]: 
+                    st.success(m)
+                for m in res["errors"]: 
+                    st.error(m)
                 st.rerun()
-        except Exception as e: st.error(f"خطأ في القراءة: {str(e)}")
+        except Exception as e: 
+            st.error(f"خطأ في القراءة: {str(e)}")
 
     st.divider()
 
@@ -483,10 +604,14 @@ def render_offers_page():
     # ==========================================
     st.markdown(" 🔍 أدوات التصفية والبحث المتقدمة عن العروض")
     f1, f2, f3, f4 = st.columns(4)
-    with f1: search_offer = st.text_input("🔎 ابحث باسم العرض أو بالمعرف:", key="filter_search_input")
-    with f2: status_filter = st.selectbox("📌 حالة نشاط العرض:", ["الكل", "نشط", "غير نشط"], key="filter_status_select", help="يتجاهل البحث بالاسم هذا الفلتر")
-    with f3: filter_date = st.date_input("📅 ابحث عن تاريخ الانتهاء:", value=None, key="filter_date_input")
-    with f4: filter_overlap = st.checkbox("🔄 فحص التداخل (منتجات مكررة)", key="f_overlap")
+    with f1: 
+        search_offer = st.text_input("🔎 ابحث باسم العرض أو بالمعرف:", key="filter_search_input")
+    with f2: 
+        status_filter = st.selectbox("📌 حالة نشاط العرض:", ["الكل", "نشط", "غير نشط"], key="filter_status_select", help="يتجاهل البحث بالاسم هذا الفلتر")
+    with f3: 
+        filter_date = st.date_input("📅 ابحث عن تاريخ الانتهاء:", value=None, key="filter_date_input")
+    with f4: 
+        filter_overlap = st.checkbox("🔄 فحص التداخل (منتجات مكررة)", key="f_overlap")
 
     now_ksa = datetime.now() + timedelta(hours=3)
     
@@ -496,19 +621,26 @@ def render_offers_page():
             product_offer_map = {}
             for o in raw_offers:
                 o_id = o.get('id')
-                if o.get('status') != 'active': continue
+                if o.get('status') != 'active': 
+                    continue
                 full_res = safe_api_request("GET", f"{SALLA_API_URL}/{o_id}", headers)
                 if full_res and full_res.get('data'):
                     p_ids = set()
-                    for p in full_res['data'].get('buy', {}).get('products', []): p_ids.add(str(p.get('id', p) if isinstance(p, dict) else p))
-                    for p in full_res['data'].get('get', {}).get('products', []): p_ids.add(str(p.get('id', p) if isinstance(p, dict) else p))
+                    for p in full_res['data'].get('buy', {}).get('products', []): 
+                        p_ids.add(str(p.get('id', p) if isinstance(p, dict) else p))
+                    for p in full_res['data'].get('get', {}).get('products', []): 
+                        p_ids.add(str(p.get('id', p) if isinstance(p, dict) else p))
                     for pid in p_ids:
-                        if pid not in product_offer_map: product_offer_map[pid] = []
+                        if pid not in product_offer_map: 
+                            product_offer_map[pid] = []
                         product_offer_map[pid].append(o_id)
             for pid, o_ids in product_offer_map.items():
-                if len(o_ids) > 1: overlapping_offer_ids.update(o_ids)
-            if not overlapping_offer_ids: st.success("✅ ممتاز! لا يوجد أي تداخل في منتجات العروض النشطة.")
-            else: st.warning(f"⚠️ انتبه: تم العثور على منتجات مكررة مشتركة بين {len(overlapping_offer_ids)} عروض نشطة.")
+                if len(o_ids) > 1: 
+                    overlapping_offer_ids.update(o_ids)
+            if not overlapping_offer_ids: 
+                st.success("✅ ممتاز! لا يوجد أي تداخل في منتجات العروض النشطة.")
+            else: 
+                st.warning(f"⚠️ انتبه: تم العثور على منتجات مكررة مشتركة بين {len(overlapping_offer_ids)} عروض نشطة.")
 
     filtered_offers = []
     for offer in raw_offers:
@@ -519,19 +651,32 @@ def render_offers_page():
         exp_date = safe_parse_date(offer.get('expiry_date'))
         
         if search_offer:
-            if search_offer.lower() not in offer_name.lower() and search_offer not in str(offer_id): continue
+            if search_offer.lower() not in offer_name.lower() and search_offer not in str(offer_id): 
+                continue
         else:
-            if status_filter == "نشط" and status != "active": continue
-            if status_filter == "غير نشط" and status == "active": continue
+            if status_filter == "نشط" and status != "active": 
+                continue
+            if status_filter == "غير نشط" and status == "active": 
+                continue
             
-        if filter_date and (not exp_date or exp_date.date() != filter_date): continue
-        if filter_overlap and offer_id not in overlapping_offer_ids: continue
+        if filter_date and (not exp_date or exp_date.date() != filter_date): 
+            continue
+        if filter_overlap and offer_id not in overlapping_offer_ids: 
+            continue
         filtered_offers.append(offer)
     
     st.session_state["filtered_offers"] = filtered_offers
     
     if filtered_offers and len(filtered_offers) < len(raw_offers):
-        st.download_button("📥 اضغط هنا لتحميل ملف العروض المفلترة الحالية مباشرة", data=export_offers_to_excel(filtered_offers), file_name=f"filtered_offers_export_{datetime.now().strftime('%Y%m%d_%H%M%S')}.xlsx", mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", key="direct_download_filtered_offers_bottom_final", type="primary", use_container_width=True)
+        st.download_button(
+            "📥 اضغط هنا لتحميل ملف العروض المفلترة الحالية مباشرة", 
+            data=export_offers_to_excel(filtered_offers), 
+            file_name=f"filtered_offers_export_{datetime.now().strftime('%Y%m%d_%H%M%S')}.xlsx", 
+            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", 
+            key="direct_download_filtered_offers_bottom_final", 
+            type="primary", 
+            use_container_width=True
+        )
     
     st.markdown(f"<div style='background: #f0f4f8; padding: 8px 16px; border-radius: 8px; margin-bottom: 14px; border-right: 4px solid #00b4d8;'><strong>📊 عدد العروض المطابقة للبحث: {len(filtered_offers)} عرض</strong></div>", unsafe_allow_html=True)
 
