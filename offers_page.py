@@ -96,7 +96,7 @@ def render_offers_page():
         progress_bar = st.progress(0)
         
         while True:
-            status_text.markdown(f"**{loading_text}** (صفحة {page} من {total_pages if page > 1 else '...'}) | تم تحميل {len(all_p)} منتج")
+            status_text.markdown(f"**{loading_text}** (صفحة {page} من {total_pages if page > 1 else '...'} | تم تحميل {len(all_p)} منتج)")
             url = f"{url_base}?per_page=60&page={page}" if "?" not in url_base else f"{url_base}&per_page=60&page={page}"
             res = safe_api_request("GET", url, headers)
             if not res or not res.get("data"): break
