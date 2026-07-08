@@ -661,18 +661,6 @@ def render_product_card(idx: int, p: Dict, headers: Dict[str, str]):
                                 })
         
                         if branch_updates and st.button("💾 حفظ التغييرات", key=f"save_bq_{p_id}_{idx}", type="primary"):
-                                with st.spinner("جاري التوزيع في سلة..."):
-                                    res = safe_api_request(
-                                        "POST", 
-                                        "https://api.salla.dev/admin/v2/products/quantities/bulk", 
-                                        headers, 
-                                        json={"products": branch_updates}
-                                    )
-                                    if res:
-                                        st.success("✅ تم تحديث وتوزيع الكميات!")
-                                        st.rerun()
-                            else:
-                                st.warning("الرجاء إدخال كميات أكبر من صفر للتحديث.")
             
             st.markdown("</div>", unsafe_allow_html=True)
 
