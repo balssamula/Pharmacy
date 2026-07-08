@@ -507,8 +507,8 @@ def render_product_card(idx: int, p: Dict, headers: Dict[str, str]):
                 
             with c_info:
                 st.markdown(f"🆔 **المعرف:** `{p_id}` | 🔢 **SKU:** `{p_sku}`")
-                st.markdown(📢 **ترويجي:** <span style='color:#e67e22; font-weight:bold;'>{p_promotion}</span>", unsafe_allow_html=True)
-                st.markdown(🏷️ **فرعي:** `{p_sub_title}`")
+                st.markdown(f"📢 **ترويجي:** <span style='color:#e67e22; font-weight:bold;'>{p_promotion}</span>", unsafe_allow_html=True)
+                st.markdown(f"🏷️ **فرعي:** `{p_sub_title}`")
                 st.markdown(f"📦 **المخزون الإجمالي:** `{p.get('quantity', 0)}` | 📈 **المبيعات:** `{p.get('sold_quantity', 0)}`")
                 st.markdown(f"🔗 [🌐 عرض في المتجر]({p_url})")
 
