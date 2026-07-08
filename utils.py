@@ -631,7 +631,8 @@ def attach_product_image_api(product_id: int, image_bytes: bytes=None, filename:
 def update_product_promotions_secure(product_id: int, new_promo: str, new_sub: str, headers: dict) -> bool:
     """تحديث العناوين الترويجية والفرعية بشكل آمن مع حماية السعر الأصلي"""
     current_res = safe_api_request("GET", f"https://api.salla.dev/admin/v2/products/{product_id}", headers)
-    if not current_res or not current_res.get('data'): return False
+    if not current_res or not current_res.get('data'): 
+        return False
     
     p_data = current_res['data']
     price_val = get_flat_price(p_data.get('price', 0))
@@ -640,18 +641,25 @@ def update_product_promotions_secure(product_id: int, new_promo: str, new_sub: s
     
     base_price = regular_val if regular_val > 0 else price_val
     
-    # ✅ إجبار إرسال العنوان الترويجي والفرعي كنصوص لسلة
+    # ✅ بناء الـ payload مع الحقول الصحيحة
     payload = {
         "name": p_data.get('name'),
         "price": base_price,
-        "promotion_title": new_promo if new_promo else "",
-        "promotion_subtitle": new_sub if new_sub else ""
     }
     
-    # نحافظ على السعر المخفض إن وجد
+    # ✅ إضافة العناوين الترويجية والفرعية
+    if new_promo is not None:
+        payload["promotion_title"] = new_promo
+    if new_sub is not None:
+        payload["promotion_subtitle"] = new_sub
+    
+    # الحفاظ على السعر المخفض إن وجد
     if sale_val > 0: 
         payload['sale_price'] = sale_val
-        
+    
+    # الحفاظ على حالة المنتج
+    payload['status'] = p_data.get('status', 'sale')
+    
     res = safe_api_request("PUT", f"https://api.salla.dev/admin/v2/products/{product_id}", headers, json=payload)
     return res is not None
 
@@ -1135,11 +1143,10 @@ def get_group_products(product_id: int) -> List[Dict]:
     
     group_products = []
     
-    # ✅ الطريقة الصحيحة: سلة تستخدم 'skus' للمنتجات داخل المجموعة
+    # ✅ الطريقة الصحيحة 1: سلة تستخدم 'skus' للمنتجات داخل المجموعة
     skus = product.get('skus', [])
     
     for sku in skus:
-        # كل SKU يحتوي على product_id
         sku_product_id = sku.get('id')
         if not sku_product_id:
             continue
@@ -1147,7 +1154,6 @@ def get_group_products(product_id: int) -> List[Dict]:
         # جلب تفاصيل المنتج الفرعي
         sku_details = get_product_details(sku_product_id)
         if sku_details:
-            # ✅ الحصول على الكمية المطلوبة من المجموعة
             bundle_qty = sku.get('quantity', 1)
             
             group_products.append({
@@ -1164,6 +1170,51 @@ def get_group_products(product_id: int) -> List[Dict]:
                 'with_tax': sku_details.get('with_tax', True),
                 'regular_price': get_flat_price(sku_details.get('regular_price', 0))
             })
+    
+    # ✅ الطريقة الصحيحة 2: grouped_items (طريقة أخرى)
+    if not group_products:
+        grouped_items = product.get('grouped_items', [])
+        for item in grouped_items:
+            product_data = item.get('product', {})
+            sku_product_id = product_data.get('id')
+            if sku_product_id:
+                sku_details = get_product_details(sku_product_id)
+                if sku_details:
+                    group_products.append({
+                        'id': sku_details.get('id'),
+                        'name': sku_details.get('name', 'منتج بدون اسم'),
+                        'sku': sku_details.get('sku', 'لا يوجد'),
+                        'price': get_flat_price(sku_details.get('price', 0)),
+                        'bundle_quantity': item.get('quantity', 1),
+                        'stock_quantity': sku_details.get('quantity', 0),
+                        'sold_quantity': sku_details.get('sold_quantity', 0),
+                        'status': sku_details.get('status', 'sale'),
+                        'image': sku_details.get('thumbnail') or sku_details.get('main_image'),
+                        'url': sku_details.get('url'),
+                        'with_tax': sku_details.get('with_tax', True),
+                        'regular_price': get_flat_price(sku_details.get('regular_price', 0))
+                    })
+    
+    # ✅ الطريقة الصحيحة 3: إذا كان المنتج يحتوي على children
+    if not group_products:
+        children = product.get('children', [])
+        for child_id in children:
+            sku_details = get_product_details(child_id)
+            if sku_details:
+                group_products.append({
+                    'id': sku_details.get('id'),
+                    'name': sku_details.get('name', 'منتج بدون اسم'),
+                    'sku': sku_details.get('sku', 'لا يوجد'),
+                    'price': get_flat_price(sku_details.get('price', 0)),
+                    'bundle_quantity': 1,
+                    'stock_quantity': sku_details.get('quantity', 0),
+                    'sold_quantity': sku_details.get('sold_quantity', 0),
+                    'status': sku_details.get('status', 'sale'),
+                    'image': sku_details.get('thumbnail') or sku_details.get('main_image'),
+                    'url': sku_details.get('url'),
+                    'with_tax': sku_details.get('with_tax', True),
+                    'regular_price': get_flat_price(sku_details.get('regular_price', 0))
+                })
     
     return group_products
 
