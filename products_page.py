@@ -616,26 +616,35 @@ def render_product_card(idx: int, p: Dict, headers: Dict[str, str]):
                         st.markdown("**الكميات الحالية في الفروع:**")
                         branch_updates = []
                         for b in branches:
-                            current_qty = branch_quantities.get(b['id'], 0)
-                            st.write(f"🏪 {b['name']}: الكمية الحالية = **{current_qty}**")
+                            branch_id = b.get('id')
+                            branch_name = b.get('name', f'فرع {branch_id}')
+                            current_qty = branch_quantities.get(branch_id, 0)
             
-                            new_q = st.number_input(
-                                f"تعديل الكمية في {b['name']}", 
-                                min_value=0, 
-                                value=current_qty,  # ✅ عرض الكمية الفعلية
-                                step=1, 
-                                key=f"bq_{p_id}_{b['id']}_{idx}"
-                            )
-                            if new_q != current_qty:
-                                branch_updates.append({
-                                    "identifer": p_sku, 
-                                    "identifer_type": "sku", 
-                                    "branch_id": b['id'], 
-                                    "quantity": new_q, 
-                                    "mode": "overwrite"
-                                })
+                            # عرض الكمية الحالية
+                            st.write(f"🏪 **{branch_name}**: الكمية الحالية = **{current_qty}**")
+            
+                            col_qty, col_btn = st.columns([2, 1])
+                            with col_qty:
+                                new_q = st.number_input(
+                                    f"تعديل الكمية",
+                                    min_value=0, 
+                                    value=current_qty,
+                                    step=1, 
+                                    key=f"bq_{p_id}_{branch_id}_{idx}",
+                                    label_visibility="collapsed"
+                                )
+                            with col_btn:
+                                if st.button(f"تحديث", key=f"bq_btn_{p_id}_{branch_id}_{idx}", use_container_width=True):
+                                    if new_q != current_qty:
+                                        branch_updates.append({
+                                            "identifer": p_sku, 
+                                            "identifer_type": "sku", 
+                                            "branch_id": branch_id, 
+                                            "quantity": new_q, 
+                                            "mode": "overwrite"
+                                        })
         
-                        if branch_updates and st.button("💾 حفظ التغييرات", key=f"save_bq_{p_id}_{idx}", type="primary"):
+                        if branch_updates and st.button("💾 حفظ جميع التغييرات", key=f"save_bq_{p_id}_{idx}", type="primary"):
                             with st.spinner("جاري التوزيع في سلة..."):
                                 res = safe_api_request(
                                     "POST", 
@@ -646,8 +655,8 @@ def render_product_card(idx: int, p: Dict, headers: Dict[str, str]):
                                 if res:
                                     st.success("✅ تم تحديث وتوزيع الكميات!")
                                     st.rerun()
-                        else:
-                            st.warning("الرجاء إدخال كميات أكبر من صفر للتحديث.")
+                                else:
+                                    st.error("❌ فشل تحديث الكميات")
             
             st.markdown("</div>", unsafe_allow_html=True)
 
@@ -671,7 +680,12 @@ def render_products_page():
     
     headers = get_headers()
     if not headers: return
-    
+
+    initialize_global_products()  # تأكد من وجودها
+    if not st.session_state.get("all_products_fetched", False):
+        perform_global_sync()
+        st.rerun()
+        
     initialize_session()
     render_sync_and_status(headers)
     st.divider()
@@ -735,13 +749,42 @@ def get_branch_quantities(product_id: int) -> Dict:
     if not headers: return {}
     
     try:
+        # ✅ الطريقة الصحيحة: استخدام API كميات المنتج
+        res = safe_api_request("GET", f"https://api.salla.dev/admin/v2/products/quantities?product={product_id}", headers)
+        if res and res.get('data'):
+            branch_qty = {}
+            for item in res['data']:
+                # الكمية في كل فرع
+                branch_qty[item.get('branch_id')] = item.get('quantity', 0)
+            return branch_qty
+    except Exception as e:
+        pass
+    
+    # ✅ طريقة بديلة: من product details
+    try:
         res = safe_api_request("GET", f"https://api.salla.dev/admin/v2/products/{product_id}", headers)
         if res and res.get('data'):
-            scoped_prices = res['data'].get('scoped_prices', [])
-            branch_qty = {}
-            for scope in scoped_prices:
-                branch_qty[scope.get('scope_id')] = scope.get('quantity', 0)
-            return branch_qty
+            product = res['data']
+            # الكمية الإجمالية
+            total_qty = product.get('quantity', 0)
+            
+            # إذا كان هناك فروع، جرب scoped_prices
+            scoped_prices = product.get('scoped_prices', [])
+            if scoped_prices:
+                branch_qty = {}
+                for scope in scoped_prices:
+                    branch_qty[scope.get('scope_id')] = scope.get('quantity', 0)
+                return branch_qty
+            
+            # إذا كان هناك branches في المنتج
+            branches_data = product.get('branches', [])
+            if branches_data:
+                branch_qty = {}
+                for b in branches_data:
+                    branch_qty[b.get('id')] = b.get('quantity', 0)
+                return branch_qty
+            
+            return {'default': total_qty}
     except:
         pass
     return {}
