@@ -1128,7 +1128,10 @@ def get_product_details(product_id: int) -> Optional[Dict]:
     return None
 
 def get_group_products(product_id: int) -> List[Dict]:
-    """جلب المنتجات المضمنة داخل مجموعة منتجات"""
+    """
+    جلب المنتجات المضمنة داخل مجموعة منتجات
+    ✅ يدعم: consisted_products, bundle.products, grouped_items, skus
+    """
     headers = get_headers()
     if not headers: 
         return []
@@ -1143,42 +1146,53 @@ def get_group_products(product_id: int) -> List[Dict]:
     
     group_products = []
     
-    # ✅ الطريقة الصحيحة 1: سلة تستخدم 'skus' للمنتجات داخل المجموعة
-    skus = product.get('skus', [])
+    # ✅ الطريقة 1: consisted_products (الأحدث والأكثر دقة)
+    consisted_products = product.get('consisted_products', [])
+    for item in consisted_products:
+        # البيانات موجودة مباشرة في item
+        group_products.append({
+            'id': item.get('id'),
+            'name': item.get('name', 'منتج بدون اسم'),
+            'sku': item.get('sku', 'لا يوجد'),
+            'price': get_flat_price(item.get('price', 0)),
+            'bundle_quantity': item.get('quantity_in_group', 1),
+            'stock_quantity': item.get('quantity', 0),
+            'sold_quantity': item.get('sold_quantity', 0),
+            'status': item.get('status', 'sale'),
+            'image': item.get('thumbnail') or item.get('main_image'),
+            'url': item.get('url'),
+            'with_tax': item.get('with_tax', True),
+            'regular_price': get_flat_price(item.get('regular_price', 0))
+        })
     
-    for sku in skus:
-        sku_product_id = sku.get('id')
-        if not sku_product_id:
-            continue
-            
-        # جلب تفاصيل المنتج الفرعي
-        sku_details = get_product_details(sku_product_id)
-        if sku_details:
-            bundle_qty = sku.get('quantity', 1)
-            
+    # ✅ الطريقة 2: bundle.products
+    if not group_products:
+        bundle = product.get('bundle', {})
+        bundle_products = bundle.get('products', [])
+        for item in bundle_products:
             group_products.append({
-                'id': sku_details.get('id'),
-                'name': sku_details.get('name', 'منتج بدون اسم'),
-                'sku': sku_details.get('sku', 'لا يوجد'),
-                'price': get_flat_price(sku_details.get('price', 0)),
-                'bundle_quantity': bundle_qty,
-                'stock_quantity': sku_details.get('quantity', 0),
-                'sold_quantity': sku_details.get('sold_quantity', 0),
-                'status': sku_details.get('status', 'sale'),
-                'image': sku_details.get('thumbnail') or sku_details.get('main_image'),
-                'url': sku_details.get('url'),
-                'with_tax': sku_details.get('with_tax', True),
-                'regular_price': get_flat_price(sku_details.get('regular_price', 0))
+                'id': item.get('id'),
+                'name': item.get('name', 'منتج بدون اسم'),
+                'sku': item.get('sku', 'لا يوجد'),
+                'price': item.get('price', 0),
+                'bundle_quantity': item.get('quantity_in_group', 1),
+                'stock_quantity': item.get('qty', 0),
+                'sold_quantity': 0,
+                'status': 'sale',
+                'image': item.get('main_image'),
+                'url': None,
+                'with_tax': True,
+                'regular_price': get_flat_price(item.get('regular_price', 0))
             })
     
-    # ✅ الطريقة الصحيحة 2: grouped_items (طريقة أخرى)
+    # ✅ الطريقة 3: grouped_items
     if not group_products:
         grouped_items = product.get('grouped_items', [])
         for item in grouped_items:
-            product_data = item.get('product', {})
-            sku_product_id = product_data.get('id')
-            if sku_product_id:
-                sku_details = get_product_details(sku_product_id)
+            prod = item.get('product', {})
+            if prod and prod.get('id'):
+                # جلب تفاصيل المنتج الفرعي
+                sku_details = get_product_details(prod.get('id'))
                 if sku_details:
                     group_products.append({
                         'id': sku_details.get('id'),
@@ -1195,18 +1209,21 @@ def get_group_products(product_id: int) -> List[Dict]:
                         'regular_price': get_flat_price(sku_details.get('regular_price', 0))
                     })
     
-    # ✅ الطريقة الصحيحة 3: إذا كان المنتج يحتوي على children
+    # ✅ الطريقة 4: skus (الطريقة القديمة)
     if not group_products:
-        children = product.get('children', [])
-        for child_id in children:
-            sku_details = get_product_details(child_id)
+        skus = product.get('skus', [])
+        for sku in skus:
+            sku_product_id = sku.get('id')
+            if not sku_product_id:
+                continue
+            sku_details = get_product_details(sku_product_id)
             if sku_details:
                 group_products.append({
                     'id': sku_details.get('id'),
                     'name': sku_details.get('name', 'منتج بدون اسم'),
                     'sku': sku_details.get('sku', 'لا يوجد'),
                     'price': get_flat_price(sku_details.get('price', 0)),
-                    'bundle_quantity': 1,
+                    'bundle_quantity': sku.get('quantity', 1),
                     'stock_quantity': sku_details.get('quantity', 0),
                     'sold_quantity': sku_details.get('sold_quantity', 0),
                     'status': sku_details.get('status', 'sale'),
@@ -1219,7 +1236,10 @@ def get_group_products(product_id: int) -> List[Dict]:
     return group_products
 
 def update_group_product_quantity(parent_product_id: int, child_product_id: int, new_quantity: int) -> bool:
-    """تحديث عدد حبات المنتج الفرعي داخل المجموعة"""
+    """
+    تحديث عدد حبات المنتج الفرعي داخل المجموعة
+    ✅ يدعم: consisted_products و bundle.products
+    """
     headers = get_headers()
     if not headers: 
         return False
@@ -1229,34 +1249,42 @@ def update_group_product_quantity(parent_product_id: int, child_product_id: int,
     if not parent:
         return False
     
-    # ✅ تحديث كمية المنتج الفرعي في skus
-    skus = parent.get('skus', [])
+    # ✅ تحديث الكمية في consisted_products
+    consisted_products = parent.get('consisted_products', [])
     updated = False
-    new_skus = []
     
-    for sku in skus:
-        sku_id = sku.get('id')
-        if str(sku_id) == str(child_product_id):
-            sku['quantity'] = new_quantity
+    for item in consisted_products:
+        if item.get('id') == child_product_id:
+            item['quantity_in_group'] = new_quantity
             updated = True
-        new_skus.append(sku)
+            break
+    
+    # ✅ إذا لم يتم العثور في consisted_products، جرب bundle.products
+    if not updated:
+        bundle = parent.get('bundle', {})
+        bundle_products = bundle.get('products', [])
+        for item in bundle_products:
+            if item.get('id') == child_product_id:
+                item['quantity_in_group'] = new_quantity
+                updated = True
+                break
     
     if not updated:
-        # إذا لم يتم العثور على المنتج، أضفه
-        child = get_product_details(child_product_id)
-        if child:
-            new_skus.append({
-                'id': child_product_id,
-                'quantity': new_quantity,
-                'price': get_flat_price(child.get('price', 0))
-            })
+        st.error(f"❌ لم يتم العثور على المنتج ID: {child_product_id} في المجموعة")
+        return False
     
+    # ✅ تحديث المنتج الأب
     payload = {
         "name": parent.get('name'),
         "price": get_flat_price(parent.get('price', 0)),
-        "skus": new_skus,
         "type": "group_products"
     }
+    
+    # حفظ التغييرات في consisted_products أو bundle
+    if 'consisted_products' in parent:
+        payload["consisted_products"] = consisted_products
+    elif 'bundle' in parent:
+        payload["bundle"] = bundle
     
     res = safe_api_request("PUT", f"https://api.salla.dev/admin/v2/products/{parent_product_id}", headers, json=payload)
     
@@ -1265,7 +1293,10 @@ def update_group_product_quantity(parent_product_id: int, child_product_id: int,
         all_products = st.session_state.get("all_products", [])
         for i, p in enumerate(all_products):
             if str(p.get('id')) == str(parent_product_id):
-                all_products[i]['skus'] = new_skus
+                if 'consisted_products' in all_products[i]:
+                    all_products[i]['consisted_products'] = consisted_products
+                elif 'bundle' in all_products[i]:
+                    all_products[i]['bundle']['products'] = bundle_products
                 break
         st.session_state["all_products"] = all_products
     
@@ -1281,19 +1312,34 @@ def remove_product_from_group(parent_product_id: int, child_product_id: int) -> 
     if not parent: 
         return False
     
-    # ✅ إزالة من skus
-    skus = parent.get('skus', [])
-    new_skus = [sku for sku in skus if str(sku.get('id')) != str(child_product_id)]
+    # ✅ إزالة من consisted_products
+    consisted_products = parent.get('consisted_products', [])
+    new_consisted = [item for item in consisted_products if item.get('id') != child_product_id]
     
-    if len(new_skus) == len(skus):
-        return False  # لم يتم العثور على المنتج
-    
-    payload = {
-        "name": parent.get('name'),
-        "price": get_flat_price(parent.get('price', 0)),
-        "skus": new_skus,
-        "type": "group_products"
-    }
+    if len(new_consisted) == len(consisted_products):
+        # ✅ جرب إزالة من bundle.products
+        bundle = parent.get('bundle', {})
+        bundle_products = bundle.get('products', [])
+        new_bundle_products = [item for item in bundle_products if item.get('id') != child_product_id]
+        
+        if len(new_bundle_products) == len(bundle_products):
+            st.error("❌ لم يتم العثور على المنتج في المجموعة")
+            return False
+        
+        bundle['products'] = new_bundle_products
+        payload = {
+            "name": parent.get('name'),
+            "price": get_flat_price(parent.get('price', 0)),
+            "type": "group_products",
+            "bundle": bundle
+        }
+    else:
+        payload = {
+            "name": parent.get('name'),
+            "price": get_flat_price(parent.get('price', 0)),
+            "type": "group_products",
+            "consisted_products": new_consisted
+        }
     
     res = safe_api_request("PUT", f"https://api.salla.dev/admin/v2/products/{parent_product_id}", headers, json=payload)
     
@@ -1302,7 +1348,10 @@ def remove_product_from_group(parent_product_id: int, child_product_id: int) -> 
         all_products = st.session_state.get("all_products", [])
         for i, p in enumerate(all_products):
             if str(p.get('id')) == str(parent_product_id):
-                all_products[i]['skus'] = new_skus
+                if 'consisted_products' in all_products[i]:
+                    all_products[i]['consisted_products'] = new_consisted
+                elif 'bundle' in all_products[i]:
+                    all_products[i]['bundle']['products'] = new_bundle_products
                 break
         st.session_state["all_products"] = all_products
     
@@ -1320,28 +1369,35 @@ def add_product_to_group(parent_product_id: int, child_product_id: int) -> bool:
     
     child = get_product_details(child_product_id)
     if not child:
+        st.error("❌ المنتج غير موجود")
         return False
     
-    # ✅ إضافة إلى skus
-    skus = parent.get('skus', [])
+    # ✅ إضافة إلى consisted_products
+    consisted_products = parent.get('consisted_products', [])
     
     # التحقق من عدم وجود المنتج مسبقاً
-    for sku in skus:
-        if str(sku.get('id')) == str(child_product_id):
-            return False  # المنتج موجود بالفعل
+    for item in consisted_products:
+        if item.get('id') == child_product_id:
+            st.warning("⚠️ المنتج موجود بالفعل في المجموعة")
+            return False
     
     # إضافة المنتج الجديد
-    skus.append({
-        'id': child_product_id,
-        'quantity': 1,
-        'price': get_flat_price(child.get('price', 0))
-    })
+    new_item = {
+        "id": child_product_id,
+        "name": child.get('name'),
+        "sku": child.get('sku'),
+        "price": get_flat_price(child.get('price', 0)),
+        "quantity_in_group": 1,
+        "quantity": child.get('quantity', 0),
+        "main_image": child.get('thumbnail') or child.get('main_image')
+    }
+    consisted_products.append(new_item)
     
     payload = {
         "name": parent.get('name'),
         "price": get_flat_price(parent.get('price', 0)),
-        "skus": skus,
-        "type": "group_products"
+        "type": "group_products",
+        "consisted_products": consisted_products
     }
     
     res = safe_api_request("PUT", f"https://api.salla.dev/admin/v2/products/{parent_product_id}", headers, json=payload)
@@ -1351,7 +1407,7 @@ def add_product_to_group(parent_product_id: int, child_product_id: int) -> bool:
         all_products = st.session_state.get("all_products", [])
         for i, p in enumerate(all_products):
             if str(p.get('id')) == str(parent_product_id):
-                all_products[i]['skus'] = skus
+                all_products[i]['consisted_products'] = consisted_products
                 break
         st.session_state["all_products"] = all_products
     
