@@ -23,6 +23,65 @@ def initialize_global_products():
         st.session_state["last_sync_time"] = None
     if "product_offers_map" not in st.session_state:
         st.session_state["product_offers_map"] = {}
+    if "branches" not in st.session_state:
+        st.session_state["branches"] = []
+
+def perform_global_sync():
+    """مزامنة عامة لجميع الصفحات (تُستدعى مرة واحدة)"""
+    headers = get_headers()
+    if not headers:
+        return
+    
+    if st.session_state.get("all_products_fetched", False):
+        return  # تم التحميل مسبقاً
+    
+    with st.spinner("⏳ جاري التحميل الأولي للمنتجات والعروض..."):
+        # جلب المنتجات
+        all_p = []
+        page = 1
+        while True:
+            res = safe_api_request("GET", f"https://api.salla.dev/admin/v2/products?per_page=100&page={page}", headers)
+            if not res or not res.get("data"): break
+            all_p.extend(res["data"])
+            if page >= res.get("pagination", {}).get("totalPages", 1): break
+            page += 1
+        st.session_state["all_products"] = all_p
+        
+        # جلب الفروع
+        st.session_state["branches"] = get_branches_list()
+        
+        # جلب العروض
+        all_o = []
+        o_page = 1
+        while True:
+            ores = safe_api_request("GET", f"https://api.salla.dev/admin/v2/specialoffers?per_page=100&page={o_page}", headers)
+            if not ores or not ores.get("data"): break
+            all_o.extend(ores["data"])
+            if o_page >= ores.get("pagination", {}).get("totalPages", 1): break
+            o_page += 1
+        
+        po_map = {}
+        for o in all_o:
+            if o.get("status") != "active": continue
+            oid = o.get("id")
+            full_o = safe_api_request("GET", f"https://api.salla.dev/admin/v2/specialoffers/{oid}", headers)
+            if full_o and full_o.get("data"):
+                pids = set()
+                for px in full_o["data"].get("buy", {}).get("products", []):
+                    pid = str(px.get("id", px) if isinstance(px, dict) else px)
+                    if pid.isdigit(): pids.add(pid)
+                for px in full_o["data"].get("get", {}).get("products", []):
+                    pid = str(px.get("id", px) if isinstance(px, dict) else px)
+                    if pid.isdigit(): pids.add(pid)
+                for pid in pids:
+                    if pid not in po_map: po_map[pid] = []
+                    po_map[pid].append({"id": oid, "name": o.get("name")})
+        
+        st.session_state["product_offers_map"] = po_map
+        st.session_state["all_products_fetched"] = True
+        st.session_state["last_sync_time"] = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        
+        st.success(f"✅ تم تحميل {len(all_p)} منتج و {len(all_o)} عرض بنجاح!")
         
 # ==============================================================================================
 # CSS الاحترافي الحاسم لعزل خط كايرو عن عناصر الرموز والـ Ligatures (expand_more و arrow_down)
