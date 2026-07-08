@@ -88,43 +88,46 @@ def render_offers_page():
     # ==========================================
     # 🌟 دالة السحب الذكية مع شريط التقدم المرئي (مُصححة)
     # ==========================================
-    def fetch_all_pages(url_base, loading_text="جاري التحميل..."):
-        all_data = []
-        page = 1
-        total_pages = 1
-        status_text = st.empty()
-        progress_bar = st.progress(0)
+   # ==========================================
+# 🌟 دالة السحب الذكية مع شريط التقدم المرئي (مُصححة)
+# ==========================================
+def fetch_all_pages(url_base, loading_text="جاري التحميل..."):
+    all_data = []
+    page = 1
+    total_pages = 1
+    status_text = st.empty()
+    progress_bar = st.progress(0)
+    
+    while True:
+        # ✅ عرض عداد العناصر المحملة
+        status_text.info(f"📥 {loading_text} (صفحة {page} من {total_pages if page > 1 else '...'}) | تم تحميل {len(all_data)} عنصر")
         
-        while True:
-            # ✅ عرض عداد العناصر المحملة (تم إصلاح المتغير من all_p إلى all_data)
-            status_text.info(f"📥 {loading_text} (صفحة {page} من {total_pages if page > 1 else '...'}) | تم تحميل {len(all_data)} عنصر")
-            
-            # بناء الـ URL
-            if "?" not in url_base:
-                url = f"{url_base}?per_page=100&page={page}"
-            else:
-                url = f"{url_base}&per_page=100&page={page}"
-            
-            res = safe_api_request("GET", url, headers)
-            if not res or not res.get("data"):
-                break
-            
-            # تحديث عدد الصفحات الكلي
-            if page == 1:
-                total_pages = res.get("pagination", {}).get("totalPages", 1)
-            
-            all_data.extend(res["data"])
-            
-            # ✅ تحديث شريط التقدم
-            progress_bar.progress(min(page / total_pages, 1.0))
-            
-            if page >= total_pages:
-                break
-            page += 1
+        # ✅ إصلاح: استخدام per_page=60 بدلاً من 100 (الحد الأقصى المسموح به في سلة)
+        if "?" not in url_base:
+            url = f"{url_base}?per_page=60&page={page}"
+        else:
+            url = f"{url_base}&per_page=60&page={page}"
         
-        progress_bar.empty()
-        status_text.empty()
-        return all_data
+        res = safe_api_request("GET", url, headers)
+        if not res or not res.get("data"):
+            break
+        
+        # تحديث عدد الصفحات الكلي
+        if page == 1:
+            total_pages = res.get("pagination", {}).get("totalPages", 1)
+        
+        all_data.extend(res["data"])
+        
+        # ✅ تحديث شريط التقدم
+        progress_bar.progress(min(page / total_pages, 1.0))
+        
+        if page >= total_pages:
+            break
+        page += 1
+    
+    progress_bar.empty()
+    status_text.empty()
+    return all_data
     
     # ⚙️ تهيئة وجلب البيانات المساعدة تلقائياً (لتسريع الصفحة)
     if "all_products" not in st.session_state: 
