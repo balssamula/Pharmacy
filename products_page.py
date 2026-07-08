@@ -54,14 +54,14 @@ def fetch_all_pages_with_progress(url_base, headers, loading_text="جاري ال
     progress_bar = st.progress(0)
     
     while True:
-        # عرض حالة التقدم
+        # ✅ عرض عداد المنتجات المحملة
         status_text.info(f"📥 {loading_text} (صفحة {page} من {total_pages if page > 1 else '...'}) | تم تحميل {len(all_data)} عنصر")
         
-        # بناء الـ URL
+        # ✅ إصلاح: استخدام per_page=60 بدلاً من 100 (الحد الأقصى المسموح به في سلة)
         if "?" not in url_base:
-            url = f"{url_base}?per_page=100&page={page}"
+            url = f"{url_base}?per_page=60&page={page}"
         else:
-            url = f"{url_base}&per_page=100&page={page}"
+            url = f"{url_base}&per_page=60&page={page}"
         
         res = safe_api_request("GET", url, headers)
         if not res or not res.get("data"):
@@ -73,7 +73,7 @@ def fetch_all_pages_with_progress(url_base, headers, loading_text="جاري ال
         
         all_data.extend(res["data"])
         
-        # تحديث شريط التقدم
+        # ✅ تحديث شريط التقدم
         progress_bar.progress(min(page / total_pages, 1.0))
         
         if page >= total_pages:
@@ -85,17 +85,17 @@ def fetch_all_pages_with_progress(url_base, headers, loading_text="جاري ال
     return all_data
 
 def perform_global_sync():
-    """مزامنة عامة لجميع الصفحات مع شريط تقدم"""
+    """مزامنة عامة لجميع الصفحات مع شريط تقدم وعداد"""
     headers = get_headers()
     if not headers:
         return
     
     if st.session_state.get("all_products_fetched", False):
-        return  # تم التحميل مسبقاً
+        return
     
     with st.spinner("⏳ جاري التحميل الأولي للمنتجات والعروض..."):
         try:
-            # ✅ جلب المنتجات مع شريط تقدم
+            # ✅ جلب المنتجات مع شريط تقدم (per_page=60)
             st.session_state["all_products"] = fetch_all_pages_with_progress(
                 "https://api.salla.dev/admin/v2/products",
                 headers,
@@ -105,23 +105,21 @@ def perform_global_sync():
             # ✅ جلب الفروع
             st.session_state["branches"] = get_branches_list()
             
-            # ✅ جلب التصنيفات (للأغراض المساعدة)
-            if "all_categories" not in st.session_state:
-                st.session_state["all_categories"] = fetch_all_pages_with_progress(
-                    "https://api.salla.dev/admin/v2/categories",
-                    headers,
-                    "جاري سحب التصنيفات"
-                )
+            # ✅ جلب التصنيفات (per_page=60)
+            st.session_state["all_categories"] = fetch_all_pages_with_progress(
+                "https://api.salla.dev/admin/v2/categories",
+                headers,
+                "جاري سحب التصنيفات"
+            )
             
-            # ✅ جلب الماركات (للأغراض المساعدة)
-            if "all_brands" not in st.session_state:
-                st.session_state["all_brands"] = fetch_all_pages_with_progress(
-                    "https://api.salla.dev/admin/v2/brands",
-                    headers,
-                    "جاري سحب الماركات التجارية"
-                )
+            # ✅ جلب الماركات (per_page=60)
+            st.session_state["all_brands"] = fetch_all_pages_with_progress(
+                "https://api.salla.dev/admin/v2/brands",
+                headers,
+                "جاري سحب الماركات التجارية"
+            )
             
-            # ✅ جلب العروض مع شريط تقدم
+            # ✅ جلب العروض مع شريط تقدم (per_page=60)
             all_o = fetch_all_pages_with_progress(
                 "https://api.salla.dev/admin/v2/specialoffers",
                 headers,
@@ -180,10 +178,9 @@ def initialize_session():
             st.session_state[key] = val
 
 def perform_sync(headers: Dict[str, str]):
-    """عملية المزامنة الشاملة مع شريط تقدم"""
+    """عملية المزامنة الشاملة مع شريط تقدم (للمزامنة اليدوية)"""
     with st.spinner("⏳ جاري سحب وتصنيف كافة المنتجات والعروض النشطة..."):
         try:
-            # ✅ إضافة شريط التقدم
             progress_bar = st.progress(0)
             status_text = st.empty()
             
@@ -196,15 +193,18 @@ def perform_sync(headers: Dict[str, str]):
             status_text.info("📥 جاري تحميل المنتجات...")
             
             while True:
+                # ✅ إصلاح: استخدام per_page=60 بدلاً من 100
                 res = safe_api_request("GET", f"https://api.salla.dev/admin/v2/products?per_page=60&page={page}", headers)
-                if not res or not res.get("data"): break
+                if not res or not res.get("data"): 
+                    break
                 all_p.extend(res["data"])
                 
                 total_pages = res.get("pagination", {}).get("totalPages", 1)
                 progress_bar.progress(page / total_pages)
                 status_text.info(f"📥 تحميل الصفحة {page} من {total_pages} | تم تحميل {len(all_p)} منتج")
                 
-                if page >= total_pages: break
+                if page >= total_pages: 
+                    break
                 page += 1
             
             st.session_state["all_products"] = all_p
@@ -214,10 +214,13 @@ def perform_sync(headers: Dict[str, str]):
             all_o = []
             o_page = 1
             while True:
+                # ✅ إصلاح: استخدام per_page=60 بدلاً من 100
                 ores = safe_api_request("GET", f"https://api.salla.dev/admin/v2/specialoffers?per_page=60&page={o_page}", headers)
-                if not ores or not ores.get("data"): break
+                if not ores or not ores.get("data"): 
+                    break
                 all_o.extend(ores["data"])
-                if o_page >= ores.get("pagination", {}).get("totalPages", 1): break
+                if o_page >= ores.get("pagination", {}).get("totalPages", 1): 
+                    break
                 o_page += 1
             
             po_map = {}
