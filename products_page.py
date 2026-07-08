@@ -518,7 +518,7 @@ def render_product_card(idx: int, p: Dict, headers: Dict[str, str]):
                     st.markdown(f"📅 بداية التخفيض: `{sale_start_date}`")
                     st.markdown(f"📅 نهاية التخفيض: `{sale_end_date}`")
                 else:
-                    st.markdown(f"<div style="background:#e2e8f0; padding:10px; border-radius:8px; border-right:5px solid #4a5568;"><b style="color:#2d3748; font-size:14px;">سعر ثابت: {base_price:,.2f} SAR</b></div>", unsafe_allow_html=True)
+                    st.markdown(f"""<div style="background:#e2e8f0; padding:10px; border-radius:8px; border-right:5px solid #4a5568;"><b style="color:#2d3748; font-size:14px;">سعر ثابت: {base_price:,.2f} SAR</b></div>""", unsafe_allow_html=True)
                 
                 with st.expander("💰 تحديث الأسعار"):
                     np = st.number_input("أصلي (SAR):", min_value=0.0, value=float(base_price), key=f"np_{p_id}_{idx}")
