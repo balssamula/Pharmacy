@@ -896,3 +896,75 @@ def get_branch_quantities(product_id: int) -> Dict:
     except:
         pass
     return {}
+
+def fetch_group_products_v2(parent_id: int, headers: Dict[str, str]) -> List[Dict]:
+    """جلب المنتجات الفرعية لمجموعة باستخدام API سلة الصحيح"""
+    items = []
+    try:
+        res = safe_api_request("GET", f"https://api.salla.dev/admin/v2/products/{parent_id}", headers)
+        if not res or not res.get('data'): 
+            return items
+        
+        data = res['data']
+        
+        # ✅ الطريقة 1: consisted_products (الأفضل والأحدث)
+        if data.get('consisted_products'):
+            for item in data['consisted_products']:
+                items.append({
+                    'id': item.get('id'),
+                    'name': item.get('name', 'منتج بدون اسم'),
+                    'sku': item.get('sku', 'لا يوجد'),
+                    'price': get_flat_price(item.get('price', 0)),
+                    'bundle_quantity': item.get('quantity_in_group', 1),
+                    'stock_quantity': item.get('quantity', 0),
+                    'sold_quantity': item.get('sold_quantity', 0),
+                    'status': item.get('status', 'sale'),
+                    'image': item.get('thumbnail') or item.get('main_image'),
+                    'url': item.get('url'),
+                    'with_tax': item.get('with_tax', True)
+                })
+            return items
+        
+        # ✅ الطريقة 2: bundle.products
+        bundle = data.get('bundle', {})
+        if bundle.get('products'):
+            for item in bundle['products']:
+                items.append({
+                    'id': item.get('id'),
+                    'name': item.get('name', 'منتج بدون اسم'),
+                    'sku': item.get('sku', 'لا يوجد'),
+                    'price': item.get('price', 0),
+                    'bundle_quantity': item.get('quantity_in_group', 1),
+                    'stock_quantity': item.get('qty', 0),
+                    'sold_quantity': 0,
+                    'status': 'sale',
+                    'image': item.get('main_image'),
+                    'url': None,
+                    'with_tax': True
+                })
+            return items
+        
+        # ✅ الطريقة 3: grouped_items
+        if data.get('grouped_items'):
+            for item in data['grouped_items']:
+                prod = item.get('product', {})
+                if prod and prod.get('id'):
+                    items.append({
+                        'id': prod.get('id'),
+                        'name': prod.get('name', 'منتج بدون اسم'),
+                        'sku': prod.get('sku', 'لا يوجد'),
+                        'price': get_flat_price(prod.get('price', 0)),
+                        'bundle_quantity': item.get('quantity', 1),
+                        'stock_quantity': prod.get('quantity', 0),
+                        'sold_quantity': prod.get('sold_quantity', 0),
+                        'status': prod.get('status', 'sale'),
+                        'image': prod.get('thumbnail') or prod.get('main_image'),
+                        'url': prod.get('url'),
+                        'with_tax': prod.get('with_tax', True)
+                    })
+            return items
+        
+    except Exception as e:
+        st.error(f"❌ خطأ: {str(e)}")
+    
+    return items
