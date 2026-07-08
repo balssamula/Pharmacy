@@ -383,18 +383,21 @@ def render_group_product_section(p_id: str, p_name: str, idx: int, headers: Dict
     st.markdown("---")
     
     with st.spinner(f"جاري تحميل منتجات المجموعة..."):
-        group_products = fetch_group_products_v2(int(p_id), headers)  # ✅ استخدام الدالة الجديدة
+        # ✅ استخدام الدالة المُصححة
+        group_products = get_group_products(int(p_id))
     
     with st.expander(f"📦 تفاصيل مجموعة المنتجات ({len(group_products)} منتج)", expanded=False):
         if not group_products:
             st.info("ℹ️ لا توجد منتجات في هذه المجموعة.")
-            # عرض خيار لاختبار الـ API
-            with st.expander("🔍 اختبار جلب المجموعة"):
+            
+            # ✅ عرض خيار اختبار API مع تنسيق أفضل
+            with st.expander("🔍 اختبار جلب المجموعة (للتشخيص)"):
                 res = safe_api_request("GET", f"https://api.salla.dev/admin/v2/products/{int(p_id)}", headers)
                 if res and res.get('data'):
                     st.json(res['data'])
+                else:
+                    st.error("فشل جلب بيانات المجموعة")
         else:
-            # عرض المنتجات كما هي
             for gp_idx, gp in enumerate(group_products):
                 gp_id = str(gp.get('id', 'N/A'))
                 gp_name_sub = gp.get('name', 'بدون اسم')
@@ -404,7 +407,23 @@ def render_group_product_section(p_id: str, p_name: str, idx: int, headers: Dict
                 gp_stock = gp.get('stock_quantity', 0)
                 gp_image = gp.get('image')
                 
-                st.markdown(f"<div style='background: #f8f9fa; border-radius: 10px; padding: 15px; margin-bottom: 12px; border-right: 4px solid #6C2BD9;'><div style='display: flex; gap: 15px; align-items: center;'><div style='flex: 0 0 60px;'>{f"<img src='{gp_image}' style='width: 60px; height: 60px; border-radius: 8px;'>" if gp_image else "🚫"}</div><div style='flex: 1;'> <b>{gp_name_sub}</b><br><span style='font-size: 12px; color: #666;'>🆔 {gp_id} | 🔢 {gp_sku} | 💰 {gp_price:.2f} SAR</span></div><div style='flex: 0 0 120px; font-size: 12px; font-weight: bold;'>حبات: <span style='color:#6C2BD9;'>{gp_bundle_qty}</span><br>مخزون: {gp_stock}</div></div></div>", unsafe_allow_html=True)
+                st.markdown(f"""
+                <div style='background: #f8f9fa; border-radius: 10px; padding: 15px; margin-bottom: 12px; border-right: 4px solid #6C2BD9;'>
+                    <div style='display: flex; gap: 15px; align-items: center;'>
+                        <div style='flex: 0 0 60px;'>
+                            {f"<img src='{gp_image}' style='width: 60px; height: 60px; border-radius: 8px;'>" if gp_image else "🚫"}
+                        </div>
+                        <div style='flex: 1;'>
+                            <b>{gp_name_sub}</b><br>
+                            <span style='font-size: 12px; color: #666;'>🆔 {gp_id} | 🔢 {gp_sku} | 💰 {gp_price:.2f} SAR</span>
+                        </div>
+                        <div style='flex: 0 0 120px; font-size: 12px; font-weight: bold;'>
+                            حبات: <span style='color:#6C2BD9;'>{gp_bundle_qty}</span><br>
+                            مخزون: {gp_stock}
+                        </div>
+                    </div>
+                </div>
+                """, unsafe_allow_html=True)
                 
                 c_q, c_act = st.columns(2)
                 with c_q:
@@ -412,28 +431,42 @@ def render_group_product_section(p_id: str, p_name: str, idx: int, headers: Dict
                     if st.button("💾 حفظ", key=f"gqs_{gp_id}_{idx}_{gp_idx}", use_container_width=True):
                         with st.spinner("تحديث..."):
                             if update_group_product_quantity(int(p_id), int(gp_id), new_q):
-                                st.success("✅ تم!"); st.rerun()
+                                st.success("✅ تم تحديث الكمية!")
+                                st.rerun()
+                            else:
+                                st.error("❌ فشل التحديث")
                 with c_act:
-                    if gp.get('url'): st.markdown(f"[🔗 عرض بالمتجر]({gp.get('url')})")
+                    if gp.get('url'): 
+                        st.markdown(f"[🔗 عرض بالمتجر]({gp.get('url')})")
                     if st.button("🗑️ إزالة", key=f"gqr_{gp_id}_{idx}_{gp_idx}", use_container_width=True):
                         with st.spinner("إزالة..."):
                             if remove_product_from_group(int(p_id), int(gp_id)):
-                                st.success("✅ تمت الإزالة!"); st.rerun()
+                                st.success("✅ تمت الإزالة!")
+                                st.rerun()
+                            else:
+                                st.error("❌ فشل الإزالة")
                 st.markdown("<hr style='margin:10px 0; border:0; border-bottom:1px dashed #ddd;'>", unsafe_allow_html=True)
                 
         st.markdown("#### ➕ إضافة منتج للمجموعة")
         search_p = st.text_input("ابحث باسم أو SKU للإضافة:", key=f"gps_{p_id}_{idx}")
         if search_p:
-            f_prods = [pr for pr in st.session_state.get("all_products", []) if str(pr.get('id')) != p_id and (search_p.lower() in str(pr.get('name', '')).lower() or search_p.lower() in str(pr.get('sku', '')).lower())]
+            f_prods = [pr for pr in st.session_state.get("all_products", []) 
+                      if str(pr.get('id')) != p_id and 
+                      (search_p.lower() in str(pr.get('name', '')).lower() or 
+                       search_p.lower() in str(pr.get('sku', '')).lower())]
             if f_prods:
                 for pr in f_prods[:5]:
                     c1, c2 = st.columns([3, 1])
-                    with c1: st.markdown(f"**{pr.get('name')}** | `{pr.get('sku')}`")
+                    with c1: 
+                        st.markdown(f"**{pr.get('name')}** | `{pr.get('sku')}`")
                     with c2:
                         if st.button("➕ إضافة", key=f"gpa_{pr.get('id')}_{idx}"):
                             with st.spinner("إضافة..."):
                                 if add_product_to_group(int(p_id), pr.get('id')):
-                                    st.success("✅ تمت الإضافة!"); st.rerun()
+                                    st.success("✅ تمت الإضافة!")
+                                    st.rerun()
+                                else:
+                                    st.error("❌ فشل الإضافة")
             else:
                 st.info("لا توجد تطابقات.")
 
@@ -567,12 +600,30 @@ def render_product_card(idx: int, p: Dict, headers: Dict[str, str]):
                         if update_product_status(p_id, t_st): st.rerun()
 
                 with st.popover("✏️ تحديث العناوين"):
-                    n_pr = st.text_input("ترويجي:", value="" if p_promotion=="-" else p_promotion, key=f"npr_{p_id}_{idx}")
-                    n_su = st.text_input("فرعي:", value="" if p_sub_title=="-" else p_sub_title, key=f"nsu_{p_id}_{idx}")
+                    # ✅ استخدام القيم الصحيحة
+                    current_promo = p.get('promotion_title', '') or (p.get('promotion', {}).get('title', ''))
+                    current_sub = p.get('promotion_subtitle', '') or (p.get('promotion', {}).get('sub_title', ''))
+    
+                    n_pr = st.text_input("ترويجي:", value=current_promo, key=f"npr_{p_id}_{idx}")
+                    n_su = st.text_input("فرعي:", value=current_sub, key=f"nsu_{p_id}_{idx}")
+    
                     if st.button("💾 حفظ العناوين", key=f"svt_{p_id}_{idx}", type="primary", use_container_width=True):
                         with st.spinner("جاري الحفظ..."):
-                            if update_product_promotions_secure(p_id, n_pr, n_su, headers): 
-                                st.success("✅ تم تحديث العناوين!"); st.rerun()
+                            # ✅ استخدام الدالة الصحيحة مع القيم الجديدة
+                            if update_product_promotions_secure(int(p_id), n_pr, n_su, headers):
+                                st.success("✅ تم تحديث العناوين!")
+                                # تحديث البيانات في session_state
+                                for i, prod in enumerate(st.session_state["all_products"]):
+                                    if str(prod.get('id')) == p_id:
+                                        st.session_state["all_products"][i]['promotion_title'] = n_pr
+                                        st.session_state["all_products"][i]['promotion_subtitle'] = n_su
+                                        if 'promotion' in st.session_state["all_products"][i]:
+                                            st.session_state["all_products"][i]['promotion']['title'] = n_pr
+                                            st.session_state["all_products"][i]['promotion']['sub_title'] = n_su
+                                        break
+                                st.rerun()
+                            else:
+                                st.error("❌ فشل تحديث العناوين")
 
                 # ✅ زر حذف المنتج
                 with st.popover("حذف المنتج", icon="🗑️", type="primary"):
