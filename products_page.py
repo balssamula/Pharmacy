@@ -303,37 +303,74 @@ def render_products_page():
     render_matching_section(headers)
     st.divider()
 
+    # ==========================================
+    # 🔍 الفلاتر المحسنة في صفحة المنتجات
+    # ==========================================
+
     # --- الفلاتر والعرض ---
     st.markdown("### 🔍 أدوات التصفية والبحث في المنتجات")
     sq = st.text_input("ابحث باسم أو SKU:").lower()
-    
-    f1, f2, f3, f4, f5 = st.columns(5)
-    with f1: f_hid = st.checkbox("مخفي")
-    with f2: f_img = st.checkbox("بدون صورة")
-    with f3: f_pro = st.checkbox("له عنوان ترويجي")
-    with f4: f_dis = st.checkbox("له سعر مخفض ")
-    with f5: f_grp = st.checkbox("📦 مجموعات منتجات فقط")
 
+    # ✅ فلاتر محسنة بخيارين
+    st.markdown("#### 🎯 فلاتر سريعة:")
+    col_f1, col_f2, col_f3, col_f4, col_f5 = st.columns(5)
+
+    with col_f1:
+        filter_status_type = st.radio("الحالة:", ["الكل", "مخفي", "معروض"], horizontal=True, key="f_status_type")
+    with col_f2:
+        filter_image = st.radio("الصورة:", ["الكل", "بها صورة", "بدون صورة"], horizontal=True, key="f_image")
+    with col_f3:
+        filter_promo = st.radio("العناوين:", ["الكل", "ترويجي", "فرعي"], horizontal=True, key="f_promo")
+    with col_f4:
+        filter_discount = st.radio("السعر:", ["الكل", "مخفض", "غير مخفض"], horizontal=True, key="f_discount")
+    with col_f5:
+        filter_type = st.radio("النوع:", ["الكل", "منتجات عادية", "مجموعة منتجات"], horizontal=True, key="f_type")
+
+    # تطبيق الفلاتر
     filtered = []
     for p in st.session_state["all_products"]:
+        # فلتر البحث
         if sq and sq not in str(p.get('name', '')).lower() and sq not in str(p.get('sku', '')).lower(): 
             continue
-        if f_hid and p.get('status') != 'hidden': 
+    
+        # فلتر الحالة
+        if filter_status_type == "مخفي" and p.get('status') != 'hidden':
             continue
-        if f_img and p.get('thumbnail'): 
+        if filter_status_type == "معروض" and p.get('status') == 'hidden':
             continue
-        if f_pro and not p.get('promotion_title'): 
+    
+        # فلتر الصورة
+        has_image = bool(p.get('thumbnail') or p.get('main_image'))
+        if filter_image == "بها صورة" and not has_image:
             continue
-        if f_grp and p.get('type') != 'group_products': 
+        if filter_image == "بدون صورة" and has_image:
             continue
-        
-        # فلتر المخفض
+    
+        # فلتر العناوين
+        has_promo = bool(p.get('promotion_title') or (p.get('promotion', {}).get('title')))
+        has_sub = bool(p.get('promotion_subtitle') or (p.get('promotion', {}).get('sub_title')))
+        if filter_promo == "ترويجي" and not has_promo:
+            continue
+        if filter_promo == "فرعي" and not has_sub:
+            continue
+    
+        # فلتر السعر المخفض
         pr = get_flat_price(p.get('price', 0))
         reg = get_flat_price(p.get('regular_price', 0))
         sal = get_flat_price(p.get('sale_price', 0))
-        if f_dis and not (sal > 0 and sal < (reg if reg > 0 else pr)): 
+        is_discounted = (sal > 0 and sal < (reg if reg > 0 else pr))
+        if filter_discount == "مخفض" and not is_discounted:
             continue
-            
+        if filter_discount == "غير مخفض" and is_discounted:
+            continue
+    
+        # فلتر النوع
+        is_group = p.get('type') == 'group_products'
+        if filter_type == "منتجات عادية" and is_group:
+            continue
+        if filter_type == "مجموعة منتجات" and not is_group:
+            continue
+    
         filtered.append(p)
         
     st.info(f"📊 النتائج: {len(filtered)} منتج")
@@ -655,6 +692,23 @@ def render_product_card(idx: int, p: Dict, headers: Dict[str, str]):
         type_badge = "<span style='background: linear-gradient(135deg, #6C2BD9 0%, #9B59B6 100%); color: white; padding: 4px 12px; border-radius: 20px; font-size: 11px; font-weight:600;'>📦 مجموعة منتجات</span>" if product_type == 'group_products' else ""
         border_color = "#9B59B6" if product_type == 'group_products' else "#e67e22"
 
+        # ✅ زر تحديث سريع للمنتج (في شريط العنوان)
+        with st.popover("🔄", use_container_width=True):
+            st.markdown(f"**تحديث بيانات المنتج:** {p_name}")
+            if st.button("🔄 تحديث هذا المنتج", key=f"refresh_{p_id}_{idx}", type="primary", use_container_width=True):
+                with st.spinner("جاري تحديث المنتج..."):
+                    fresh_res = safe_api_request("GET", f"https://api.salla.dev/admin/v2/products/{int(p_id)}", headers)
+                    if fresh_res and fresh_res.get('data'):
+                        # تحديث البيانات في session_state
+                        for i, prod in enumerate(st.session_state["all_products"]):
+                            if str(prod.get('id')) == p_id:
+                                st.session_state["all_products"][i] = fresh_res['data']
+                                break
+                        st.success("✅ تم تحديث المنتج!")
+                        st.rerun()
+                    else:
+                        st.error("❌ فشل تحديث المنتج")
+                        
         # استخراج العروض المربوطة بالمنتج من الذاكرة
         p_offers = st.session_state.get("product_offers_map", {}).get(p_id, [])
         offer_badge = f"<span style='background: linear-gradient(135deg, #F7971E 0%, #FFD200 100%); color: #1a1a2e; padding: 4px 12px; border-radius: 20px; font-size: 11px; font-weight: 700; border: 2px solid #FFD700; box-shadow: 0 2px 8px rgba(255, 215, 0, 0.4);'>🎁 مشمول في ({len(p_offers)}) عروض</span>" if p_offers else ""
@@ -663,7 +717,7 @@ def render_product_card(idx: int, p: Dict, headers: Dict[str, str]):
         st.markdown(f"<div style='background: linear-gradient(135deg, #243b55 0%, #141e30 100%); padding: 14px 20px; border-radius: 12px 12px 0px 0px; margin-top: 25px; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 10px; border-bottom: 3px solid {border_color};'><span style='color: #ffffff; font-weight: bold; font-size: 15px;'>📦 {p_name}</span><div style='display: flex; gap: 8px; flex-wrap: wrap; align-items: center;'><span style='background: rgba(255,255,255,0.2); color: #fff; padding: 4px 12px; border-radius: 20px; font-size: 11px; font-weight:600;'>{disp_status}</span><span style='background: rgba(0, 235, 207, 0.2); color: #00EBCF; padding: 4px 12px; border-radius: 20px; font-size: 11px; font-weight:600;'>{tax_status}</span>{type_badge}{offer_badge}</div></div>", unsafe_allow_html=True)
 
         with st.container(border=True):
-            st.markdown("""<div style="background-color: #fafbfc; padding: 20px; border-radius: 0px 0px 12px 12px; border: 1px solid #e1e8ed; border-top: none; margin-bottom: 20px;">""", unsafe_allow_html=True)
+            st.markdown("""<div style="background-color: #fafbfc; padding: 20px; margin-bottom: 20px;">""", unsafe_allow_html=True)
             c_img, c_info, c_prc, c_act = st.columns([1.5, 2.5, 2.5, 2])
             
             with c_img:
