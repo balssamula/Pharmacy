@@ -7,7 +7,7 @@ from utils import (
     get_headers, safe_api_request, SALLA_API_URL, generate_salla_excel_template,
     process_excel_import, export_offers_to_excel, safe_parse_date,
     OFFER_TYPES_MAP, CHANNELS_MAP, APPLIED_TO_MAP, safe_float,
-    update_product_promotions_secure
+    update_product_promotions_secure, render_dynamic_selection
 )
 
 def render_offers_page():
