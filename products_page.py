@@ -360,7 +360,26 @@ def render_products_page():
     for idx, p in enumerate(filtered[start:start+limit]):
         render_product_card(start + idx, p, headers)
 
+    # ✅ عرض أداة التشخيص (إذا كانت مفتوحة)
+    render_diagnose_section(headers)
 
+def render_diagnose_section(headers: Dict[str, str]):
+    """عرض أداة تشخيص العناوين"""
+    if st.session_state.get("show_diagnose", False) and st.session_state.get("diagnose_product_id"):
+        product_id = st.session_state["diagnose_product_id"]
+        
+        with st.container(border=True):
+            col_title, col_close = st.columns([5, 1])
+            with col_title:
+                st.markdown("### 🔍 أداة تشخيص العناوين الترويجية والفرعية")
+            with col_close:
+                if st.button("❌ إغلاق", use_container_width=True, type="primary"):
+                    st.session_state["show_diagnose"] = False
+                    st.session_state["diagnose_product_id"] = None
+                    st.rerun()
+            
+            diagnose_product_promotions(product_id, headers)
+            
 def render_settings_and_templates(headers: Dict[str, str]):
     """يعرض إعدادات الربط وتحميل القوالب والكميات"""
     col_widget1, col_widget2 = st.columns(2)
@@ -739,23 +758,31 @@ def render_product_card(idx: int, p: Dict, headers: Dict[str, str]):
                     n_pr = st.text_input("ترويجي:", value=current_promo, key=f"npr_{p_id}_{idx}")
                     n_su = st.text_input("فرعي:", value=current_sub, key=f"nsu_{p_id}_{idx}")
     
-                    if st.button("💾 حفظ العناوين", key=f"svt_{p_id}_{idx}", type="primary", use_container_width=True):
-                        with st.spinner("جاري الحفظ..."):
-                            # ✅ استخدام الدالة الصحيحة مع القيم الجديدة
-                            if update_product_promotions_secure(int(p_id), n_pr, n_su, headers):
-                                st.success("✅ تم تحديث العناوين!")
-                                # تحديث البيانات في session_state
-                                for i, prod in enumerate(st.session_state["all_products"]):
-                                    if str(prod.get('id')) == p_id:
-                                        st.session_state["all_products"][i]['promotion_title'] = n_pr
-                                        st.session_state["all_products"][i]['promotion_subtitle'] = n_su
-                                        if 'promotion' in st.session_state["all_products"][i]:
-                                            st.session_state["all_products"][i]['promotion']['title'] = n_pr
-                                            st.session_state["all_products"][i]['promotion']['sub_title'] = n_su
-                                        break
-                                st.rerun()
-                            else:
-                                st.error("❌ فشل تحديث العناوين")
+                    col_btn1, col_btn2 = st.columns(2)
+                    with col_btn1:
+                        if st.button("💾 حفظ العناوين", key=f"svt_{p_id}_{idx}", type="primary", use_container_width=True):
+                            with st.spinner("جاري الحفظ..."):
+                                if update_product_promotions_secure(int(p_id), n_pr, n_su, headers):
+                                    st.success("✅ تم تحديث العناوين!")
+                                    # تحديث البيانات في session_state
+                                    for i, prod in enumerate(st.session_state["all_products"]):
+                                        if str(prod.get('id')) == p_id:
+                                            st.session_state["all_products"][i]['promotion_title'] = n_pr
+                                            st.session_state["all_products"][i]['promotion_subtitle'] = n_su
+                                            if 'promotion' in st.session_state["all_products"][i]:
+                                                st.session_state["all_products"][i]['promotion']['title'] = n_pr
+                                                st.session_state["all_products"][i]['promotion']['sub_title'] = n_su
+                                            break
+                                    st.rerun()
+                                else:
+                                    st.error("❌ فشل تحديث العناوين")
+    
+                    with col_btn2:
+                        # ✅ زر التشخيص (يظهر بجانب زر الحفظ)
+                        if st.button("🔍 تشخيص العناوين", key=f"diag_{p_id}_{idx}", use_container_width=True):
+                            st.session_state["diagnose_product_id"] = int(p_id)
+                            st.session_state["show_diagnose"] = True
+                            st.rerun()
 
                 # ✅ زر حذف المنتج
                 with st.popover("حذف المنتج", icon="🗑️", type="primary"):
@@ -971,3 +998,145 @@ def fetch_group_products_v2(parent_id: int, headers: Dict[str, str]) -> List[Dic
         st.error(f"❌ خطأ: {str(e)}")
     
     return items
+
+# ==========================================
+# 🔍 أداة تشخيص العناوين الترويجية والفرعية
+# ==========================================
+def diagnose_product_promotions(product_id: int, headers: Dict[str, str]):
+    """
+    أداة تشخيصية لعرض هيكل العناوين الترويجية والفرعية من API سلة
+    """
+    st.markdown("### 🔍 تشخيص العناوين الترويجية والفرعية")
+    
+    with st.spinner("جاري جلب بيانات المنتج من API..."):
+        res = safe_api_request("GET", f"https://api.salla.dev/admin/v2/products/{product_id}", headers)
+        
+    if not res or not res.get('data'):
+        st.error("❌ فشل جلب بيانات المنتج")
+        return
+    
+    data = res['data']
+    
+    st.markdown("#### 📋 هيكل العناوين في استجابة API:")
+    
+    # عرض الهيكل الكامل للعناوين
+    col1, col2 = st.columns(2)
+    
+    with col1:
+        st.markdown("**🔍 الحقول المتعلقة بالعناوين:**")
+        
+        # عرض جميع الحقول المتعلقة بالعناوين
+        promo_fields = {
+            'promotion': data.get('promotion'),
+            'promotion_title': data.get('promotion_title'),
+            'promotion_subtitle': data.get('promotion_subtitle'),
+            'subtitle': data.get('subtitle'),
+            'title': data.get('title'),
+        }
+        
+        for field, value in promo_fields.items():
+            if value is not None:
+                if isinstance(value, dict):
+                    st.json({field: value})
+                else:
+                    st.write(f"**{field}**: `{value}`")
+            else:
+                st.write(f"**{field}**: `غير موجود`")
+    
+    with col2:
+        st.markdown("**📝 القيم الحالية في العرض:**")
+        
+        # استخراج القيم الحالية
+        current_promo = data.get('promotion_title', '') or (data.get('promotion', {}).get('title', '') if isinstance(data.get('promotion'), dict) else '')
+        current_sub = data.get('promotion_subtitle', '') or (data.get('promotion', {}).get('sub_title', '') if isinstance(data.get('promotion'), dict) else '')
+        current_subtitle = data.get('subtitle', '')
+        
+        st.write(f"**العنوان الترويجي الحالي:** `{current_promo or '(فارغ)'}`")
+        st.write(f"**العنوان الفرعي (promotion_subtitle):** `{current_sub or '(فارغ)'}`")
+        st.write(f"**العنوان الفرعي (subtitle):** `{current_subtitle or '(فارغ)'}`")
+        
+        if data.get('promotion'):
+            st.markdown("**📦 كائن promotion:**")
+            st.json(data['promotion'])
+    
+    st.markdown("---")
+    st.markdown("#### 🛠️ اختبار تحديث العناوين:")
+    
+    col_test1, col_test2 = st.columns(2)
+    
+    with col_test1:
+        test_promo = st.text_input("العنوان الترويجي التجريبي:", value="اختبار ترويجي", key=f"test_promo_{product_id}")
+        if st.button("💾 تحديث العنوان الترويجي", key=f"test_update_promo_{product_id}", type="primary"):
+            with st.spinner("جاري التحديث..."):
+                # تجربة تحديث العنوان الترويجي
+                payload = {
+                    "name": data.get('name'),
+                    "price": get_flat_price(data.get('price', 0)),
+                    "promotion_title": test_promo
+                }
+                # الحفاظ على السعر المخفض
+                sale_price = get_flat_price(data.get('sale_price', 0))
+                if sale_price > 0:
+                    payload['sale_price'] = sale_price
+                
+                res_update = safe_api_request("PUT", f"https://api.salla.dev/admin/v2/products/{product_id}", headers, json=payload)
+                if res_update:
+                    st.success("✅ تم تحديث العنوان الترويجي!")
+                    # إعادة جلب البيانات لعرض التغيير
+                    st.rerun()
+                else:
+                    st.error("❌ فشل التحديث")
+    
+    with col_test2:
+        test_sub = st.text_input("العنوان الفرعي التجريبي:", value="اختبار فرعي", key=f"test_sub_{product_id}")
+        # اختيار نوع الحقل الذي سيتم تحديثه
+        sub_field_type = st.selectbox(
+            "اختر الحقل المراد تحديثه:",
+            ["promotion_subtitle", "subtitle", "كليهما"],
+            key=f"sub_field_type_{product_id}"
+        )
+        
+        if st.button("💾 تحديث العنوان الفرعي", key=f"test_update_sub_{product_id}", type="primary"):
+            with st.spinner("جاري التحديث..."):
+                payload = {
+                    "name": data.get('name'),
+                    "price": get_flat_price(data.get('price', 0)),
+                }
+                
+                # تحديث الحقل المختار
+                if sub_field_type in ["promotion_subtitle", "كليهما"]:
+                    payload["promotion_subtitle"] = test_sub
+                if sub_field_type in ["subtitle", "كليهما"]:
+                    payload["subtitle"] = test_sub
+                
+                # الحفاظ على السعر المخفض
+                sale_price = get_flat_price(data.get('sale_price', 0))
+                if sale_price > 0:
+                    payload['sale_price'] = sale_price
+                
+                res_update = safe_api_request("PUT", f"https://api.salla.dev/admin/v2/products/{product_id}", headers, json=payload)
+                if res_update:
+                    st.success(f"✅ تم تحديث العنوان الفرعي ({sub_field_type})!")
+                    st.rerun()
+                else:
+                    st.error("❌ فشل التحديث")
+    
+    st.markdown("---")
+    st.markdown("#### 📝 توصيات:")
+    
+    # تحليل النتائج وتقديم توصيات
+    if current_sub:
+        st.info(f"📌 العنوان الفرعي الحالي موجود في: `{current_sub}`")
+        st.write("✅ يبدو أن العنوان الفرعي يعمل بشكل صحيح.")
+    else:
+        st.warning("⚠️ العنوان الفرعي الحالي فارغ.")
+        
+        if data.get('promotion') and isinstance(data['promotion'], dict) and data['promotion'].get('sub_title'):
+            st.write("🔍 تم العثور على العنوان الفرعي في `promotion.sub_title`")
+            st.write("💡 استخدم `promotion_subtitle` لتحديثه.")
+        elif data.get('subtitle'):
+            st.write("🔍 تم العثور على العنوان الفرعي في `subtitle`")
+            st.write("💡 استخدم `subtitle` لتحديثه.")
+        else:
+            st.write("🔍 لم يتم العثور على أي عنوان فرعي.")
+            st.write("💡 جرب تحديث `promotion_subtitle` أو `subtitle`")
