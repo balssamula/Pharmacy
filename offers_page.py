@@ -197,12 +197,372 @@ def render_offers_page():
         raw_offers = fetch_all_pages(SALLA_API_URL, "جاري سحب العروض من متجرك")
 
     # ==========================================
-    # ⚡ الأزرار الجانبية (كما هي)
+    # ⚡ نظام الإجراءات السريعة الجانبية (الأزرار واللوحات)
     # ==========================================
     if "qa_action" not in st.session_state: 
         st.session_state.qa_action = None
 
-    # ... (الأزرار الجانبية كما هي في الكود الأصلي) ...
+    # ✅ جلب العروض مع شريط تقدم وعداد
+    with st.spinner("🔄 جاري جلب كافة العروض الحالية من المتجر..."):
+        raw_offers = fetch_all_pages(SALLA_API_URL, "جاري سحب العروض من متجرك")
+
+    # 1. إيقاف العروض
+    st.markdown('<span id="qa-marker-1"></span>', unsafe_allow_html=True)
+    if st.button("⏹️ إيقاف جميع العروض المفعلة", key="btn_qa_1"):
+        active_offers = [o for o in raw_offers if o.get('status') == 'active']
+        if not active_offers: 
+            st.warning("لا توجد عروض مفعلة")
+        else:
+            with st.spinner("جاري الإيقاف..."):
+                c = sum(1 for o in active_offers if safe_api_request("PUT", f"{SALLA_API_URL}/{o.get('id')}/status", headers, json={"status": "inactive"}))
+                st.success(f"تم إيقاف {c} عرض!")
+        st.session_state.qa_action = None
+
+    # 2. تواريخ الانتهاء وإزالة العناوين
+    st.markdown('<span id="qa-marker-2"></span>', unsafe_allow_html=True)
+    if st.button("📅 إدارة تواريخ الانتهاء", key="btn_qa_2"):
+        st.session_state.qa_action = "end_dates"
+        st.rerun()
+
+    # 3. تواريخ البداية
+    st.markdown('<span id="qa-marker-3"></span>', unsafe_allow_html=True)
+    if st.button("📅 إدارة تواريخ البداية", key="btn_qa_3"):
+        st.session_state.qa_action = "start_dates"
+        st.rerun()
+
+    # 4. تطبيق الكوبونات
+    st.markdown('<span id="qa-marker-4"></span>', unsafe_allow_html=True)
+    if st.button("🚀 تطبيق العرض مع كوبون (الكل)", key="btn_qa_4"):
+        with st.spinner("جاري تحديث كافة العروض..."):
+            active_offers = [o for o in raw_offers if o.get("status") == "active"]
+            c = 0
+            for offer_summary in active_offers:
+                offer_id = offer_summary.get("id")
+                full_offer_res = safe_api_request("GET", f"{SALLA_API_URL}/{offer_id}", headers)
+                if not full_offer_res or not full_offer_res.get("data"): 
+                    continue
+                payload = rebuild_offer_payload(full_offer_res["data"], {"applied_with_coupon": True})
+                if safe_api_request("PUT", f"{SALLA_API_URL}/{offer_id}", headers, json=payload): 
+                    c += 1
+            st.success(f"تم تفعيل دمج الكوبونات لـ {c} عرض!")
+        st.session_state.qa_action = None
+
+    # 5. مسودة العروض
+    st.markdown('<span id="qa-marker-5"></span>', unsafe_allow_html=True)
+    if st.button("📝 مسودة تأسيس العروض", key="btn_qa_5"):
+        st.session_state.qa_action = "draft"
+        st.rerun()
+
+    # ==========================================
+    # ⚡ اللوحات العلوية المريحة (تظهر عند النقر على الأزرار السريعة)
+    # ==========================================
+    if st.session_state.qa_action in ["end_dates", "start_dates", "draft"]:
+        with st.container(border=True):
+            col_t, col_c = st.columns([5, 1])
+            with col_c:
+                if st.button("❌ إغلاق اللوحة", use_container_width=True, type="primary"):
+                    st.session_state.qa_action = None
+                    st.rerun()
+
+            if st.session_state.qa_action == "end_dates":
+                with col_t: 
+                    st.markdown("### 📅 إدارة وتمديد تواريخ الانتهاء")
+                target_scope_end = st.radio("استهداف العروض للتمديد/الإنهاء:", ["تنتهي في تاريخ محدد", "جميع العروض المتاحة"], key="b_end_scope")
+                if target_scope_end == "تنتهي في تاريخ محدد":
+                    col_date1, col_time1 = st.columns(2)
+                    with col_date1: 
+                        target_date = st.date_input("تاريخ الانتهاء الحالي:", value=datetime.now().date(), key="be_t_date")
+                    with col_time1: 
+                        target_time = st.time_input("الوقت:", value=datetime.now().time().replace(minute=59, second=59), key="be_t_time")
+                    target_str = datetime.combine(target_date, target_time).strftime('%Y-%m-%d')
+                    matching_offers_end = [o for o in raw_offers if o.get('expiry_date', '') and o.get('expiry_date', '').startswith(target_str)]
+                else: 
+                    matching_offers_end = raw_offers
+
+                action_type = st.radio("الإجراء المطلوب تنفيذه:", ["تاريخ جديد للتمديد", "إلغاء التفعيل", "مسح العناوين الترويجية لمنتجاتها"], key="be_action")
+                
+                if action_type == "تاريخ جديد للتمديد":
+                    col_date2, col_time2 = st.columns(2)
+                    with col_date2: 
+                        new_date = st.date_input("التاريخ الجديد:", value=datetime.now().date() + timedelta(days=30), key="be_n_date")
+                    with col_time2: 
+                        new_time = st.time_input("الوقت الجديد:", value=datetime.now().time().replace(minute=59, second=59), key="be_n_time")
+                    new_expiry_str = datetime.combine(new_date, new_time).strftime('%Y-%m-%d %H:%M:%S')
+                    btn_lbl = "🔄 تطبيق التمديد"
+                elif action_type == "إلغاء التفعيل":
+                    btn_lbl = "🛑 تطبيق الإيقاف"
+                else:
+                    btn_lbl = "🧹 مسح العناوين الترويجية للمنتجات"
+                
+                if st.button(btn_lbl, use_container_width=True, type="primary"):
+                    if not matching_offers_end: 
+                        st.warning("لا توجد عروض مطابقة")
+                    else:
+                        with st.spinner("جاري المعالجة..."):
+                            if action_type == "مسح العناوين الترويجية لمنتجاتها":
+                                product_ids = set()
+                                st.info("جاري استخراج المنتجات المشمولة من العروض...")
+                                for offer in matching_offers_end:
+                                    offer_id = offer.get('id')
+                                    full_res = safe_api_request("GET", f"{SALLA_API_URL}/{offer_id}", headers)
+                                    if full_res and full_res.get('data'):
+                                        off_data = full_res['data']
+                                        for p in off_data.get('buy', {}).get('products', []):
+                                            pid = p.get('id', p) if isinstance(p, dict) else p
+                                            if str(pid).isdigit(): 
+                                                product_ids.add(str(pid))
+                                        for p in off_data.get('get', {}).get('products', []):
+                                            pid = p.get('id', p) if isinstance(p, dict) else p
+                                            if str(pid).isdigit(): 
+                                                product_ids.add(str(pid))
+                                
+                                c_prods = 0
+                                st.info(f"تم العثور على {len(product_ids)} منتج مختلف. جاري التحديث الآمن وإزالة العناوين...")
+                                for pid in product_ids:
+                                    if update_product_promotions_secure(int(pid), "", "", headers):
+                                        c_prods += 1
+                                st.success(f"✅ تم مسح وإفراغ العناوين الترويجية لـ {c_prods} منتج بنجاح!")
+                            else:
+                                c = 0
+                                for offer in matching_offers_end:
+                                    offer_id = offer.get('id')
+                                    if action_type == "إلغاء التفعيل":
+                                        if safe_api_request("PUT", f"{SALLA_API_URL}/{offer_id}/status", headers, json={"status": "inactive"}): 
+                                            c += 1
+                                    else:
+                                        full_res = safe_api_request("GET", f"{SALLA_API_URL}/{offer_id}", headers)
+                                        if full_res and full_res.get('data'):
+                                            payload = rebuild_offer_payload(full_res['data'], {"expiry_date": new_expiry_str})
+                                            if safe_api_request("PUT", f"{SALLA_API_URL}/{offer_id}", headers, json=payload): 
+                                                c += 1
+                                action_word = "إيقاف" if action_type == "إلغاء التفعيل" else "تمديد"
+                                st.success(f"✅ تم تنفيذ إجراء الـ {action_word} لـ {c} عرض بنجاح!")
+
+            elif st.session_state.qa_action == "start_dates":
+                with col_t: 
+                    st.markdown("### 📅 إدارة وتعديل تواريخ البداية")
+                target_scope_start = st.radio("استهداف العروض للبدء:", ["تبدأ في تاريخ محدد", "جميع العروض المتاحة"], key="bs_scope")
+                if target_scope_start == "تبدأ في تاريخ محدد":
+                    col_sd1, col_st1 = st.columns(2)
+                    with col_sd1: 
+                        target_s_date = st.date_input("تاريخ البداية الحالي:", value=datetime.now().date(), key="bs_t_date")
+                    with col_st1: 
+                        target_s_time = st.time_input("الوقت:", value=datetime.now().time().replace(minute=0, second=0), key="bs_t_time")
+                    target_s_str = datetime.combine(target_s_date, target_s_time).strftime('%Y-%m-%d')
+                    matching_offers_start = [o for o in raw_offers if o.get('start_date', '') and o.get('start_date', '').startswith(target_s_str)]
+                else: 
+                    matching_offers_start = raw_offers
+                
+                if st.button("🕒 تعيين الوقت الحالي", key="btn_now_start_bulk"):
+                    st.session_state["bs_n_date"] = (datetime.now() + timedelta(hours=3)).date()
+                    st.session_state["bs_n_time"] = (datetime.now() + timedelta(hours=3)).time()
+                col_nsd, col_nst = st.columns(2)
+                with col_nsd: 
+                    new_s_date = st.date_input("تاريخ البداية الجديد:", value=st.session_state.get("bs_n_date", datetime.now().date()), key="bs_n_date")
+                with col_nst: 
+                    new_s_time = st.time_input("الوقت الجديد:", value=st.session_state.get("bs_n_time", datetime.now().time().replace(minute=0, second=0)), key="bs_n_time")
+                new_start_str = datetime.combine(new_s_date, new_s_time).strftime('%Y-%m-%d %H:%M:%S')
+                
+                if st.button("🚀 تطبيق تاريخ البداية", use_container_width=True, type="primary"):
+                    if not matching_offers_start: 
+                        st.warning("لا توجد عروض مطابقة")
+                    else:
+                        with st.spinner("جاري التعديل..."):
+                            c = 0
+                            for offer in matching_offers_start:
+                                offer_id = offer.get('id')
+                                full_res = safe_api_request("GET", f"{SALLA_API_URL}/{offer_id}", headers)
+                                if full_res and full_res.get('data'):
+                                    payload = rebuild_offer_payload(full_res['data'], {"start_date": new_start_str})
+                                    if safe_api_request("PUT", f"{SALLA_API_URL}/{offer_id}", headers, json=payload): 
+                                        c += 1
+                            st.success(f"تم تعديل البداية لـ {c} عرض!")
+
+            elif st.session_state.qa_action == "draft":
+                with col_t: 
+                    st.markdown("### 📝 مصنع ومسودة تأسيس العروض")
+                st.info("استخدم هذه الأداة لرفع ملف المسودة (ملف قراءة العروض) وسيقوم النظام بتصنيع ملف إكسيل جاهز للاستيراد في سلة مبني على قوانين وخصومات معقدة.")
+                
+                def get_draft_template():
+                    import openpyxl
+                    from openpyxl.worksheet.datavalidation import DataValidation
+                    from openpyxl.styles import PatternFill, Font, Alignment, Border, Side
+                    
+                    draft_headers = [
+                        "رقم المنتج sku", "اسم المنتج", "سعر بيع المنتج", "نسبة الضريبة", "العلامة التجارية", "Agent", 
+                        "التصنيفات", "المعتمد لمجلة شهر 6", "كمية المنتجات لتطبيق العرض", "نسبة الخصم", "قيمة الخصم شامل", 
+                        "السعر قبل شامل", "السعر بعد شامل", "عرض مجمع", "تاريخ البدء", "تاريخ الانتهاء", "نوع الخصم"
+                    ]
+                    example_row = [
+                        "2746", "سنافي 20 مج حبوب 4 ق", 88.95, 0.15, "N.A", "SPIMACO", "MEDICINE", "2حبة بسعر 99.95 ريال",
+                        2, 0.5, 77.95, 177.9, 99.95, "عرض_مجمع_1", "2026-08-01 00:00:00", "2026-08-30 23:59:59", "خصم بنسبة"
+                    ]
+                    
+                    wb = openpyxl.Workbook()
+                    ws = wb.active
+                    ws.title = "مسودة العروض"
+                    ws.append(draft_headers)
+                    ws.append(example_row)
+                    
+                    header_fill = PatternFill(start_color="0F1C2E", end_color="0F1C2E", fill_type="solid")
+                    header_font = Font(color="FFFFFF", bold=True, name="Segoe UI", size=11)
+                    center_align = Alignment(horizontal="center", vertical="center", wrap_text=True)
+                    thin_border = Border(left=Side(style='thin', color='DDDDDD'), right=Side(style='thin', color='DDDDDD'), 
+                                         top=Side(style='thin', color='DDDDDD'), bottom=Side(style='thin', color='DDDDDD'))
+                    
+                    for col in range(1, len(draft_headers) + 1):
+                        cell = ws.cell(row=1, column=col)
+                        cell.fill = header_fill
+                        cell.font = header_font
+                        cell.alignment = center_align
+                        cell.border = thin_border
+                        ws.column_dimensions[openpyxl.utils.get_column_letter(col)].width = 20
+                        
+                    dv = DataValidation(type="list", formula1='"منتج مجاني,خصم بنسبة"', allow_blank=True)
+                    ws.add_data_validation(dv)
+                    dv.add("Q2:Q1000")
+                    
+                    buf = io.BytesIO()
+                    wb.save(buf)
+                    return buf.getvalue()
+
+                st.download_button("📥 تنزيل نموذج مسودة التأسيس (المنسق مع القوائم)", data=get_draft_template(), file_name="Draft_Offers_Template.xlsx", mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
+                uploaded_draft = st.file_uploader("📂 رفع ملف مسودة العروض المعبأ:", type=["xlsx", "csv"], key="draft_up")
+                
+                if uploaded_draft:
+                    if st.button("⚙️ معالجة المسودة وتوليد ملف العروض الجاهز لرفعه", type="primary"):
+                        try:
+                            df_draft = pd.read_excel(uploaded_draft) if uploaded_draft.name.endswith('.xlsx') else pd.read_csv(uploaded_draft)
+                            sku_map = {str(p.get('sku', '')).strip(): str(p.get('id', '')) for p in st.session_state["all_products"] if p.get('sku')}
+                            offer_name_map = {str(o.get('name', '')).strip(): str(o.get('id', '')) for o in raw_offers}
+                            
+                            output_rows = []
+                            df_draft['عرض مجمع'] = df_draft['عرض مجمع'].fillna(df_draft.index.astype(str) + "_single_offer")
+                            
+                            for group_name, group_df in df_draft.groupby('عرض مجمع'):
+                                first_row = group_df.iloc[0]
+                                skus = [str(x).strip() for x in group_df['رقم المنتج sku'].tolist() if pd.notna(x)]
+                                ids = [sku_map.get(s, '') for s in skus if sku_map.get(s, '')]
+                                
+                                sku_str = "-".join(skus) if skus else "UnknownSKU"
+                                id_str = ",".join(ids)
+                                offer_msg = str(first_row.get('المعتمد لمجلة شهر 6', ''))
+                                offer_name = f"{sku_str} / {offer_msg}"
+                                
+                                action = "تحديث" if offer_name in offer_name_map else "إنشاء"
+                                offer_id = offer_name_map.get(offer_name, "")
+                                start_date = str(first_row.get('تاريخ البدء', '')) if pd.notna(first_row.get('تاريخ البدء')) else ''
+                                end_date = str(first_row.get('تاريخ الانتهاء', '')) if pd.notna(first_row.get('تاريخ الانتهاء')) else ''
+                                
+                                discount_type_raw = str(first_row.get('نوع الخصم', '')).strip()
+                                salla_discount_type = "منتج مجاني" if discount_type_raw == "منتج مجاني" else "خصم بنسبة"
+                                discount_amount = 0.0
+                                buy_qty = 1
+                                get_qty = 1
+                                
+                                if salla_discount_type == "منتج مجاني":
+                                    match = re.search(r'(\d+)\s*(?:حبة)?\s*\+\s*(\d+)', offer_msg)
+                                    if match: 
+                                        buy_qty = int(match.group(1))
+                                        get_qty = int(match.group(2))
+                                else:
+                                    match_price = re.search(r'(\d+)\s*حبة بسعر', offer_msg)
+                                    if match_price:
+                                        total_items = int(match_price.group(1))
+                                        buy_qty = total_items - 1
+                                        get_qty = 1
+                                        L = float(first_row.get('السعر قبل شامل', 0)) if pd.notna(first_row.get('السعر قبل شامل')) else 0
+                                        M = float(first_row.get('السعر بعد شامل', 0)) if pd.notna(first_row.get('السعر بعد شامل')) else 0
+                                        C = float(first_row.get('سعر بيع المنتج', 0)) if pd.notna(first_row.get('سعر بيع المنتج')) else 0
+                                        if C > 0: 
+                                            discount_amount = round(((L - M) / C) * 100, 2)
+                                    else:
+                                        match_pct = re.search(r'خصم\s*(\d+(\.\d+)?)%', offer_msg)
+                                        if match_pct: 
+                                            discount_amount = float(match_pct.group(1))
+                                        match_buy_get = re.search(r'على الحبة (الثانية|الثالثة|الرابعة)', offer_msg)
+                                        if match_buy_get:
+                                            buy_qty = {"الثانية": 1, "الثالثة": 2, "الرابعة": 3}.get(match_buy_get.group(1), 1)
+                                            get_qty = 1
+
+                                row = {
+                                    "الإجراء": action, 
+                                    "معرف العرض": offer_id, 
+                                    "اسم العرض": offer_name, 
+                                    "نوع العرض": "اذا اشترى العميل X يحصل على Y",
+                                    "المنصة": "متصفح وتطبيق المتجر", 
+                                    "تطبيق على": "منتجات مختارة", 
+                                    "تاريخ البدء": start_date, 
+                                    "تاريخ الانتهاء": end_date,
+                                    "تطبيق مع كوبون": "نعم", 
+                                    "الحد الأقصى للخصم": 0, 
+                                    "الحد الأدنى للشراء": 0, 
+                                    "الحد الأدنى للكمية": 0,
+                                    "مجموعات العملاء": "", 
+                                    "نوع شراء X": "منتج", 
+                                    "كمية شراء X": buy_qty, 
+                                    "عناصر شراء X (IDs)": id_str,
+                                    "نوع عرض Y": "منتج", 
+                                    "كمية عرض Y": get_qty, 
+                                    "عناصر عرض Y (IDs)": id_str,
+                                    "نوع الخصم": salla_discount_type, 
+                                    "قيمة الخصم": discount_amount, 
+                                    "رسالة العرض": offer_msg, 
+                                    "حالة العرض": "نشط"
+                                }
+                                output_rows.append(row)
+                                
+                            df_out = pd.DataFrame(output_rows)
+                            st.success("✅ تمت المعالجة بنجاح! راجع النتائج بالأسفل ثم قم بتحميل الملف الجاهز لرفعه لسلة.")
+                            st.dataframe(df_out, use_container_width=True)
+                            
+                            buf = io.BytesIO()
+                            df_out.to_excel(buf, index=False)
+                            st.download_button("📥 تحميل ملف العروض الجاهز للرفع 🚀", data=buf.getvalue(), file_name="Generated_Salla_Offers.xlsx", mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", type="primary")
+                        except Exception as e: 
+                            st.error(f"خطأ أثناء معالجة المسودة: {str(e)}")
+
+    st.divider()
+
+    # ==========================================
+    # --- رفع واستيراد ملف العروض الجاهز للسلة ---
+    # ==========================================
+    col_dl, col_ex = st.columns([1, 1])
+    with col_dl: 
+        st.download_button(
+            "📥 تنزيل قالب سلة الافتراضي للعروض", 
+            data=generate_salla_excel_template(), 
+            file_name="Salla_Offers_Template.xlsx", 
+            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", 
+            use_container_width=True
+        )
+    with col_ex:
+        if raw_offers: 
+            st.download_button(
+                "📥 تصدير قائمة العروض الحالية", 
+                data=export_offers_to_excel(raw_offers), 
+                file_name=f"Offers_Export_{datetime.now().strftime('%Y%m%d')}.xlsx", 
+                mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", 
+                use_container_width=True, 
+                type="primary"
+            )
+
+    uploaded_file = st.file_uploader("📂 رفع ملف العروض الجاهز (XLSX) لرفعه للمتجر مباشرة:", type=["xlsx"])
+    if uploaded_file:
+        try:
+            df_user = pd.read_excel(uploaded_file)
+            st.dataframe(df_user, use_container_width=True)
+            if st.button("🚀 تأكيد معالجة ونشر ملف العروض المرفوعة", use_container_width=True):
+                res = process_excel_import(df_user)
+                for m in res["success"]: 
+                    st.success(m)
+                for m in res["errors"]: 
+                    st.error(m)
+                st.rerun()
+        except Exception as e: 
+            st.error(f"خطأ في القراءة: {str(e)}")
+
+    st.divider()
 
     # ==========================================
     # 🔍 الفلاتر الخاصة بالعروض (بدون فلاتر المنتجات)
