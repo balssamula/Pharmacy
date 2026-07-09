@@ -71,11 +71,41 @@ def render_offers_page():
             font-size: 18px;
             pointer-events: none;
         }
+        
+        /* ✅ تنسيق حاويات الفلاتر */
+        .filter-container {
+            background: linear-gradient(135deg, #1a2332 0%, #0f1c2e 100%);
+            padding: 15px 20px;
+            border-radius: 12px;
+            border: 1px solid #2d3a4a;
+            margin-bottom: 15px;
+        }
+        .filter-title {
+            color: #00EBCF;
+            font-weight: bold;
+            font-size: 13px;
+            text-align: center;
+            margin-bottom: 8px;
+            display: block;
+        }
+        .filter-container .stRadio > div {
+            justify-content: center !important;
+        }
+        .filter-container .stRadio label {
+            color: #cbd5e1 !important;
+        }
+        .filter-container .stRadio label div[data-testid="stMarkdownContainer"] p {
+            color: #cbd5e1 !important;
+        }
+        .filter-container .stRadio [data-testid="stBaseButton-selected"] {
+            background-color: #00EBCF !important;
+            color: #0f1c2e !important;
+        }
     </style>
     """, unsafe_allow_html=True)
 
     # ==========================================
-    # 🌟 دالة السحب الذكية مع شريط التقدم (مُصححة)
+    # 🌟 دالة السحب الذكية مع شريط التقدم
     # ==========================================
     def fetch_all_pages(url_base, loading_text="جاري التحميل..."):
         all_data = []
@@ -110,6 +140,32 @@ def render_offers_page():
         status_text.empty()
         return all_data
     
+    # ✅ تعريف render_dynamic_selection قبل استخدامها
+    def render_dynamic_selection(label, selection_type, existing_ids, key_prefix):
+        options = {}
+        if selection_type == "product":
+            for p in st.session_state.get("all_products", []): 
+                options[f"🆔 {p.get('id')} - SKU:{p.get('sku','')} - {p.get('name','')}"] = p.get('id')
+        elif selection_type == "category":
+            for c in st.session_state.get("all_categories", []): 
+                options[f"📁 {c.get('name','')} - (ID:{c.get('id')})"] = c.get('id')
+        elif selection_type == "brand":
+            for b in st.session_state.get("all_brands", []): 
+                options[f"🏢 {b.get('name','')} - (ID:{b.get('id')})"] = b.get('id')
+                
+        selected_labels = []
+        options_inv = {v: k for k, v in options.items()}
+        for eid in existing_ids:
+            if eid in options_inv: 
+                selected_labels.append(options_inv[eid])
+            else:
+                fallback = f"ID: {eid} (غير متوفر)"
+                options[fallback] = eid
+                selected_labels.append(fallback)
+                
+        selected = st.multiselect(label, options=list(options.keys()), default=selected_labels, key=key_prefix)
+        return [options[s] for s in selected]
+    
     # ⚙️ تهيئة وجلب البيانات المساعدة
     if "all_products" not in st.session_state: 
         st.session_state["all_products"] = []
@@ -141,15 +197,15 @@ def render_offers_page():
         raw_offers = fetch_all_pages(SALLA_API_URL, "جاري سحب العروض من متجرك")
 
     # ==========================================
-    # ⚡ الأزرار الجانبية
+    # ⚡ الأزرار الجانبية (كما هي)
     # ==========================================
     if "qa_action" not in st.session_state: 
         st.session_state.qa_action = None
 
-    # ... (الأزرار الجانبية كما هي) ...
+    # ... (الأزرار الجانبية كما هي في الكود الأصلي) ...
 
     # ==========================================
-    # 🔍 الفلاتر المحسنة
+    # 🔍 الفلاتر الخاصة بالعروض (بدون فلاتر المنتجات)
     # ==========================================
     st.markdown("### 🔍 أدوات التصفية والبحث المتقدمة")
     
@@ -158,21 +214,6 @@ def render_offers_page():
         search_offer = st.text_input("🔎 ابحث باسم العرض أو بالمعرف:", key="filter_search_input")
     with col_status:
         status_filter = st.selectbox("📌 حالة العرض:", ["الكل", "نشط", "غير نشط"], key="filter_status_select")
-    
-    # ✅ فلاتر محسنة بخيارين
-    st.markdown("#### 🎯 فلاتر سريعة:")
-    col_f1, col_f2, col_f3, col_f4, col_f5 = st.columns(5)
-    
-    with col_f1:
-        filter_status_type = st.radio("الحالة:", ["الكل", "مخفي", "معروض"], horizontal=True, key="f_status_type")
-    with col_f2:
-        filter_image = st.radio("الصورة:", ["الكل", "بها صورة", "بدون صورة"], horizontal=True, key="f_image")
-    with col_f3:
-        filter_promo = st.radio("العناوين:", ["الكل", "ترويجي", "فرعي"], horizontal=True, key="f_promo")
-    with col_f4:
-        filter_discount = st.radio("السعر:", ["الكل", "مخفض", "غير مخفض"], horizontal=True, key="f_discount")
-    with col_f5:
-        filter_type = st.radio("النوع:", ["الكل", "منتجات عادية", "مجموعة منتجات"], horizontal=True, key="f_type")
     
     col_date1, col_date2 = st.columns(2)
     with col_date1:
@@ -328,36 +369,8 @@ def render_offers_page():
         elif exp_date and exp_date < now_ksa: exp_badge = "⚠️ منتهي الصلاحية"
         else: exp_badge = "⏳ ساري الصلاحية"
         
-        st.markdown(f"""
-            <div style="background: linear-gradient(135deg, #0f1c2e 0%, #1a365d 100%); padding: 14px 20px; border-radius: 12px 12px 0px 0px; margin-top: 25px; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 10px; border-bottom: 3px solid #00b4d8;">
-                <span style="color: #ffffff; font-weight: bold; font-size: 16px;">🎯 {offer_name} (ID: {offer_id})</span>
-                <div style="display: flex; gap: 8px; flex-wrap: wrap;">
-                    <span style="background: rgba(255,255,255,0.2); color: #fff; padding: 4px 12px; border-radius: 20px; font-size: 11px; font-weight:600;">{badge}</span>
-                    <span style="background: rgba(255,193,7,0.25); color: #ffca28; padding: 4px 12px; border-radius: 20px; font-size: 11px; font-weight:600;">{exp_badge}</span>
-                    <span style="background: rgba(0,235,207,0.2); color: #00EBCF; padding: 4px 12px; border-radius: 20px; font-size: 11px; font-weight:600;">🔄 تحديث سريع</span>
-                </div>
-            </div>
-        """, unsafe_allow_html=True)
-        
-        with st.container(border=True):            
-            # ✅ زر تحديث سريع للعرض
-            col_refresh, col_empty = st.columns([1, 5])
-            with col_refresh:
-                if st.button("🔄", key=f"refresh_offer_{offer_id}_{idx}", use_container_width=True):
-                    with st.spinner("جاري تحديث العرض..."):
-                        # جلب أحدث بيانات للعرض
-                        fresh_res = safe_api_request("GET", f"{SALLA_API_URL}/{offer_id}", headers)
-                        if fresh_res and fresh_res.get('data'):
-                            # تحديث البيانات في session_state
-                            for i, o in enumerate(raw_offers):
-                                if o.get('id') == offer_id:
-                                    raw_offers[i] = fresh_res['data']
-                                    break
-                            st.success("✅ تم تحديث العرض!")
-                            st.rerun()
-                        else:
-                            st.error("❌ فشل تحديث العرض")
-            
+        st.markdown(f"<div style="background: linear-gradient(135deg, #0f1c2e 0%, #1a365d 100%); padding: 14px 20px; border-radius: 12px 12px 0px 0px; margin-top: 25px; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 10px; border-bottom: 3px solid #00b4d8;"><span style="color: #ffffff; font-weight: bold; font-size: 16px;">🎯 {offer_name} (ID: {offer_id})</span><div style="display: flex; gap: 8px; flex-wrap: wrap;"><span style="background: rgba(255,255,255,0.2); color: #fff; padding: 4px 12px; border-radius: 20px; font-size: 11px; font-weight:600;">{badge}</span><span style="background: rgba(255,193,7,0.25); color: #ffca28; padding: 4px 12px; border-radius: 20px; font-size: 11px; font-weight:600;">{exp_badge}</span><span style="background: rgba(0,235,207,0.2); color: #00EBCF; padding: 4px 12px; border-radius: 20px; font-size: 11px; font-weight:600; cursor: pointer;" onclick="window.location.reload();">🔄 تحديث</span></div></div>", unsafe_allow_html=True)
+                  
             cx, cy = st.columns(2)
             with cx:
                 st.markdown(f"⚙️ **نوع العرض:** `{OFFER_TYPES_MAP.get(o_type_raw, o_type_raw)}`")
