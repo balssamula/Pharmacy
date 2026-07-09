@@ -645,22 +645,53 @@ def update_product_promotions_secure(product_id: int, new_promo: str, new_sub: s
     payload = {
         "name": p_data.get('name'),
         "price": base_price,
+        "status": p_data.get('status', 'sale')
     }
     
     # ✅ إضافة العناوين الترويجية والفرعية
     if new_promo is not None:
         payload["promotion_title"] = new_promo
-    if new_sub is not None:
-        payload["promotion_subtitle"] = new_sub
     
-    # الحفاظ على السعر المخفض إن وجد
+    if new_sub is not None:
+        # ✅ جرب كلا الحقلين لضمان التوافق
+        payload["promotion_subtitle"] = new_sub
+        # بعض المنتجات تستخدم subtitle بدلاً من promotion_subtitle
+        payload["subtitle"] = new_sub
+    
+    # ✅ الحفاظ على السعر المخفض إن وجد
     if sale_val > 0: 
         payload['sale_price'] = sale_val
     
-    # الحفاظ على حالة المنتج
-    payload['status'] = p_data.get('status', 'sale')
+    # ✅ إضافة promotion إذا كان موجوداً
+    if p_data.get('promotion'):
+        promotion = p_data.get('promotion', {})
+        if new_promo is not None:
+            promotion['title'] = new_promo
+        if new_sub is not None:
+            promotion['sub_title'] = new_sub
+        payload['promotion'] = promotion
     
+    # ✅ إرسال الطلب
     res = safe_api_request("PUT", f"https://api.salla.dev/admin/v2/products/{product_id}", headers, json=payload)
+    
+    if res:
+        # ✅ تحديث البيانات في session_state
+        all_products = st.session_state.get("all_products", [])
+        for i, p in enumerate(all_products):
+            if str(p.get('id')) == str(product_id):
+                if new_promo is not None:
+                    all_products[i]['promotion_title'] = new_promo
+                if new_sub is not None:
+                    all_products[i]['promotion_subtitle'] = new_sub
+                    all_products[i]['subtitle'] = new_sub
+                if 'promotion' in all_products[i]:
+                    if new_promo is not None:
+                        all_products[i]['promotion']['title'] = new_promo
+                    if new_sub is not None:
+                        all_products[i]['promotion']['sub_title'] = new_sub
+                break
+        st.session_state["all_products"] = all_products
+    
     return res is not None
 
 def update_product_tax_secure(product_id: int, with_tax: bool, tax_cause: str, headers: dict) -> bool:
