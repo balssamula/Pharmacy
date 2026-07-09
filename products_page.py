@@ -309,22 +309,86 @@ def render_products_page():
 
     # --- الفلاتر والعرض ---
     st.markdown("### 🔍 أدوات التصفية والبحث في المنتجات")
-    sq = st.text_input("ابحث باسم أو SKU:").lower()
 
-    # ✅ فلاتر محسنة بخيارين
-    st.markdown("#### 🎯 فلاتر سريعة:")
+    # ✅ حاوية البحث
+    with st.container(border=True):
+        st.markdown("#### 🔎 البحث")
+        sq = st.text_input("ابحث باسم أو SKU:", placeholder="أدخل اسم المنتج أو الكود...", label_visibility="collapsed")
+
+    # ✅ فلاتر سريعة بتصميم محترف
+    st.markdown("#### 🎯 فلاتر سريعة")
     col_f1, col_f2, col_f3, col_f4, col_f5 = st.columns(5)
 
+    # ✅ كل فلتر في حاوية منفصلة بتصميم جذاب
     with col_f1:
-        filter_status_type = st.radio("الحالة:", ["الكل", "مخفي", "معروض"], horizontal=True, key="f_status_type")
+        st.markdown("""
+        <div class="filter-container">
+            <span class="filter-title">📌 الحالة</span>
+        </div>
+        """, unsafe_allow_html=True)
+        filter_status_type = st.radio(
+            "",
+            ["الكل", "مخفي", "معروض"], 
+            horizontal=True, 
+            key="f_status_type",
+            label_visibility="collapsed"
+        )
+
     with col_f2:
-        filter_image = st.radio("الصورة:", ["الكل", "بها صورة", "بدون صورة"], horizontal=True, key="f_image")
+        st.markdown("""
+        <div class="filter-container">
+            <span class="filter-title">🖼️ الصورة</span>
+        </div>
+        """, unsafe_allow_html=True)
+        filter_image = st.radio(
+            "",
+            ["الكل", "بها صورة", "بدون صورة"], 
+            horizontal=True, 
+            key="f_image",
+            label_visibility="collapsed"
+        )
+
     with col_f3:
-        filter_promo = st.radio("العناوين:", ["الكل", "ترويجي", "فرعي"], horizontal=True, key="f_promo")
+        st.markdown("""
+        <div class="filter-container">
+            <span class="filter-title">📢 العناوين</span>
+        </div>
+        """, unsafe_allow_html=True)
+        filter_promo = st.radio(
+            "",
+            ["الكل", "ترويجي", "فرعي"], 
+            horizontal=True, 
+            key="f_promo",
+            label_visibility="collapsed"
+        )
+
     with col_f4:
-        filter_discount = st.radio("السعر:", ["الكل", "مخفض", "غير مخفض"], horizontal=True, key="f_discount")
+        st.markdown("""
+        <div class="filter-container">
+            <span class="filter-title">💰 السعر</span>
+        </div>
+        """, unsafe_allow_html=True)
+        filter_discount = st.radio(
+            "",
+            ["الكل", "مخفض", "غير مخفض"], 
+            horizontal=True, 
+            key="f_discount",
+            label_visibility="collapsed"
+        )
+
     with col_f5:
-        filter_type = st.radio("النوع:", ["الكل", "منتجات عادية", "مجموعة منتجات"], horizontal=True, key="f_type")
+        st.markdown("""
+        <div class="filter-container">
+            <span class="filter-title">📦 النوع</span>
+        </div>
+        """, unsafe_allow_html=True)
+        filter_type = st.radio(
+            "",
+            ["الكل", "منتجات عادية", "مجموعة منتجات"], 
+            horizontal=True, 
+            key="f_type",
+            label_visibility="collapsed"
+        )
 
     # تطبيق الفلاتر
     filtered = []
@@ -332,20 +396,20 @@ def render_products_page():
         # فلتر البحث
         if sq and sq not in str(p.get('name', '')).lower() and sq not in str(p.get('sku', '')).lower(): 
             continue
-    
+
         # فلتر الحالة
         if filter_status_type == "مخفي" and p.get('status') != 'hidden':
             continue
         if filter_status_type == "معروض" and p.get('status') == 'hidden':
             continue
-    
+
         # فلتر الصورة
         has_image = bool(p.get('thumbnail') or p.get('main_image'))
         if filter_image == "بها صورة" and not has_image:
             continue
         if filter_image == "بدون صورة" and has_image:
             continue
-    
+
         # فلتر العناوين
         has_promo = bool(p.get('promotion_title') or (p.get('promotion', {}).get('title')))
         has_sub = bool(p.get('promotion_subtitle') or (p.get('promotion', {}).get('sub_title')))
@@ -353,7 +417,7 @@ def render_products_page():
             continue
         if filter_promo == "فرعي" and not has_sub:
             continue
-    
+
         # فلتر السعر المخفض
         pr = get_flat_price(p.get('price', 0))
         reg = get_flat_price(p.get('regular_price', 0))
@@ -363,16 +427,16 @@ def render_products_page():
             continue
         if filter_discount == "غير مخفض" and is_discounted:
             continue
-    
+
         # فلتر النوع
         is_group = p.get('type') == 'group_products'
         if filter_type == "منتجات عادية" and is_group:
             continue
         if filter_type == "مجموعة منتجات" and not is_group:
             continue
-    
+
         filtered.append(p)
-        
+    
     st.info(f"📊 النتائج: {len(filtered)} منتج")
 
     # Pagination
@@ -714,7 +778,7 @@ def render_product_card(idx: int, p: Dict, headers: Dict[str, str]):
         offer_badge = f"<span style='background: linear-gradient(135deg, #F7971E 0%, #FFD200 100%); color: #1a1a2e; padding: 4px 12px; border-radius: 20px; font-size: 11px; font-weight: 700; border: 2px solid #FFD700; box-shadow: 0 2px 8px rgba(255, 215, 0, 0.4);'>🎁 مشمول في ({len(p_offers)}) عروض</span>" if p_offers else ""
 
         # ✅ رسم شريط العنوان (يظهر دائماً للجميع)
-        st.markdown(f"<div style='background: linear-gradient(135deg, #243b55 0%, #141e30 100%); padding: 14px 20px; border-radius: 12px 12px 0px 0px; margin-top: 25px; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 10px; border-bottom: 3px solid {border_color};'><span style='color: #ffffff; font-weight: bold; font-size: 15px;'>📦 {p_name}</span><div style='display: flex; gap: 8px; flex-wrap: wrap; align-items: center;'><span style='background: rgba(255,255,255,0.2); color: #fff; padding: 4px 12px; border-radius: 20px; font-size: 11px; font-weight:600;'>{disp_status}</span><span style='background: rgba(0, 235, 207, 0.2); color: #00EBCF; padding: 4px 12px; border-radius: 20px; font-size: 11px; font-weight:600;'>{tax_status}</span>{type_badge}{offer_badge}</div></div>", unsafe_allow_html=True)
+        st.markdown(f"<div style='background: linear-gradient(135deg, #243b55 0%, #141e30 100%); padding: 14px 20px; border-radius: 12px 12px 0px 0px; margin-top: 25px; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 10px; border-bottom: 3px solid {border_color};><span style='color: #ffffff; font-weight: bold; font-size: 15px;'>📦 {p_name}</span><div style='display: flex; gap: 8px; flex-wrap: wrap; align-items: center;'><span style='background: rgba(255,255,255,0.2); color: #fff; padding: 4px 12px; border-radius: 20px; font-size: 11px; font-weight:600;'>{disp_status}</span><span style='background: rgba(0, 235, 207, 0.2); color: #00EBCF; padding: 4px 12px; border-radius: 20px; font-size: 11px; font-weight:600;'>{tax_status}</span>{type_badge}{offer_badge}<span style='background: rgba(0,235,207,0.15); color: #00EBCF; padding: 4px 10px; border-radius: 20px; font-size: 11px; font-weight:600; cursor: pointer;'onclick="window.location.reload();">🔄 تحديث</span></div></div>", unsafe_allow_html=True)
 
         with st.container(border=True):
             c_img, c_info, c_prc, c_act = st.columns([1.5, 2.5, 2.5, 2])
