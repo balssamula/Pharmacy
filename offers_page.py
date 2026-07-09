@@ -339,13 +339,11 @@ def render_offers_page():
             </div>
         """, unsafe_allow_html=True)
         
-        with st.container(border=True):
-            st.markdown("""<div style="background-color: #ffffff; padding: 20px; border-radius: 0px 0px 12px 12px; border: 1px solid #e8edf2; border-top: none; box-shadow: 0 4px 12px rgba(0,0,0,0.05); margin-bottom: 25px;">""", unsafe_allow_html=True)
-            
+        with st.container(border=True):            
             # ✅ زر تحديث سريع للعرض
             col_refresh, col_empty = st.columns([1, 5])
             with col_refresh:
-                if st.button("🔄 تحديث هذا العرض", key=f"refresh_offer_{offer_id}_{idx}", use_container_width=True):
+                if st.button("🔄", key=f"refresh_offer_{offer_id}_{idx}", use_container_width=True):
                     with st.spinner("جاري تحديث العرض..."):
                         # جلب أحدث بيانات للعرض
                         fresh_res = safe_api_request("GET", f"{SALLA_API_URL}/{offer_id}", headers)
