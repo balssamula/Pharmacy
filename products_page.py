@@ -465,7 +465,8 @@ def render_products_page():
     render_diagnose_section(headers)
 
 def render_diagnose_section(headers: Dict[str, str]):
-    """عرض أداة تشخيص العناوين"""
+    """عرض أداة تشخيص العناوين وكميات الفروع"""
+    # تشخيص العناوين
     if st.session_state.get("show_diagnose", False) and st.session_state.get("diagnose_product_id"):
         product_id = st.session_state["diagnose_product_id"]
         
@@ -480,6 +481,22 @@ def render_diagnose_section(headers: Dict[str, str]):
                     st.rerun()
             
             diagnose_product_promotions(product_id, headers)
+    
+    # تشخيص كميات الفروع
+    if st.session_state.get("show_branch_diagnose", False) and st.session_state.get("diagnose_branch_product_id"):
+        product_id = st.session_state["diagnose_branch_product_id"]
+        
+        with st.container(border=True):
+            col_title, col_close = st.columns([5, 1])
+            with col_title:
+                st.markdown("### 🔍 أداة تشخيص كميات الفروع")
+            with col_close:
+                if st.button("❌ إغلاق التشخيص", use_container_width=True, type="primary"):
+                    st.session_state["show_branch_diagnose"] = False
+                    st.session_state["diagnose_branch_product_id"] = None
+                    st.rerun()
+            
+            diagnose_branch_quantities(product_id, headers)
             
 def render_settings_and_templates(headers: Dict[str, str]):
     """يعرض إعدادات الربط وتحميل القوالب والكميات"""
@@ -932,7 +949,7 @@ def render_product_card(idx: int, p: Dict, headers: Dict[str, str]):
                                 st.success("✅ تم تحديث حالة الضريبة بنجاح!")
                                 st.rerun()
                 
-                # ✅ كميات الفروع (تم إصلاح المسافة)
+                # ✅ كميات الفروع (مع زر تشخيص)
                 with st.popover("🏢 كميات الفروع"):
                     if not branches:
                         st.warning("لا توجد فروع مسجلة.")
@@ -942,6 +959,7 @@ def render_product_card(idx: int, p: Dict, headers: Dict[str, str]):
         
                         st.markdown("**الكميات الحالية في الفروع:**")
                         branch_updates = []
+        
                         for b in branches:
                             branch_id = b.get('id')
                             branch_name = b.get('name', f'فرع {branch_id}')
@@ -970,6 +988,14 @@ def render_product_card(idx: int, p: Dict, headers: Dict[str, str]):
                                             "quantity": new_q, 
                                             "mode": "overwrite"
                                         })
+                                        st.success(f"✅ تم تحديث كمية {branch_name} إلى {new_q}")
+                                        st.rerun()
+        
+                        # ✅ زر تشخيص كميات الفروع
+                        if st.button("🔍 تشخيص كميات الفروع", key=f"diag_branch_{p_id}_{idx}", use_container_width=True):
+                            st.session_state["diagnose_branch_product_id"] = int(p_id)
+                            st.session_state["show_branch_diagnose"] = True
+                            st.rerun()
         
                         if branch_updates and st.button("💾 حفظ جميع التغييرات", key=f"save_bq_{p_id}_{idx}", type="primary"):
                             with st.spinner("جاري التوزيع في سلة..."):
@@ -1001,48 +1027,62 @@ def render_product_card(idx: int, p: Dict, headers: Dict[str, str]):
 def get_branch_quantities(product_id: int) -> Dict:
     """جلب كميات المنتج في جميع الفروع"""
     headers = get_headers()
-    if not headers: return {}
+    if not headers: 
+        return {}
+    
+    branch_qty = {}
     
     try:
-        # ✅ الطريقة الصحيحة: استخدام API كميات المنتج
+        # ✅ الطريقة 1: استخدام API كميات المنتج
         res = safe_api_request("GET", f"https://api.salla.dev/admin/v2/products/quantities?product={product_id}", headers)
         if res and res.get('data'):
-            branch_qty = {}
             for item in res['data']:
-                # الكمية في كل فرع
-                branch_qty[item.get('branch_id')] = item.get('quantity', 0)
+                branch_id = item.get('branch_id')
+                if branch_id:
+                    branch_qty[branch_id] = item.get('quantity', 0)
             return branch_qty
     except Exception as e:
         pass
     
-    # ✅ طريقة بديلة: من product details
     try:
+        # ✅ الطريقة 2: من product details
         res = safe_api_request("GET", f"https://api.salla.dev/admin/v2/products/{product_id}", headers)
         if res and res.get('data'):
             product = res['data']
-            # الكمية الإجمالية
+            
+            # طريقة branches_quantities
+            if product.get('branches_quantities'):
+                for item in product['branches_quantities']:
+                    branch_id = item.get('id')
+                    if branch_id:
+                        branch_qty[branch_id] = item.get('quantity', 0)
+                return branch_qty
+            
+            # طريقة scoped_prices
+            if product.get('scoped_prices'):
+                for item in product['scoped_prices']:
+                    scope_id = item.get('scope_id')
+                    if scope_id:
+                        branch_qty[scope_id] = item.get('quantity', 0)
+                return branch_qty
+            
+            # طريقة branches
+            if product.get('branches'):
+                for item in product['branches']:
+                    branch_id = item.get('id')
+                    if branch_id:
+                        branch_qty[branch_id] = item.get('quantity', 0)
+                return branch_qty
+            
+            # طريقة default (كمية إجمالية)
             total_qty = product.get('quantity', 0)
-            
-            # إذا كان هناك فروع، جرب scoped_prices
-            scoped_prices = product.get('scoped_prices', [])
-            if scoped_prices:
-                branch_qty = {}
-                for scope in scoped_prices:
-                    branch_qty[scope.get('scope_id')] = scope.get('quantity', 0)
-                return branch_qty
-            
-            # إذا كان هناك branches في المنتج
-            branches_data = product.get('branches', [])
-            if branches_data:
-                branch_qty = {}
-                for b in branches_data:
-                    branch_qty[b.get('id')] = b.get('quantity', 0)
-                return branch_qty
-            
-            return {'default': total_qty}
+            if total_qty > 0:
+                branch_qty['default'] = total_qty
+            return branch_qty
     except:
         pass
-    return {}
+    
+    return branch_qty
 
 def fetch_group_products_v2(parent_id: int, headers: Dict[str, str]) -> List[Dict]:
     """جلب المنتجات الفرعية لمجموعة باستخدام API سلة الصحيح"""
@@ -1257,3 +1297,131 @@ def diagnose_product_promotions(product_id: int, headers: Dict[str, str]):
         else:
             st.write("🔍 لم يتم العثور على أي عنوان فرعي.")
             st.write("💡 جرب تحديث `promotion_subtitle` أو `subtitle`")
+
+# ==========================================
+# 🔍 أداة تشخيص كميات الفروع
+# ==========================================
+def diagnose_branch_quantities(product_id: int, headers: Dict[str, str]):
+    """
+    أداة تشخيصية لعرض كميات المنتج في الفروع من API سلة
+    """
+    st.markdown("### 🔍 تشخيص كميات الفروع")
+    
+    with st.spinner("جاري جلب بيانات المنتج من API..."):
+        res = safe_api_request("GET", f"https://api.salla.dev/admin/v2/products/{product_id}", headers)
+        
+    if not res or not res.get('data'):
+        st.error("❌ فشل جلب بيانات المنتج")
+        return
+    
+    data = res['data']
+    
+    st.markdown("#### 📋 هيكل كميات الفروع في استجابة API:")
+    
+    # عرض جميع الحقول المتعلقة بالكميات
+    col1, col2 = st.columns(2)
+    
+    with col1:
+        st.markdown("**🔍 الحقول المتعلقة بالكميات:**")
+        
+        quantity_fields = {
+            'quantity': data.get('quantity'),
+            'branches_quantities': data.get('branches_quantities'),
+            'scoped_prices': data.get('scoped_prices'),
+            'branches': data.get('branches'),
+            'managed_by_branches': data.get('managed_by_branches')
+        }
+        
+        for field, value in quantity_fields.items():
+            if value is not None:
+                if isinstance(value, (dict, list)):
+                    st.json({field: value})
+                else:
+                    st.write(f"**{field}**: `{value}`")
+            else:
+                st.write(f"**{field}**: `غير موجود`")
+    
+    with col2:
+        st.markdown("**📝 الكميات في الفروع:**")
+        
+        # استخراج الكميات بجميع الطرق
+        branch_quantities = {}
+        
+        # الطريقة 1: branches_quantities
+        if data.get('branches_quantities'):
+            for item in data['branches_quantities']:
+                branch_quantities[item.get('id')] = {
+                    'name': item.get('name', f'فرع {item.get("id")}'),
+                    'quantity': item.get('quantity', 0)
+                }
+        
+        # الطريقة 2: scoped_prices
+        if data.get('scoped_prices'):
+            for item in data['scoped_prices']:
+                scope_id = item.get('scope_id')
+                if scope_id and scope_id not in branch_quantities:
+                    branch_quantities[scope_id] = {
+                        'name': f'فرع {scope_id}',
+                        'quantity': item.get('quantity', 0)
+                    }
+        
+        # الطريقة 3: branches
+        if data.get('branches'):
+            for item in data['branches']:
+                branch_id = item.get('id')
+                if branch_id and branch_id not in branch_quantities:
+                    branch_quantities[branch_id] = {
+                        'name': item.get('name', f'فرع {branch_id}'),
+                        'quantity': item.get('quantity', 0)
+                    }
+        
+        if branch_quantities:
+            for bid, bdata in branch_quantities.items():
+                st.write(f"🏪 **{bdata['name']}**: الكمية = `{bdata['quantity']}`")
+        else:
+            st.write("⚠️ لا توجد كميات في الفروع.")
+            st.write(f"📦 الكمية الإجمالية: `{data.get('quantity', 0)}`")
+        
+        if data.get('managed_by_branches'):
+            st.info("✅ المنتج مدار بواسطة الفروع (managed_by_branches = true)")
+        else:
+            st.info("ℹ️ المنتج غير مدار بواسطة الفروع (managed_by_branches = false)")
+    
+    st.markdown("---")
+    st.markdown("#### 🛠️ اختبار جلب الكميات من API الفروع:")
+    
+    if st.button("🔄 اختبار API كميات المنتج", key=f"test_branch_api_{product_id}"):
+        with st.spinner("جاري اختبار API..."):
+            test_res = safe_api_request("GET", f"https://api.salla.dev/admin/v2/products/quantities?product={product_id}", headers)
+            if test_res and test_res.get('data'):
+                st.success("✅ API كميات المنتج يعمل!")
+                st.json(test_res['data'])
+            else:
+                st.error("❌ فشل جلب كميات المنتج من API")
+
+# ✅ التنقل بين الصفحات (في الأعلى والأسفل)
+def render_pagination_bottom():
+    """عرض أزرار التنقل بين الصفحات في الأسفل"""
+    col_prev, col_page, col_next = st.columns([1, 2, 1])
+    with col_prev:
+        if st.button("⬅️ السابق", disabled=st.session_state["prod_page"] == 1, use_container_width=True, key="prev_page_bottom"):
+            st.session_state["prod_page"] -= 1
+            st.rerun()
+    with col_page:
+        st.markdown(f"<h4 style='text-align:center;'>📄 صفحة {st.session_state['prod_page']} من {pages}</h4>", unsafe_allow_html=True)
+    with col_next:
+        if st.button("التالي ➡️", disabled=st.session_state["prod_page"] == pages, use_container_width=True, key="next_page_bottom"):
+            st.session_state["prod_page"] += 1
+            st.rerun()
+
+# بعد عرض المنتجات:
+for idx, p in enumerate(filtered[start:start+limit]):
+    render_product_card(start + idx, p, headers)
+
+# ✅ التنقل بين الصفحات في الأسفل
+st.markdown("---")
+render_pagination_bottom()
+st.markdown("---")
+
+# ✅ عرض أداة التشخيص (إذا كانت مفتوحة)
+render_diagnose_section(headers)
