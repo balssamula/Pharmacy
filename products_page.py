@@ -693,9 +693,9 @@ def render_product_card(idx: int, p: Dict, headers: Dict[str, str]):
         border_color = "#9B59B6" if product_type == 'group_products' else "#e67e22"
 
         # ✅ زر تحديث سريع للمنتج (في شريط العنوان)
-        with st.popover("🔄", use_container_width=True):
+        with st.popover("🔄"):
             st.markdown(f"**تحديث بيانات المنتج:** {p_name}")
-            if st.button("🔄 تحديث هذا المنتج", key=f"refresh_{p_id}_{idx}", type="primary", use_container_width=True):
+            if st.button("🔄 تحديث هذا المنتج", key=f"refresh_{p_id}_{idx}", type="primary"):
                 with st.spinner("جاري تحديث المنتج..."):
                     fresh_res = safe_api_request("GET", f"https://api.salla.dev/admin/v2/products/{int(p_id)}", headers)
                     if fresh_res and fresh_res.get('data'):
