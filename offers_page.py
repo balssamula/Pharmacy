@@ -675,17 +675,32 @@ def render_offers_page():
     end_idx = start_idx + items_per_page
     displayed_offers = filtered_offers[start_idx:end_idx]
     
-    # ✅ أزرار التنقل (في الأعلى والأسفل)
-    def render_pagination():
+    # ✅ أزرار التنقل (في الأعلى والأسفل) - مع مفاتيح فريدة
+    def render_pagination_top():
+        """عرض أزرار التنقل بين الصفحات في الأعلى"""
         col_prev, col_page, col_next = st.columns([1, 2, 1])
         with col_prev:
-            if st.button("⬅️ السابق", disabled=st.session_state["offers_page"] == 1, use_container_width=True):
+            if st.button("⬅️ السابق", disabled=st.session_state["offers_page"] == 1, use_container_width=True, key="offers_prev_top"):
                 st.session_state["offers_page"] -= 1
                 st.rerun()
         with col_page:
             st.markdown(f"<h4 style='text-align:center;'>📄 صفحة {st.session_state['offers_page']} من {total_pages}</h4>", unsafe_allow_html=True)
         with col_next:
-            if st.button("التالي ➡️", disabled=st.session_state["offers_page"] == total_pages, use_container_width=True):
+            if st.button("التالي ➡️", disabled=st.session_state["offers_page"] == total_pages, use_container_width=True, key="offers_next_top"):
+                st.session_state["offers_page"] += 1
+                st.rerun()
+
+    def render_pagination_bottom():
+        """عرض أزرار التنقل بين الصفحات في الأسفل"""
+        col_prev, col_page, col_next = st.columns([1, 2, 1])
+        with col_prev:
+            if st.button("⬅️ السابق", disabled=st.session_state["offers_page"] == 1, use_container_width=True, key="offers_prev_bottom"):
+                st.session_state["offers_page"] -= 1
+                st.rerun()
+        with col_page:
+            st.markdown(f"<h4 style='text-align:center;'>📄 صفحة {st.session_state['offers_page']} من {total_pages}</h4>", unsafe_allow_html=True)
+        with col_next:
+            if st.button("التالي ➡️", disabled=st.session_state["offers_page"] == total_pages, use_container_width=True, key="offers_next_bottom"):
                 st.session_state["offers_page"] += 1
                 st.rerun()
     
