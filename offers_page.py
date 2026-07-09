@@ -380,7 +380,7 @@ def render_offers_page():
             </div>
         """, unsafe_allow_html=True)
         
-            cx, cy = st.columns(2)
+        cx, cy = st.columns(2)
             with cx:
                 st.markdown(f"⚙️ **نوع العرض:** `{OFFER_TYPES_MAP.get(o_type_raw, o_type_raw)}`")
                 st.markdown(f"📺 **قناة نشر العرض:** `{CHANNELS_MAP.get(o_channel_raw, o_channel_raw)}`")
