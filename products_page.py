@@ -793,13 +793,13 @@ def render_product_card(idx: int, p: Dict, headers: Dict[str, str]):
             with c_act:
                 # ✅ زر العروض التفاعلي الآمن المستقل
                 if p_offers:
-                    with st.popover(f"🎁 استعراض العروض الخاصة للمنتج ({len(p_offers)})", use_container_width=True):
+                    with st.popover(f"🎁 استعراض العروض الخاصة للمنتج ({len(p_offers)})"):
                         st.markdown("<b style='color:#b45309;'>العروض النشطة المشمول بها:</b>", unsafe_allow_html=True)
                         for off in p_offers:
                             st.markdown(f"- 🎯 **{off['name']}** `(ID: {off['id']})`")
                 
                 t_st = "hidden" if status == "sale" else "sale"
-                if st.button("👁️ إخفاء" if status == "sale" else "👁️ إظهار", key=f"sh_{p_id}_{idx}", type="secondary" if status == "sale" else "primary", use_container_width=True):
+                if st.button("👁️ إخفاء" if status == "sale" else "👁️ إظهار", key=f"sh_{p_id}_{idx}", type="secondary" if status == "sale" else "primary"):
                     with st.spinner("جاري التحديث..."):
                         if update_product_status(p_id, t_st): st.rerun()
 
