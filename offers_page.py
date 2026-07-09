@@ -381,193 +381,193 @@ def render_offers_page():
         """, unsafe_allow_html=True)
         
         cx, cy = st.columns(2)
-            with cx:
-                st.markdown(f"⚙️ **نوع العرض:** `{OFFER_TYPES_MAP.get(o_type_raw, o_type_raw)}`")
-                st.markdown(f"📺 **قناة نشر العرض:** `{CHANNELS_MAP.get(o_channel_raw, o_channel_raw)}`")
-                st.markdown(f"🎯 **يتم تطبيق العرض على:** `{APPLIED_TO_MAP.get(o_applied_raw, o_applied_raw)}`")
-                st.markdown(f"📅 **توقيت بدء العرض:** `{offer_data.get('start_date', 'غير محدد')}`")
-            with cy:
-                st.markdown(f"📅 **توقيت انتهاء العرض:** `{offer_data.get('expiry_date', 'بدون تاريخ (مستمر)')}`")
-                st.markdown(f"🛡️ **الحد الأقصى للخصم:** `{offer_data.get('max_discount_amount', 0)} SAR` | 💵 **الحد الأدنى للشراء:** `{offer_data.get('min_purchase_amount', 0)} SAR`")
-                c_groups_raw = offer_data.get('customer_groups', [])
-                c_groups_rendered = ", ".join([str(g.get('name', g.get('id', g))) if isinstance(g, dict) else str(g) for g in c_groups_raw]) if c_groups_raw else "كل المجموعات"
-                st.markdown(f"👥 **مجموعة العملاء المستهدفة:** `{c_groups_rendered}`")
-                st.markdown(f"**🔖 تطبيق العرض مع كوبون التخفيض؟** `{'نعم' if offer_data.get('applied_with_coupon') else 'لا يطبق'}`")
-                st.markdown(f"**📢 نص رسالة العرض:** *{offer_data.get('message', 'لا توجد رسالة مرفقة')}*")
+        with cx:
+            st.markdown(f"⚙️ **نوع العرض:** `{OFFER_TYPES_MAP.get(o_type_raw, o_type_raw)}`")
+            st.markdown(f"📺 **قناة نشر العرض:** `{CHANNELS_MAP.get(o_channel_raw, o_channel_raw)}`")
+            st.markdown(f"🎯 **يتم تطبيق العرض على:** `{APPLIED_TO_MAP.get(o_applied_raw, o_applied_raw)}`")
+            st.markdown(f"📅 **توقيت بدء العرض:** `{offer_data.get('start_date', 'غير محدد')}`")
+        with cy:
+            st.markdown(f"📅 **توقيت انتهاء العرض:** `{offer_data.get('expiry_date', 'بدون تاريخ (مستمر)')}`")
+            st.markdown(f"🛡️ **الحد الأقصى للخصم:** `{offer_data.get('max_discount_amount', 0)} SAR` | 💵 **الحد الأدنى للشراء:** `{offer_data.get('min_purchase_amount', 0)} SAR`")
+            c_groups_raw = offer_data.get('customer_groups', [])
+            c_groups_rendered = ", ".join([str(g.get('name', g.get('id', g))) if isinstance(g, dict) else str(g) for g in c_groups_raw]) if c_groups_raw else "كل المجموعات"
+            st.markdown(f"👥 **مجموعة العملاء المستهدفة:** `{c_groups_rendered}`")
+            st.markdown(f"**🔖 تطبيق العرض مع كوبون التخفيض؟** `{'نعم' if offer_data.get('applied_with_coupon') else 'لا يطبق'}`")
+            st.markdown(f"**📢 نص رسالة العرض:** *{offer_data.get('message', 'لا توجد رسالة مرفقة')}*")
                 
-            st.markdown("<hr style='margin: 15px 0; border-top: 1px dashed #e2e8f0;'>", unsafe_allow_html=True)
-            col_x, col_y = st.columns(2)
+        st.markdown("<hr style='margin: 15px 0; border-top: 1px dashed #e2e8f0;'>", unsafe_allow_html=True)
+        col_x, col_y = st.columns(2)
             
-            with col_x:
-                st.markdown("<b style='color:#0f1c2e;'>🛒 مجموعة الشراء (X) - [إذا اشترى العميل]:</b>", unsafe_allow_html=True)
-                buy_obj = offer_data.get('buy', {})
-                b_type_raw = buy_obj.get("type", "product")
-                if isinstance(b_type_raw, dict): b_type_raw = b_type_raw.get("id", "product")
-                st.markdown(f"<div style='margin-bottom:8px; font-size:13px; color:#64748b;'>مطبق على: <b>{inv_type_map.get(b_type_raw, 'منتجات')}</b></div>", unsafe_allow_html=True)
+        with col_x:
+            st.markdown("<b style='color:#0f1c2e;'>🛒 مجموعة الشراء (X) - [إذا اشترى العميل]:</b>", unsafe_allow_html=True)
+            buy_obj = offer_data.get('buy', {})
+            b_type_raw = buy_obj.get("type", "product")
+            if isinstance(b_type_raw, dict): b_type_raw = b_type_raw.get("id", "product")
+            st.markdown(f"<div style='margin-bottom:8px; font-size:13px; color:#64748b;'>مطبق على: <b>{inv_type_map.get(b_type_raw, 'منتجات')}</b></div>", unsafe_allow_html=True)
                 
-                buy_html = "<div style='background:#f8fafc; padding:12px; border-radius:8px; border:1px solid #e2e8f0; max-height: 180px; overflow-y: auto;'><ul style='margin:0; padding-right:15px; font-size:13px; line-height:1.6;'>"
-                has_items = False
-                for p in buy_obj.get('products', []):
-                    p_id = p.get('id', p) if isinstance(p, dict) else p
-                    p_name = p.get('name', 'بدون اسم') if isinstance(p, dict) else 'منتج'
-                    p_sku = p.get('sku', 'لا يوجد') if isinstance(p, dict) else 'لا يوجد'
-                    promo_badge = get_promo_badge(p_id) # جلب الشارة
-                    buy_html += f"<li style='margin-bottom:8px;'>📦 <b>{p_name}</b><br><span style='color:#64748b; font-size:11px; background:#e2e8f0; padding:2px 6px; border-radius:4px;'>SKU: {p_sku}</span> <span style='color:#64748b; font-size:11px; background:#e2e8f0; padding:2px 6px; border-radius:4px;'>ID: {p_id}</span> {promo_badge}</li>"
-                    has_items = True
-                for c in buy_obj.get('categories', []):
-                    c_id = c.get('id', c) if isinstance(c, dict) else c
-                    c_name = c.get('name', 'بدون اسم') if isinstance(c, dict) else 'تصنيف'
-                    buy_html += f"<li style='margin-bottom:8px;'>📁 <b>{c_name}</b><br><span style='color:#64748b; font-size:11px; background:#e2e8f0; padding:2px 6px; border-radius:4px;'>ID: {c_id}</span></li>"
-                    has_items = True
-                for b in buy_obj.get('brands', []):
-                    b_id = b.get('id', b) if isinstance(b, dict) else b
-                    b_name = b.get('name', 'بدون اسم') if isinstance(b, dict) else 'ماركة'
-                    buy_html += f"<li style='margin-bottom:8px;'>🏢 <b>{b_name}</b><br><span style='color:#64748b; font-size:11px; background:#e2e8f0; padding:2px 6px; border-radius:4px;'>ID: {b_id}</span></li>"
-                    has_items = True
-                buy_html += "</ul></div>"
-                if has_items: st.markdown(buy_html, unsafe_allow_html=True)
-                else: st.info("جميع الأصناف المشمولة")
-                st.caption(f"الكمية المطلوبة: {buy_obj.get('quantity', 1)} قطعة")
+            buy_html = "<div style='background:#f8fafc; padding:12px; border-radius:8px; border:1px solid #e2e8f0; max-height: 180px; overflow-y: auto;'><ul style='margin:0; padding-right:15px; font-size:13px; line-height:1.6;'>"
+            has_items = False
+            for p in buy_obj.get('products', []):
+                p_id = p.get('id', p) if isinstance(p, dict) else p
+                p_name = p.get('name', 'بدون اسم') if isinstance(p, dict) else 'منتج'
+                p_sku = p.get('sku', 'لا يوجد') if isinstance(p, dict) else 'لا يوجد'
+                promo_badge = get_promo_badge(p_id) # جلب الشارة
+                buy_html += f"<li style='margin-bottom:8px;'>📦 <b>{p_name}</b><br><span style='color:#64748b; font-size:11px; background:#e2e8f0; padding:2px 6px; border-radius:4px;'>SKU: {p_sku}</span> <span style='color:#64748b; font-size:11px; background:#e2e8f0; padding:2px 6px; border-radius:4px;'>ID: {p_id}</span> {promo_badge}</li>"
+                has_items = True
+            for c in buy_obj.get('categories', []):
+                c_id = c.get('id', c) if isinstance(c, dict) else c
+                c_name = c.get('name', 'بدون اسم') if isinstance(c, dict) else 'تصنيف'
+                buy_html += f"<li style='margin-bottom:8px;'>📁 <b>{c_name}</b><br><span style='color:#64748b; font-size:11px; background:#e2e8f0; padding:2px 6px; border-radius:4px;'>ID: {c_id}</span></li>"
+                has_items = True
+            for b in buy_obj.get('brands', []):
+                b_id = b.get('id', b) if isinstance(b, dict) else b
+                b_name = b.get('name', 'بدون اسم') if isinstance(b, dict) else 'ماركة'
+                buy_html += f"<li style='margin-bottom:8px;'>🏢 <b>{b_name}</b><br><span style='color:#64748b; font-size:11px; background:#e2e8f0; padding:2px 6px; border-radius:4px;'>ID: {b_id}</span></li>"
+                has_items = True
+            buy_html += "</ul></div>"
+            if has_items: st.markdown(buy_html, unsafe_allow_html=True)
+            else: st.info("جميع الأصناف المشمولة")
+            st.caption(f"الكمية المطلوبة: {buy_obj.get('quantity', 1)} قطعة")
                 
-            with col_y:
-                st.markdown("<b style='color:#0f1c2e;'>🎁 مجموعة المنح والهدية (Y) - [يحصل على]:</b>", unsafe_allow_html=True)
-                get_obj = offer_data.get('get', {})               
-                g_type_raw = get_obj.get("type", "product")
-                if isinstance(g_type_raw, dict): g_type_raw = g_type_raw.get("id", "product")
-                st.markdown(f"<div style='margin-bottom:8px; font-size:13px; color:#64748b;'>مطبق على: <b>{inv_type_map.get(g_type_raw, 'منتجات')}</b></div>", unsafe_allow_html=True)
+        with col_y:
+            st.markdown("<b style='color:#0f1c2e;'>🎁 مجموعة المنح والهدية (Y) - [يحصل على]:</b>", unsafe_allow_html=True)
+            get_obj = offer_data.get('get', {})               
+            g_type_raw = get_obj.get("type", "product")
+            if isinstance(g_type_raw, dict): g_type_raw = g_type_raw.get("id", "product")
+            st.markdown(f"<div style='margin-bottom:8px; font-size:13px; color:#64748b;'>مطبق على: <b>{inv_type_map.get(g_type_raw, 'منتجات')}</b></div>", unsafe_allow_html=True)
                 
-                get_html = "<div style='background:#f0fdf4; padding:12px; border-radius:8px; border:1px solid #bbf7d0; max-height: 180px; overflow-y: auto;'><ul style='margin:0; padding-right:15px; font-size:13px; line-height:1.6;'>"
-                has_items_y = False
-                for p in get_obj.get('products', []):
-                    p_id = p.get('id', p) if isinstance(p, dict) else p
-                    p_name = p.get('name', 'بدون اسم') if isinstance(p, dict) else 'منتج'
-                    p_sku = p.get('sku', 'لا يوجد') if isinstance(p, dict) else 'لا يوجد'
-                    promo_badge = get_promo_badge(p_id) # جلب الشارة
-                    get_html += f"<li style='margin-bottom:8px;'>📦 <b>{p_name}</b><br><span style='color:#166534; font-size:11px; background:#dcfce7; padding:2px 6px; border-radius:4px;'>SKU: {p_sku}</span> <span style='color:#166534; font-size:11px; background:#dcfce7; padding:2px 6px; border-radius:4px;'>ID: {p_id}</span> {promo_badge}</li>"
-                    has_items_y = True
-                for c in get_obj.get('categories', []):
-                    c_id = c.get('id', c) if isinstance(c, dict) else c
-                    c_name = c.get('name', 'بدون اسم') if isinstance(c, dict) else 'تصنيف'
-                    get_html += f"<li style='margin-bottom:8px;'>📁 <b>{c_name}</b><br><span style='color:#166534; font-size:11px; background:#dcfce7; padding:2px 6px; border-radius:4px;'>ID: {c_id}</span></li>"
-                    has_items_y = True
-                for b in get_obj.get('brands', []):
-                    b_id = b.get('id', b) if isinstance(b, dict) else b
-                    b_name = b.get('name', 'بدون اسم') if isinstance(b, dict) else 'ماركة'
-                    get_html += f"<li style='margin-bottom:8px;'>🏢 <b>{b_name}</b><br><span style='color:#166534; font-size:11px; background:#dcfce7; padding:2px 6px; border-radius:4px;'>ID: {b_id}</span></li>"
-                    has_items_y = True
-                get_html += "</ul></div>"
-                if has_items_y: st.markdown(get_html, unsafe_allow_html=True)
-                else: st.success("جميع الأصناف المشمولة")
-                st.caption(f"كمية المنح/الخصم: {get_obj.get('quantity', 1)} قطعة")
-                if get_obj.get('discount_amount'): st.markdown(f"🔥 **قيمة/نسبة الخصم :** `{get_obj.get('discount_amount')}`")
+            get_html = "<div style='background:#f0fdf4; padding:12px; border-radius:8px; border:1px solid #bbf7d0; max-height: 180px; overflow-y: auto;'><ul style='margin:0; padding-right:15px; font-size:13px; line-height:1.6;'>"
+            has_items_y = False
+            for p in get_obj.get('products', []):
+                p_id = p.get('id', p) if isinstance(p, dict) else p
+                p_name = p.get('name', 'بدون اسم') if isinstance(p, dict) else 'منتج'
+                p_sku = p.get('sku', 'لا يوجد') if isinstance(p, dict) else 'لا يوجد'
+                promo_badge = get_promo_badge(p_id) # جلب الشارة
+                get_html += f"<li style='margin-bottom:8px;'>📦 <b>{p_name}</b><br><span style='color:#166534; font-size:11px; background:#dcfce7; padding:2px 6px; border-radius:4px;'>SKU: {p_sku}</span> <span style='color:#166534; font-size:11px; background:#dcfce7; padding:2px 6px; border-radius:4px;'>ID: {p_id}</span> {promo_badge}</li>"
+                has_items_y = True
+            for c in get_obj.get('categories', []):
+                c_id = c.get('id', c) if isinstance(c, dict) else c
+                c_name = c.get('name', 'بدون اسم') if isinstance(c, dict) else 'تصنيف'
+                get_html += f"<li style='margin-bottom:8px;'>📁 <b>{c_name}</b><br><span style='color:#166534; font-size:11px; background:#dcfce7; padding:2px 6px; border-radius:4px;'>ID: {c_id}</span></li>"
+                has_items_y = True
+            for b in get_obj.get('brands', []):
+                b_id = b.get('id', b) if isinstance(b, dict) else b
+                b_name = b.get('name', 'بدون اسم') if isinstance(b, dict) else 'ماركة'
+                get_html += f"<li style='margin-bottom:8px;'>🏢 <b>{b_name}</b><br><span style='color:#166534; font-size:11px; background:#dcfce7; padding:2px 6px; border-radius:4px;'>ID: {b_id}</span></li>"
+                has_items_y = True
+            get_html += "</ul></div>"
+            if has_items_y: st.markdown(get_html, unsafe_allow_html=True)
+            else: st.success("جميع الأصناف المشمولة")
+            st.caption(f"كمية المنح/الخصم: {get_obj.get('quantity', 1)} قطعة")
+            if get_obj.get('discount_amount'): st.markdown(f"🔥 **قيمة/نسبة الخصم :** `{get_obj.get('discount_amount')}`")
 
-            st.markdown("<br>", unsafe_allow_html=True)
-            b1, b2, b3 = st.columns(3)
-            with b1:
-                t_status = "inactive" if status == "active" else "active"
-                lbl = "🛑 إيقاف العرض" if status == "active" else "▶️ إعادة تفعيل العرض"
-                if st.button(lbl, key=f"t_st_{offer_id}_{idx}", use_container_width=True):
-                    safe_api_request("PUT", f"{SALLA_API_URL}/{offer_id}/status", headers, json={"status": t_status})
-                    st.rerun()
-            with b2:
-                if st.button("🔖 عكس تطبيق العرض مع الكوبون ⏯", key=f"t_cp_{offer_id}_{idx}", use_container_width=True):
-                    safe_api_request("PUT", f"{SALLA_API_URL}/{offer_id}", headers, json={"applied_with_coupon": not offer_data.get('applied_with_coupon', False)})
-                    st.rerun()
-            with b3:
-                if st.button("🗑️ حذف العرض بالكامل", key=f"t_dl_{offer_id}_{idx}", use_container_width=True, type="primary"):
-                    safe_api_request("DELETE", f"{SALLA_API_URL}/{offer_id}", headers)
-                    st.rerun()
+        st.markdown("<br>", unsafe_allow_html=True)
+        b1, b2, b3 = st.columns(3)
+        with b1:
+            t_status = "inactive" if status == "active" else "active"
+            lbl = "🛑 إيقاف العرض" if status == "active" else "▶️ إعادة تفعيل العرض"
+            if st.button(lbl, key=f"t_st_{offer_id}_{idx}", use_container_width=True):
+                safe_api_request("PUT", f"{SALLA_API_URL}/{offer_id}/status", headers, json={"status": t_status})
+                st.rerun()
+        with b2:
+            if st.button("🔖 عكس تطبيق العرض مع الكوبون ⏯", key=f"t_cp_{offer_id}_{idx}", use_container_width=True):
+                safe_api_request("PUT", f"{SALLA_API_URL}/{offer_id}", headers, json={"applied_with_coupon": not offer_data.get('applied_with_coupon', False)})
+                st.rerun()
+        with b3:
+            if st.button("🗑️ حذف العرض بالكامل", key=f"t_dl_{offer_id}_{idx}", use_container_width=True, type="primary"):
+                safe_api_request("DELETE", f"{SALLA_API_URL}/{offer_id}", headers)
+                st.rerun()
 
-            # --- حاوية التعديل المتقدمة (ديناميكية) ---
-            with st.expander("✏️ تعديل ومراجعة العرض الترويجي", expanded=False):
-                ed_name = st.text_input("إسم العرض:", value=offer_name, key=f"ed_n_{offer_id}_{idx}")
-                ed_msg = st.text_input("رسالة العرض:", value=offer_data.get('message', ''), key=f"ed_m_{offer_id}_{idx}")
+        # --- حاوية التعديل المتقدمة (ديناميكية) ---
+        with st.expander("✏️ تعديل ومراجعة العرض الترويجي", expanded=False):
+            ed_name = st.text_input("إسم العرض:", value=offer_name, key=f"ed_n_{offer_id}_{idx}")
+            ed_msg = st.text_input("رسالة العرض:", value=offer_data.get('message', ''), key=f"ed_m_{offer_id}_{idx}")
                 
-                ec1, ec2, ec3 = st.columns(3)
-                with ec1:
-                    current_type_idx = list(OFFER_TYPES_MAP.keys()).index(o_type_raw) if o_type_raw in OFFER_TYPES_MAP else 0
-                    ed_type_ar = st.selectbox("نوع العرض:", list(OFFER_TYPES_MAP.values()), index=current_type_idx, key=f"ed_t_ar_{offer_id}_{idx}")
-                    ed_applied_ar = st.selectbox("تطبيق العرض على:", list(APPLIED_TO_MAP.values()), index=list(APPLIED_TO_MAP.keys()).index(o_applied_raw) if o_applied_raw in APPLIED_TO_MAP else 0, key=f"ed_app_ar_{offer_id}_{idx}")
-                with ec2:
-                    current_chan_idx = list(CHANNELS_MAP.keys()).index(o_channel_raw) if o_channel_raw in CHANNELS_MAP else 0
-                    ed_chan_ar = st.selectbox("منصة النشر:", list(CHANNELS_MAP.values()), index=current_chan_idx, key=f"ed_ch_ar_{offer_id}_{idx}")
-                    ed_status = st.selectbox("حالة العرض:", ["active", "inactive"], index=0 if status == "active" else 1, format_func=lambda x: "مفعل" if x == "active" else "مسودة", key=f"ed_status_field_{offer_id}_{idx}")
-                with ec3:
-                    ed_coupon = st.selectbox("تطبيق مع كوبون؟", ["لا", "نعم"], index=1 if offer_data.get('applied_with_coupon') else 0, key=f"ed_c_{offer_id}_{idx}")
+            ec1, ec2, ec3 = st.columns(3)
+            with ec1:
+                current_type_idx = list(OFFER_TYPES_MAP.keys()).index(o_type_raw) if o_type_raw in OFFER_TYPES_MAP else 0
+                ed_type_ar = st.selectbox("نوع العرض:", list(OFFER_TYPES_MAP.values()), index=current_type_idx, key=f"ed_t_ar_{offer_id}_{idx}")
+                ed_applied_ar = st.selectbox("تطبيق العرض على:", list(APPLIED_TO_MAP.values()), index=list(APPLIED_TO_MAP.keys()).index(o_applied_raw) if o_applied_raw in APPLIED_TO_MAP else 0, key=f"ed_app_ar_{offer_id}_{idx}")
+            with ec2:
+                current_chan_idx = list(CHANNELS_MAP.keys()).index(o_channel_raw) if o_channel_raw in CHANNELS_MAP else 0
+                ed_chan_ar = st.selectbox("منصة النشر:", list(CHANNELS_MAP.values()), index=current_chan_idx, key=f"ed_ch_ar_{offer_id}_{idx}")
+                ed_status = st.selectbox("حالة العرض:", ["active", "inactive"], index=0 if status == "active" else 1, format_func=lambda x: "مفعل" if x == "active" else "مسودة", key=f"ed_status_field_{offer_id}_{idx}")
+            with ec3:
+                ed_coupon = st.selectbox("تطبيق مع كوبون؟", ["لا", "نعم"], index=1 if offer_data.get('applied_with_coupon') else 0, key=f"ed_c_{offer_id}_{idx}")
 
-                selected_ed_type_key = [k for k, v in OFFER_TYPES_MAP.items() if v == ed_type_ar][0]
-                selected_ed_chan_key = [k for k, v in CHANNELS_MAP.items() if v == ed_chan_ar][0]
-                selected_ed_app_key = [k for k, v in APPLIED_TO_MAP.items() if v == ed_applied_ar][0]
-                ed_cust_groups = st.text_input("مجموعة العملاء (IDs):", value=",".join([str(g.get('id', g)) if isinstance(g, dict) else str(g) for g in offer_data.get('customer_groups', [])]), key=f"ed_cg_{offer_id}_{idx}")
+            selected_ed_type_key = [k for k, v in OFFER_TYPES_MAP.items() if v == ed_type_ar][0]
+            selected_ed_chan_key = [k for k, v in CHANNELS_MAP.items() if v == ed_chan_ar][0]
+            selected_ed_app_key = [k for k, v in APPLIED_TO_MAP.items() if v == ed_applied_ar][0]
+            ed_cust_groups = st.text_input("مجموعة العملاء (IDs):", value=",".join([str(g.get('id', g)) if isinstance(g, dict) else str(g) for g in offer_data.get('customer_groups', [])]), key=f"ed_cg_{offer_id}_{idx}")
 
-                ecc1, ecc2, ecc3 = st.columns(3)
-                with ecc1: ed_max_discount = st.number_input("أقصى خصم (SAR):", min_value=0.0, value=safe_float(offer_data.get('max_discount_amount', 0.0)), key=f"ed_max_d_{offer_id}_{idx}")
-                with ecc2: ed_min_purchase = st.number_input("أدنى شراء (SAR):", min_value=0.0, value=safe_float(offer_data.get('min_purchase_amount', 0.0)), key=f"ed_min_p_{offer_id}_{idx}")
-                with ecc3: ed_min_items = st.number_input("أدنى كمية:", min_value=0, value=int(safe_float(offer_data.get('min_items_count', 0.0))), key=f"ed_min_i_{offer_id}_{idx}")
+            ecc1, ecc2, ecc3 = st.columns(3)
+            with ecc1: ed_max_discount = st.number_input("أقصى خصم (SAR):", min_value=0.0, value=safe_float(offer_data.get('max_discount_amount', 0.0)), key=f"ed_max_d_{offer_id}_{idx}")
+            with ecc2: ed_min_purchase = st.number_input("أدنى شراء (SAR):", min_value=0.0, value=safe_float(offer_data.get('min_purchase_amount', 0.0)), key=f"ed_min_p_{offer_id}_{idx}")
+            with ecc3: ed_min_items = st.number_input("أدنى كمية:", min_value=0, value=int(safe_float(offer_data.get('min_items_count', 0.0))), key=f"ed_min_i_{offer_id}_{idx}")
 
-                if selected_ed_type_key == "buy_x_get_y":
-                    eq1, eq2 = st.columns(2)
-                    with eq1:
-                        ed_buy_type_ar = st.selectbox("نوع شراء X:", type_options_ar, index=type_options_ar.index(inv_type_map.get(b_type_raw, "منتجات")), key=f"ed_bt_{offer_id}_{idx}")
-                        ed_buy_type = type_map[ed_buy_type_ar]
-                        ed_buy_qty = st.number_input("كمية الشراء (X):", min_value=1, value=int(buy_obj.get('quantity', 1)), key=f"ed_bq_{offer_id}_{idx}")
-                        existing_buy_ids = [i.get('id', i) if isinstance(i, dict) else i for i in buy_obj.get({'product':'products','category':'categories','brand':'brands'}.get(ed_buy_type), [])]
-                        ed_buy_selected_ids = render_dynamic_selection(f"تعديل {ed_buy_type_ar} الشراء (X):", ed_buy_type, existing_buy_ids, f"ed_buy_X_{offer_id}_{idx}")
+            if selected_ed_type_key == "buy_x_get_y":
+                eq1, eq2 = st.columns(2)
+                with eq1:
+                    ed_buy_type_ar = st.selectbox("نوع شراء X:", type_options_ar, index=type_options_ar.index(inv_type_map.get(b_type_raw, "منتجات")), key=f"ed_bt_{offer_id}_{idx}")
+                    ed_buy_type = type_map[ed_buy_type_ar]
+                    ed_buy_qty = st.number_input("كمية الشراء (X):", min_value=1, value=int(buy_obj.get('quantity', 1)), key=f"ed_bq_{offer_id}_{idx}")
+                    existing_buy_ids = [i.get('id', i) if isinstance(i, dict) else i for i in buy_obj.get({'product':'products','category':'categories','brand':'brands'}.get(ed_buy_type), [])]
+                    ed_buy_selected_ids = render_dynamic_selection(f"تعديل {ed_buy_type_ar} الشراء (X):", ed_buy_type, existing_buy_ids, f"ed_buy_X_{offer_id}_{idx}")
                     
-                    with eq2:
-                        ed_get_type_ar = st.selectbox("نوع عرض Y:", type_options_ar, index=type_options_ar.index(inv_type_map.get(g_type_raw, "منتجات")), key=f"ed_gt_{offer_id}_{idx}")
-                        ed_get_type = type_map[ed_get_type_ar]
-                        ed_get_qty = st.number_input("كمية العرض (Y):", min_value=1, value=int(get_obj.get('quantity', 1)), key=f"ed_gq_{offer_id}_{idx}")
-                        existing_get_ids = [i.get('id', i) if isinstance(i, dict) else i for i in get_obj.get({'product':'products','category':'categories','brand':'brands'}.get(ed_get_type), [])]
-                        ed_get_selected_ids = render_dynamic_selection(f"تعديل {ed_get_type_ar} الممنوحة (Y):", ed_get_type, existing_get_ids, f"ed_get_Y_{offer_id}_{idx}")
+                with eq2:
+                    ed_get_type_ar = st.selectbox("نوع عرض Y:", type_options_ar, index=type_options_ar.index(inv_type_map.get(g_type_raw, "منتجات")), key=f"ed_gt_{offer_id}_{idx}")
+                    ed_get_type = type_map[ed_get_type_ar]
+                    ed_get_qty = st.number_input("كمية العرض (Y):", min_value=1, value=int(get_obj.get('quantity', 1)), key=f"ed_gq_{offer_id}_{idx}")
+                    existing_get_ids = [i.get('id', i) if isinstance(i, dict) else i for i in get_obj.get({'product':'products','category':'categories','brand':'brands'}.get(ed_get_type), [])]
+                    ed_get_selected_ids = render_dynamic_selection(f"تعديل {ed_get_type_ar} الممنوحة (Y):", ed_get_type, existing_get_ids, f"ed_get_Y_{offer_id}_{idx}")
                     
-                    ed_discount_type_ar = st.selectbox("نوع الخصم Y:", ["منتج مجاني", "خصم بنسبة"], index=1 if get_obj.get('discount_type', 'free-product') == 'percentage' else 0, key=f"ed_dt_ar_{offer_id}_{idx}")
-                    if ed_discount_type_ar == "خصم بنسبة":
-                        ed_disc_amt = st.number_input("نسبة الخصم Y (%):", min_value=1.0, max_value=100.0, value=safe_float(get_obj.get('discount_amount', 50.0)), key=f"ed_da_{offer_id}_{idx}")
-                        ed_disc_type = "percentage"
-                    else:
-                        ed_disc_amt = 0.0; ed_disc_type = "free-product"
+                ed_discount_type_ar = st.selectbox("نوع الخصم Y:", ["منتج مجاني", "خصم بنسبة"], index=1 if get_obj.get('discount_type', 'free-product') == 'percentage' else 0, key=f"ed_dt_ar_{offer_id}_{idx}")
+                if ed_discount_type_ar == "خصم بنسبة":
+                    ed_disc_amt = st.number_input("نسبة الخصم Y (%):", min_value=1.0, max_value=100.0, value=safe_float(get_obj.get('discount_amount', 50.0)), key=f"ed_da_{offer_id}_{idx}")
+                    ed_disc_type = "percentage"
                 else:
-                    eq1, eq2 = st.columns(2)
-                    with eq1:
-                        ed_disc_amt = st.number_input("قيمة/نسبة الخصم:", min_value=0.0, value=safe_float(get_obj.get('discount_amount', 10.0)), key=f"ed_da_direct_{offer_id}_{idx}")
-                        ed_buy_type_ar = st.selectbox("النوع:", type_options_ar, index=type_options_ar.index(inv_type_map.get(b_type_raw, "منتجات")), key=f"ed_bt_direct_{offer_id}_{idx}")
-                        ed_buy_type = type_map[ed_buy_type_ar]
-                        existing_buy_ids = [i.get('id', i) if isinstance(i, dict) else i for i in buy_obj.get({'product':'products','category':'categories','brand':'brands'}.get(ed_buy_type), [])]
-                        ed_buy_selected_ids = render_dynamic_selection(f"العناصر:", ed_buy_type, existing_buy_ids, f"ed_buy_direct_{offer_id}_{idx}")
-                    with eq2: st.caption("مباشر على الخيارات دون اشتراط هدايا")
-                    ed_buy_qty = 1; ed_get_type = "product"; ed_get_qty = 1; ed_get_selected_ids = []; ed_disc_type = "percentage" if selected_ed_type_key == "percentage" else "fixed_amount"
+                    ed_disc_amt = 0.0; ed_disc_type = "free-product"
+            else:
+                eq1, eq2 = st.columns(2)
+                with eq1:
+                    ed_disc_amt = st.number_input("قيمة/نسبة الخصم:", min_value=0.0, value=safe_float(get_obj.get('discount_amount', 10.0)), key=f"ed_da_direct_{offer_id}_{idx}")
+                    ed_buy_type_ar = st.selectbox("النوع:", type_options_ar, index=type_options_ar.index(inv_type_map.get(b_type_raw, "منتجات")), key=f"ed_bt_direct_{offer_id}_{idx}")
+                    ed_buy_type = type_map[ed_buy_type_ar]
+                    existing_buy_ids = [i.get('id', i) if isinstance(i, dict) else i for i in buy_obj.get({'product':'products','category':'categories','brand':'brands'}.get(ed_buy_type), [])]
+                    ed_buy_selected_ids = render_dynamic_selection(f"العناصر:", ed_buy_type, existing_buy_ids, f"ed_buy_direct_{offer_id}_{idx}")
+                with eq2: st.caption("مباشر على الخيارات دون اشتراط هدايا")
+                ed_buy_qty = 1; ed_get_type = "product"; ed_get_qty = 1; ed_get_selected_ids = []; ed_disc_type = "percentage" if selected_ed_type_key == "percentage" else "fixed_amount"
 
-                col_ed_start_date, col_ed_start_time = st.columns(2)
-                with col_ed_start_date: ed_start_date_val = st.date_input("بدء - تاريخ:", value=safe_parse_date(offer_data.get('start_date', datetime.now().strftime('%Y-%m-%d %H:%M:%S'))).date() if safe_parse_date(offer_data.get('start_date')) else datetime.now().date(), key=f"ed_s_date_{offer_id}_{idx}")
-                with col_ed_start_time: ed_start_time_val = st.time_input("بدء - وقت:", value=safe_parse_date(offer_data.get('start_date', datetime.now().strftime('%Y-%m-%d %H:%M:%S'))).time() if safe_parse_date(offer_data.get('start_date')) else datetime.now().time(), key=f"ed_start_time_{offer_id}_{idx}", step=60)
-                ed_start = datetime.combine(ed_start_date_val, ed_start_time_val).strftime('%Y-%m-%d %H:%M:%S')
+            col_ed_start_date, col_ed_start_time = st.columns(2)
+            with col_ed_start_date: ed_start_date_val = st.date_input("بدء - تاريخ:", value=safe_parse_date(offer_data.get('start_date', datetime.now().strftime('%Y-%m-%d %H:%M:%S'))).date() if safe_parse_date(offer_data.get('start_date')) else datetime.now().date(), key=f"ed_s_date_{offer_id}_{idx}")
+            with col_ed_start_time: ed_start_time_val = st.time_input("بدء - وقت:", value=safe_parse_date(offer_data.get('start_date', datetime.now().strftime('%Y-%m-%d %H:%M:%S'))).time() if safe_parse_date(offer_data.get('start_date')) else datetime.now().time(), key=f"ed_start_time_{offer_id}_{idx}", step=60)
+            ed_start = datetime.combine(ed_start_date_val, ed_start_time_val).strftime('%Y-%m-%d %H:%M:%S')
                 
-                col_ed_end_date, col_ed_end_time = st.columns(2)
-                with col_ed_end_date: ed_end_date_val = st.date_input("انتهاء - تاريخ:", value=safe_parse_date(offer_data.get('expiry_date', datetime.now().strftime('%Y-%m-%d %H:%M:%S'))).date() if safe_parse_date(offer_data.get('expiry_date')) else (datetime.now() + timedelta(days=30)).date(), key=f"ed_e_date_{offer_id}_{idx}")
-                with col_ed_end_time: ed_end_time_val = st.time_input("انتهاء - وقت:", value=safe_parse_date(offer_data.get('expiry_date', datetime.now().strftime('%Y-%m-%d %H:%M:%S'))).time() if safe_parse_date(offer_data.get('expiry_date')) else datetime.now().time().replace(hour=23, minute=59, second=59), key=f"ed_end_time_{offer_id}_{idx}", step=60)
-                ed_end = datetime.combine(ed_end_date_val, ed_end_time_val).strftime('%Y-%m-%d %H:%M:%S')
+            col_ed_end_date, col_ed_end_time = st.columns(2)
+            with col_ed_end_date: ed_end_date_val = st.date_input("انتهاء - تاريخ:", value=safe_parse_date(offer_data.get('expiry_date', datetime.now().strftime('%Y-%m-%d %H:%M:%S'))).date() if safe_parse_date(offer_data.get('expiry_date')) else (datetime.now() + timedelta(days=30)).date(), key=f"ed_e_date_{offer_id}_{idx}")
+            with col_ed_end_time: ed_end_time_val = st.time_input("انتهاء - وقت:", value=safe_parse_date(offer_data.get('expiry_date', datetime.now().strftime('%Y-%m-%d %H:%M:%S'))).time() if safe_parse_date(offer_data.get('expiry_date')) else datetime.now().time().replace(hour=23, minute=59, second=59), key=f"ed_end_time_{offer_id}_{idx}", step=60)
+            ed_end = datetime.combine(ed_end_date_val, ed_end_time_val).strftime('%Y-%m-%d %H:%M:%S')
                 
-                if st.button("💾 اعتماد وحفظ التحديث", key=f"sv_of_{offer_id}_{idx}", type="primary", use_container_width=True):
-                    try:
-                        cg_p_list = [int(g.strip()) for g in ed_cust_groups.split(",") if g.strip().isdigit()] if ed_cust_groups.strip() else []
-                        update_payload = {
-                            "name": ed_name, "message": ed_msg, "start_date": ed_start, "expiry_date": ed_end,
-                            "status": ed_status, "offer_type": selected_ed_type_key, "applied_channel": selected_ed_chan_key, "applied_to": selected_ed_app_key,
-                            "applied_with_coupon": ed_coupon == "نعم", "max_discount_amount": float(ed_max_discount), "min_purchase_amount": float(ed_min_purchase), "min_items_count": int(ed_min_items),
-                            "customer_groups": cg_p_list, "buy": {"type": ed_buy_type, "quantity": int(ed_buy_qty)}, "get": {"type": ed_get_type, "quantity": int(ed_get_qty), "discount_type": ed_disc_type}
-                        }
-                        buy_cat = {'product':'products', 'category':'categories', 'brand':'brands'}[ed_buy_type]
-                        if ed_buy_selected_ids: update_payload["buy"][buy_cat] = ed_buy_selected_ids
-                        if selected_ed_type_key == "buy_x_get_y":
-                            get_cat = {'product':'products', 'category':'categories', 'brand':'brands'}[ed_get_type]
-                            if ed_get_selected_ids: update_payload["get"][get_cat] = ed_get_selected_ids
-                        if ed_disc_amt > 0: update_payload["get"]["discount_amount"] = float(ed_disc_amt)
-                        if safe_api_request("PUT", f"{SALLA_API_URL}/{offer_id}", headers, json=update_payload):
-                            st.success("تم التحديث!")
-                            st.rerun()
-                    except Exception as e: st.error(f"خطأ: {str(e)}")
-            st.markdown("</div>", unsafe_allow_html=True)
+            if st.button("💾 اعتماد وحفظ التحديث", key=f"sv_of_{offer_id}_{idx}", type="primary", use_container_width=True):
+                try:
+                    cg_p_list = [int(g.strip()) for g in ed_cust_groups.split(",") if g.strip().isdigit()] if ed_cust_groups.strip() else []
+                    update_payload = {
+                        "name": ed_name, "message": ed_msg, "start_date": ed_start, "expiry_date": ed_end,
+                        "status": ed_status, "offer_type": selected_ed_type_key, "applied_channel": selected_ed_chan_key, "applied_to": selected_ed_app_key,
+                        "applied_with_coupon": ed_coupon == "نعم", "max_discount_amount": float(ed_max_discount), "min_purchase_amount": float(ed_min_purchase), "min_items_count": int(ed_min_items),
+                        "customer_groups": cg_p_list, "buy": {"type": ed_buy_type, "quantity": int(ed_buy_qty)}, "get": {"type": ed_get_type, "quantity": int(ed_get_qty), "discount_type": ed_disc_type}
+                    }
+                    buy_cat = {'product':'products', 'category':'categories', 'brand':'brands'}[ed_buy_type]
+                    if ed_buy_selected_ids: update_payload["buy"][buy_cat] = ed_buy_selected_ids
+                    if selected_ed_type_key == "buy_x_get_y":
+                        get_cat = {'product':'products', 'category':'categories', 'brand':'brands'}[ed_get_type]
+                        if ed_get_selected_ids: update_payload["get"][get_cat] = ed_get_selected_ids
+                    if ed_disc_amt > 0: update_payload["get"]["discount_amount"] = float(ed_disc_amt)
+                    if safe_api_request("PUT", f"{SALLA_API_URL}/{offer_id}", headers, json=update_payload):
+                        st.success("تم التحديث!")
+                        st.rerun()
+                except Exception as e: st.error(f"خطأ: {str(e)}")
+        st.markdown("</div>", unsafe_allow_html=True)
     
     # ✅ ترقيم الصفحات في الأسفل
     st.markdown("---")
