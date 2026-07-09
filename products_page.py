@@ -315,57 +315,14 @@ def render_products_page():
         st.markdown("#### 🔎 البحث")
         sq = st.text_input("ابحث باسم أو SKU:", placeholder="أدخل اسم المنتج أو الكود...", label_visibility="collapsed")
 
-    # ✅ فلاتر سريعة بتصميم احترافي - صندوق ببرواز مذهب وحدود سوداء
-    st.markdown("""
-    <div style='
-        background: linear-gradient(145deg, #0a0e17 0%, #1a1a2e 100%);
-        border: 2px solid #FFD700;
-        border-radius: 16px;
-        padding: 20px 15px;
-        margin: 15px 0 20px 0;
-        box-shadow: 0 0 30px rgba(255, 215, 0, 0.1), inset 0 0 30px rgba(255, 215, 0, 0.02);
-    '>
-        <div style='
-            text-align: center;
-            margin-bottom: 15px;
-            font-size: 18px;
-            font-weight: bold;
-            color: #FFD700;
-            text-shadow: 0 0 20px rgba(255, 215, 0, 0.3);
-            letter-spacing: 2px;
-            border-bottom: 1px solid rgba(255, 215, 0, 0.2);
-            padding-bottom: 10px;
-        '>
-            🎯 فلاتر سريعة متقدمة
-        </div>
-        <div style='display: flex; gap: 8px; flex-wrap: wrap; justify-content: center;'>
-    """, unsafe_allow_html=True)
+    # ✅ فلاتر سريعة بتصميم احترافي
+    st.markdown("#### 🎯 فلاتر سريعة")
+    col_f1, col_f2, col_f3, col_f4, col_f5 = st.columns(5)
 
-    # ✅ 5 فلاتر في صف واحد مع تصميم كل فلتر بشكل منفصل
-    col_f1, col_f2, col_f3, col_f4, col_f5 = st.columns(5, gap="small")
-
-    # ✅ فلتر الحالة - صندوق خاص به
     with col_f1:
         st.markdown("""
-        <div style='
-            background: linear-gradient(135deg, #0d1b2a 0%, #1b2838 100%);
-            border: 1px solid #2d3a4a;
-            border-radius: 10px;
-            padding: 12px 8px 8px 8px;
-            box-shadow: inset 0 0 20px rgba(0,0,0,0.3);
-            height: 100%;
-            min-height: 120px;
-        '>
-            <div style='
-                text-align: center;
-                font-size: 13px;
-                font-weight: bold;
-                color: #00EBCF;
-                padding: 4px 0 6px 0;
-                border-bottom: 1px solid rgba(0, 235, 207, 0.15);
-                margin-bottom: 6px;
-                text-shadow: 0 0 10px rgba(0, 235, 207, 0.2);
-            '>
+        <div style='background: linear-gradient(135deg, #0d1b2a 0%, #1b2838 100%); border: 1px solid #2d3a4a; border-radius: 10px; padding: 12px 8px 8px 8px; box-shadow: inset 0 0 20px rgba(0,0,0,0.3); height: 100%; min-height: 110px;'>
+            <div style='text-align: center; font-size: 13px; font-weight: bold; color: #00EBCF; padding: 4px 0 6px 0; border-bottom: 1px solid rgba(0, 235, 207, 0.15); margin-bottom: 6px; text-shadow: 0 0 10px rgba(0, 235, 207, 0.2);'>
                 📌 الحالة
             </div>
         </div>
@@ -378,28 +335,10 @@ def render_products_page():
             label_visibility="collapsed"
         )
 
-    # ✅ فلتر الصورة - صندوق خاص به
     with col_f2:
         st.markdown("""
-        <div style='
-            background: linear-gradient(135deg, #0d1b2a 0%, #1b2838 100%);
-            border: 1px solid #2d3a4a;
-            border-radius: 10px;
-            padding: 12px 8px 8px 8px;
-            box-shadow: inset 0 0 20px rgba(0,0,0,0.3);
-            height: 100%;
-            min-height: 120px;
-        '>
-            <div style='
-                text-align: center;
-                font-size: 13px;
-                font-weight: bold;
-                color: #00EBCF;
-                padding: 4px 0 6px 0;
-                border-bottom: 1px solid rgba(0, 235, 207, 0.15);
-                margin-bottom: 6px;
-                text-shadow: 0 0 10px rgba(0, 235, 207, 0.2);
-            '>
+        <div style='background: linear-gradient(135deg, #0d1b2a 0%, #1b2838 100%); border: 1px solid #2d3a4a; border-radius: 10px; padding: 12px 8px 8px 8px; box-shadow: inset 0 0 20px rgba(0,0,0,0.3); height: 100%; min-height: 110px;'>
+            <div style='text-align: center; font-size: 13px; font-weight: bold; color: #00EBCF; padding: 4px 0 6px 0; border-bottom: 1px solid rgba(0, 235, 207, 0.15); margin-bottom: 6px; text-shadow: 0 0 10px rgba(0, 235, 207, 0.2);'>
                 🖼️ الصورة
             </div>
         </div>
@@ -412,28 +351,10 @@ def render_products_page():
             label_visibility="collapsed"
         )
 
-    # ✅ فلتر العناوين - صندوق خاص به
     with col_f3:
         st.markdown("""
-        <div style='
-            background: linear-gradient(135deg, #0d1b2a 0%, #1b2838 100%);
-            border: 1px solid #2d3a4a;
-            border-radius: 10px;
-            padding: 12px 8px 8px 8px;
-            box-shadow: inset 0 0 20px rgba(0,0,0,0.3);
-            height: 100%;
-            min-height: 120px;
-        '>
-            <div style='
-                text-align: center;
-                font-size: 13px;
-                font-weight: bold;
-                color: #00EBCF;
-                padding: 4px 0 6px 0;
-                border-bottom: 1px solid rgba(0, 235, 207, 0.15);
-                margin-bottom: 6px;
-                text-shadow: 0 0 10px rgba(0, 235, 207, 0.2);
-            '>
+        <div style='background: linear-gradient(135deg, #0d1b2a 0%, #1b2838 100%); border: 1px solid #2d3a4a; border-radius: 10px; padding: 12px 8px 8px 8px; box-shadow: inset 0 0 20px rgba(0,0,0,0.3); height: 100%; min-height: 110px;'>
+            <div style='text-align: center; font-size: 13px; font-weight: bold; color: #00EBCF; padding: 4px 0 6px 0; border-bottom: 1px solid rgba(0, 235, 207, 0.15); margin-bottom: 6px; text-shadow: 0 0 10px rgba(0, 235, 207, 0.2);'>
                 📢 العناوين
             </div>
         </div>
@@ -446,28 +367,10 @@ def render_products_page():
             label_visibility="collapsed"
         )
 
-    # ✅ فلتر السعر - صندوق خاص به
     with col_f4:
         st.markdown("""
-        <div style='
-            background: linear-gradient(135deg, #0d1b2a 0%, #1b2838 100%);
-            border: 1px solid #2d3a4a;
-            border-radius: 10px;
-            padding: 12px 8px 8px 8px;
-            box-shadow: inset 0 0 20px rgba(0,0,0,0.3);
-            height: 100%;
-            min-height: 120px;
-        '>
-            <div style='
-                text-align: center;
-                font-size: 13px;
-                font-weight: bold;
-                color: #00EBCF;
-                padding: 4px 0 6px 0;
-                border-bottom: 1px solid rgba(0, 235, 207, 0.15);
-                margin-bottom: 6px;
-                text-shadow: 0 0 10px rgba(0, 235, 207, 0.2);
-            '>
+        <div style='background: linear-gradient(135deg, #0d1b2a 0%, #1b2838 100%); border: 1px solid #2d3a4a; border-radius: 10px; padding: 12px 8px 8px 8px; box-shadow: inset 0 0 20px rgba(0,0,0,0.3); height: 100%; min-height: 110px;'>
+            <div style='text-align: center; font-size: 13px; font-weight: bold; color: #00EBCF; padding: 4px 0 6px 0; border-bottom: 1px solid rgba(0, 235, 207, 0.15); margin-bottom: 6px; text-shadow: 0 0 10px rgba(0, 235, 207, 0.2);'>
                 💰 السعر
             </div>
         </div>
@@ -480,28 +383,10 @@ def render_products_page():
             label_visibility="collapsed"
         )
 
-    # ✅ فلتر النوع - صندوق خاص به
     with col_f5:
         st.markdown("""
-        <div style='
-            background: linear-gradient(135deg, #0d1b2a 0%, #1b2838 100%);
-            border: 1px solid #2d3a4a;
-            border-radius: 10px;
-            padding: 12px 8px 8px 8px;
-            box-shadow: inset 0 0 20px rgba(0,0,0,0.3);
-            height: 100%;
-            min-height: 120px;
-        '>
-            <div style='
-                text-align: center;
-                font-size: 13px;
-                font-weight: bold;
-                color: #00EBCF;
-                padding: 4px 0 6px 0;
-                border-bottom: 1px solid rgba(0, 235, 207, 0.15);
-                margin-bottom: 6px;
-                text-shadow: 0 0 10px rgba(0, 235, 207, 0.2);
-            '>
+        <div style='background: linear-gradient(135deg, #0d1b2a 0%, #1b2838 100%); border: 1px solid #2d3a4a; border-radius: 10px; padding: 12px 8px 8px 8px; box-shadow: inset 0 0 20px rgba(0,0,0,0.3); height: 100%; min-height: 110px;'>
+            <div style='text-align: center; font-size: 13px; font-weight: bold; color: #00EBCF; padding: 4px 0 6px 0; border-bottom: 1px solid rgba(0, 235, 207, 0.15); margin-bottom: 6px; text-shadow: 0 0 10px rgba(0, 235, 207, 0.2);'>
                 📦 النوع
             </div>
         </div>
@@ -513,12 +398,6 @@ def render_products_page():
             key="f_type",
             label_visibility="collapsed"
         )
-
-    # إغلاق الحاوية الرئيسية
-    st.markdown("""
-        </div>
-    </div>
-    """, unsafe_allow_html=True)
 
     # تطبيق الفلاتر
     filtered = []
@@ -576,23 +455,74 @@ def render_products_page():
         st.session_state["prod_page"] = pages
     start = (st.session_state["prod_page"] - 1) * limit
     
-    cp, cc, cn = st.columns([1,2,1])
+    # ✅ أزرار التنقل (في الأعلى)
+    cp, cc, cn = st.columns([1, 2, 1])
     with cp:
-        if st.button("⬅️", disabled=st.session_state["prod_page"]==1, use_container_width=True): 
+        if st.button("⬅️ السابق", disabled=st.session_state["prod_page"]==1, use_container_width=True, key="prev_page_top"):
             st.session_state["prod_page"] -= 1
             st.rerun()
     with cc: 
         st.markdown(f"<h4 style='text-align:center;'>📄 صفحة {st.session_state['prod_page']} من {pages}</h4>", unsafe_allow_html=True)
     with cn:
-        if st.button("➡️", disabled=st.session_state["prod_page"]==pages, use_container_width=True): 
+        if st.button("التالي ➡️", disabled=st.session_state["prod_page"]==pages, use_container_width=True, key="next_page_top"):
             st.session_state["prod_page"] += 1
             st.rerun()
 
+    # ✅ عرض المنتجات
     for idx, p in enumerate(filtered[start:start+limit]):
         render_product_card(start + idx, p, headers)
 
+    # ✅ التنقل بين الصفحات (في الأسفل)
+    st.markdown("---")
+    col_prev_b, col_page_b, col_next_b = st.columns([1, 2, 1])
+    with col_prev_b:
+        if st.button("⬅️ السابق", disabled=st.session_state["prod_page"]==1, use_container_width=True, key="prev_page_bottom"):
+            st.session_state["prod_page"] -= 1
+            st.rerun()
+    with col_page_b:
+        st.markdown(f"<h4 style='text-align:center;'>📄 صفحة {st.session_state['prod_page']} من {pages}</h4>", unsafe_allow_html=True)
+    with col_next_b:
+        if st.button("التالي ➡️", disabled=st.session_state["prod_page"]==pages, use_container_width=True, key="next_page_bottom"):
+            st.session_state["prod_page"] += 1
+            st.rerun()
+    st.markdown("---")
+
     # ✅ عرض أداة التشخيص (إذا كانت مفتوحة)
     render_diagnose_section(headers)
+
+    # ✅ CSS مخصص للفلاتر (داخل الدالة)
+    st.markdown("""
+    <style>
+        /* تنسيق أزرار الراديو داخل الفلاتر */
+        .stRadio > div {
+            justify-content: center !important;
+            gap: 2px !important;
+        }
+        .stRadio label {
+            color: #cbd5e1 !important;
+            font-size: 11px !important;
+            padding: 2px 4px !important;
+        }
+        .stRadio [data-testid="stBaseButton-selected"] {
+            background-color: #00EBCF !important;
+            color: #0f1c2e !important;
+            border-radius: 4px !important;
+            font-weight: bold !important;
+        }
+        .stRadio [data-testid="stBaseButton"] {
+            background-color: transparent !important;
+            color: #94a3b8 !important;
+            border: 1px solid transparent !important;
+            border-radius: 4px !important;
+            padding: 2px 8px !important;
+        }
+        .stRadio [data-testid="stBaseButton"]:hover {
+            background-color: rgba(0, 235, 207, 0.1) !important;
+            color: #00EBCF !important;
+            border-color: rgba(0, 235, 207, 0.2) !important;
+        }
+    </style>
+    """, unsafe_allow_html=True)
 
 def render_diagnose_section(headers: Dict[str, str]):
     """عرض أداة تشخيص العناوين وكميات الفروع"""
@@ -1556,57 +1486,3 @@ st.markdown("---")
 # ✅ عرض أداة التشخيص (إذا كانت مفتوحة)
 render_diagnose_section(headers)
 
-# ✅ CSS مخصص للفلاتر
-st.markdown("""
-<style>
-    /* تنسيق أزرار الراديو داخل الفلاتر */
-    .stRadio > div {
-        justify-content: center !important;
-        gap: 2px !important;
-    }
-    .stRadio label {
-        color: #cbd5e1 !important;
-        font-size: 11px !important;
-        padding: 2px 4px !important;
-    }
-    .stRadio [data-testid="stBaseButton-selected"] {
-        background-color: #00EBCF !important;
-        color: #0f1c2e !important;
-        border-radius: 4px !important;
-        font-weight: bold !important;
-    }
-    .stRadio [data-testid="stBaseButton"] {
-        background-color: transparent !important;
-        color: #94a3b8 !important;
-        border: 1px solid transparent !important;
-        border-radius: 4px !important;
-        padding: 2px 8px !important;
-    }
-    .stRadio [data-testid="stBaseButton"]:hover {
-        background-color: rgba(0, 235, 207, 0.1) !important;
-        color: #00EBCF !important;
-        border-color: rgba(0, 235, 207, 0.2) !important;
-    }
-    
-    /* تنسيق الحاويات */
-    .filter-container {
-        background: linear-gradient(135deg, #0d1b2a 0%, #1b2838 100%);
-        border: 1px solid #2d3a4a;
-        border-radius: 10px;
-        padding: 12px 8px 8px 8px;
-        box-shadow: inset 0 0 20px rgba(0,0,0,0.3);
-        height: 100%;
-        min-height: 120px;
-    }
-    .filter-title {
-        text-align: center;
-        font-size: 13px;
-        font-weight: bold;
-        color: #00EBCF;
-        padding: 4px 0 6px 0;
-        border-bottom: 1px solid rgba(0, 235, 207, 0.15);
-        margin-bottom: 6px;
-        text-shadow: 0 0 10px rgba(0, 235, 207, 0.2);
-    }
-</style>
-""", unsafe_allow_html=True)
