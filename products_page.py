@@ -1458,31 +1458,3 @@ def diagnose_branch_quantities(product_id: int, headers: Dict[str, str]):
                 st.json(test_res['data'])
             else:
                 st.error("❌ فشل جلب كميات المنتج من API")
-
-# ✅ التنقل بين الصفحات (في الأعلى والأسفل)
-def render_pagination_bottom():
-    """عرض أزرار التنقل بين الصفحات في الأسفل"""
-    col_prev, col_page, col_next = st.columns([1, 2, 1])
-    with col_prev:
-        if st.button("⬅️ السابق", disabled=st.session_state["prod_page"] == 1, use_container_width=True, key="prev_page_bottom"):
-            st.session_state["prod_page"] -= 1
-            st.rerun()
-    with col_page:
-        st.markdown(f"<h4 style='text-align:center;'>📄 صفحة {st.session_state['prod_page']} من {pages}</h4>", unsafe_allow_html=True)
-    with col_next:
-        if st.button("التالي ➡️", disabled=st.session_state["prod_page"] == pages, use_container_width=True, key="next_page_bottom"):
-            st.session_state["prod_page"] += 1
-            st.rerun()
-
-# بعد عرض المنتجات:
-for idx, p in enumerate(filtered[start:start+limit]):
-    render_product_card(start + idx, p, headers)
-
-# ✅ التنقل بين الصفحات في الأسفل
-st.markdown("---")
-render_pagination_bottom()
-st.markdown("---")
-
-# ✅ عرض أداة التشخيص (إذا كانت مفتوحة)
-render_diagnose_section(headers)
-
