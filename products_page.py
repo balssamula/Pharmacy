@@ -25,6 +25,22 @@ TAX_EXEMPTION_CAUSES = [
 # ==========================================
 # ⚙️ 1. المزامنة المركزية والتهيئة (Centralized Sync)
 # ==========================================
+# ==========================================
+# 🌐 دوال المزامنة العامة (مشتركة بين الصفحات)
+# ==========================================
+
+def initialize_global_products():
+    """تهيئة المنتجات بشكل عام لجميع الصفحات"""
+    if "all_products" not in st.session_state:
+        st.session_state["all_products"] = []
+    if "all_products_fetched" not in st.session_state:
+        st.session_state["all_products_fetched"] = False
+    if "last_sync_time" not in st.session_state:
+        st.session_state["last_sync_time"] = None
+    if "product_offers_map" not in st.session_state:
+        st.session_state["product_offers_map"] = {}
+    if "branches" not in st.session_state:
+        st.session_state["branches"] = []
 
 def initialize_session():
     """تهيئة متغيرات الجلسة المشتركة"""
@@ -66,20 +82,143 @@ def fetch_pages_with_progress(url_base: str, headers: Dict, loading_text: str) -
         
     return all_data
 
-def perform_global_sync(headers: Dict[str, str]):
-    """المزامنة الشاملة (المنتجات، التصنيفات، الماركات، والعروض) وبناء روابطها"""
-    with st.spinner("⏳ جاري المزامنة الشاملة لمتجرك... يرجى الانتظار."):
+def perform_global_sync():
+    """مزامنة عامة لجميع الصفحات مع شريط تقدم وعداد"""
+    headers = get_headers()
+    if not headers:
+        return
+    
+    if st.session_state.get("all_products_fetched", False):
+        return
+    
+    with st.spinner("⏳ جاري التحميل الأولي للمنتجات والعروض..."):
         try:
+            # ✅ جلب المنتجات مع شريط تقدم (per_page=60)
+            st.session_state["all_products"] = fetch_pages_with_progress(
+                "https://api.salla.dev/admin/v2/products",
+                headers,
+                "جاري سحب قائمة المنتجات"
+            )
+            
+            # ✅ جلب الفروع
             st.session_state["branches"] = get_branches_list()
-            st.session_state["all_products"] = fetch_pages_with_progress("https://api.salla.dev/admin/v2/products", headers, "سحب المنتجات")
-            st.session_state["all_categories"] = fetch_pages_with_progress("https://api.salla.dev/admin/v2/categories", headers, "سحب التصنيفات")
-            st.session_state["all_brands"] = fetch_pages_with_progress("https://api.salla.dev/admin/v2/brands", headers, "سحب الماركات")
             
-            all_offers = fetch_pages_with_progress("https://api.salla.dev/admin/v2/specialoffers", headers, "سحب العروض النشطة")
+            # ✅ جلب التصنيفات (per_page=60)
+            st.session_state["all_categories"] = fetch_pages_with_progress(
+                "https://api.salla.dev/admin/v2/categories",
+                headers,
+                "جاري سحب التصنيفات"
+            )
             
-            # بناء قاموس الترابط بين المنتجات والعروض
+            # ✅ جلب الماركات (per_page=60)
+            st.session_state["all_brands"] = fetch_pages_with_progress(
+                "https://api.salla.dev/admin/v2/brands",
+                headers,
+                "جاري سحب الماركات التجارية"
+            )
+            
+            # ✅ جلب العروض مع شريط تقدم (per_page=60)
+            all_o = fetch_pages_with_progress(
+                "https://api.salla.dev/admin/v2/specialoffers",
+                headers,
+                "جاري سحب العروض"
+            )
+            
+            # تحليل العروض وربطها بالمنتجات
             po_map = {}
-            for o in all_offers:
+            for o in all_o:
+                if o.get("status") != "active":
+                    continue
+                oid = o.get("id")
+                full_o = safe_api_request("GET", f"https://api.salla.dev/admin/v2/specialoffers/{oid}", headers)
+                if full_o and full_o.get("data"):
+                    pids = set()
+                    for px in full_o["data"].get("buy", {}).get("products", []):
+                        pid = str(px.get("id", px) if isinstance(px, dict) else px)
+                        if pid.isdigit():
+                            pids.add(pid)
+                    for px in full_o["data"].get("get", {}).get("products", []):
+                        pid = str(px.get("id", px) if isinstance(px, dict) else px)
+                        if pid.isdigit():
+                            pids.add(pid)
+                    for pid in pids:
+                        if pid not in po_map:
+                            po_map[pid] = []
+                        po_map[pid].append({"id": oid, "name": o.get("name")})
+            
+            st.session_state["product_offers_map"] = po_map
+            st.session_state["all_products_fetched"] = True
+            st.session_state["last_sync_time"] = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+            
+            st.success(f"✅ تم تحميل {len(st.session_state['all_products'])} منتج، {len(all_o)} عرض، {len(st.session_state.get('all_categories', []))} تصنيف، {len(st.session_state.get('all_brands', []))} ماركة بنجاح!")
+            
+        except Exception as e:
+            st.error(f"❌ فشل المزامنة: {str(e)}")
+
+def render_sync_and_status(headers: Dict[str, str]):
+    """يعرض شريط المزامنة وحالة التحميل"""
+    c_title, c_btn = st.columns([3, 1])
+    with c_btn:
+        if st.button("🔄 مزامنة وجلب كافة المنتجات (إلزامي)", use_container_width=True, type="primary"):
+            perform_sync(headers)
+            st.rerun()
+
+    if st.session_state["all_products_fetched"]:
+        col_info1, col_info2 = st.columns(2)
+        with col_info1: 
+            st.success(f"✅ تم تحميل {len(st.session_state['all_products'])} منتج في الذاكرة")
+        with col_info2:
+            if st.session_state["last_sync_time"]: 
+                st.info(f"🕐 آخر مزامنة: {st.session_state['last_sync_time']}")
+    else:
+        st.warning("⚠️ يرجى الضغط على زر 'مزامنة وجلب كافة المنتجات' أولاً ليتم تحميل كامل منتجات المتجر.")
+
+def perform_sync(headers: Dict[str, str]):
+    """عملية المزامنة الشاملة مع شريط تقدم (للمزامنة اليدوية)"""
+    with st.spinner("⏳ جاري سحب وتصنيف كافة المنتجات والعروض النشطة..."):
+        try:
+            progress_bar = st.progress(0)
+            status_text = st.empty()
+            
+            # 1. تحديث الفروع
+            st.session_state["branches"] = get_branches_list()
+            
+            # 2. سحب جميع المنتجات مع شريط تقدم
+            all_p = []
+            page = 1
+            status_text.info("📥 جاري تحميل المنتجات...")
+            
+            while True:
+                res = safe_api_request("GET", f"https://api.salla.dev/admin/v2/products?per_page=60&page={page}", headers)
+                if not res or not res.get("data"): 
+                    break
+                all_p.extend(res["data"])
+                
+                total_pages = res.get("pagination", {}).get("totalPages", 1)
+                progress_bar.progress(page / total_pages)
+                status_text.info(f"📥 تحميل الصفحة {page} من {total_pages} | تم تحميل {len(all_p)} منتج")
+                
+                if page >= total_pages: 
+                    break
+                page += 1
+            
+            st.session_state["all_products"] = all_p
+            
+            # 3. سحب العروض مع شريط تقدم
+            status_text.info("🎁 جاري تحميل العروض...")
+            all_o = []
+            o_page = 1
+            while True:
+                ores = safe_api_request("GET", f"https://api.salla.dev/admin/v2/specialoffers?per_page=60&page={o_page}", headers)
+                if not ores or not ores.get("data"): 
+                    break
+                all_o.extend(ores["data"])
+                if o_page >= ores.get("pagination", {}).get("totalPages", 1): 
+                    break
+                o_page += 1
+            
+            po_map = {}
+            for o in all_o:
                 if o.get("status") != "active": continue
                 oid = o.get("id")
                 full_o = safe_api_request("GET", f"https://api.salla.dev/admin/v2/specialoffers/{oid}", headers)
@@ -94,14 +233,16 @@ def perform_global_sync(headers: Dict[str, str]):
                     for pid in pids:
                         if pid not in po_map: po_map[pid] = []
                         po_map[pid].append({"id": oid, "name": o.get("name")})
-            
+                        
             st.session_state["product_offers_map"] = po_map
             st.session_state["all_products_fetched"] = True
             st.session_state["last_sync_time"] = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-            st.success("✅ تمت المزامنة الشاملة بنجاح! البيانات الآن متاحة لجميع الصفحات.")
+            progress_bar.empty()
+            status_text.empty()
+            st.success(f"✅ تمت المزامنة! (سحب {len(all_p)} منتج)")
+            
         except Exception as e:
             st.error(f"❌ حدث خطأ غير متوقع أثناء المزامنة: {str(e)}")
-
 # ==========================================
 # 📦 2. دوال جلب المجموعات 
 # ==========================================
