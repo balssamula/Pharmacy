@@ -320,13 +320,7 @@ def render_products_page():
     col_f1, col_f2, col_f3, col_f4, col_f5 = st.columns(5)
 
     with col_f1:
-        st.markdown("""
-        <div style='background: linear-gradient(135deg, #0d1b2a 0%, #1b2838 100%); border: 1px solid #2d3a4a; border-radius: 10px; padding: 12px 8px 8px 8px; box-shadow: inset 0 0 20px rgba(0,0,0,0.3); height: 100%; min-height: 110px;'>
-            <div style='text-align: center; font-size: 13px; font-weight: bold; color: #00EBCF; padding: 4px 0 6px 0; border-bottom: 1px solid rgba(0, 235, 207, 0.15); margin-bottom: 6px; text-shadow: 0 0 10px rgba(0, 235, 207, 0.2);'>
-                📌 الحالة
-            </div>
-        </div>
-        """, unsafe_allow_html=True)
+        st.markdown("<div style='background: linear-gradient(135deg, #0d1b2a 0%, #1b2838 100%); border: 1px solid #2d3a4a; border-radius: 10px; padding: 12px 8px 8px 8px; box-shadow: inset 0 0 20px rgba(0,0,0,0.3); height: 100%; min-height: 110px;'><div style='text-align: center; font-size: 13px; font-weight: bold; color: #00EBCF; padding: 4px 0 6px 0; border-bottom: 1px solid rgba(0, 235, 207, 0.15); margin-bottom: 6px; text-shadow: 0 0 10px rgba(0, 235, 207, 0.2);'>📌 الحالة</div></div>", unsafe_allow_html=True)
         filter_status_type = st.radio(
             "",
             ["الكل", "مخفي", "معروض"], 
