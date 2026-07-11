@@ -54,7 +54,9 @@ def initialize_session():
             st.session_state[key] = val
 
 def fetch_pages_with_progress(url_base: str, headers: Dict, loading_text: str) -> List[Dict]:
-    """دالة مساعدة لجلب البيانات من API مع شريط تقدم"""
+    """
+    جلب جميع الصفحات من API مع شريط تقدم وعداد المنتجات المحملة
+    """
     all_data = []
     page = 1
     total_pages = 1
@@ -63,16 +65,23 @@ def fetch_pages_with_progress(url_base: str, headers: Dict, loading_text: str) -
     
     try:
         while True:
-            status_text.info(f"📥 {loading_text} (صفحة {page} من {total_pages if page > 1 else '...'})")
+            # ✅ عرض عداد المنتجات المحملة
+            status_text.info(f"📥 {loading_text} (صفحة {page} من {total_pages if page > 1 else '...'}) | تم تحميل {len(all_data)} عنصر")
+            
             url = f"{url_base}?per_page=60&page={page}" if "?" not in url_base else f"{url_base}&per_page=60&page={page}"
             res = safe_api_request("GET", url, headers)
             
-            if not res or not res.get("data"): break
-            if page == 1: total_pages = res.get("pagination", {}).get("totalPages", 1)
+            if not res or not res.get("data"):
+                break
+                
+            if page == 1:
+                total_pages = res.get("pagination", {}).get("totalPages", 1)
             
             all_data.extend(res["data"])
             progress_bar.progress(min(page / total_pages, 1.0))
-            if page >= total_pages: break
+            
+            if page >= total_pages:
+                break
             page += 1
     except Exception as e:
         st.error(f"خطأ في الجلب: {str(e)}")
@@ -93,31 +102,31 @@ def perform_global_sync():
     
     with st.spinner("⏳ جاري التحميل الأولي للمنتجات والعروض..."):
         try:
-            # ✅ جلب المنتجات مع شريط تقدم (per_page=60)
+            # ✅ جلب المنتجات مع شريط تقدم وعداد
             st.session_state["all_products"] = fetch_pages_with_progress(
                 "https://api.salla.dev/admin/v2/products",
                 headers,
-                "جاري سحب قائمة المنتجات"
+                "جاري سحب المنتجات"
             )
             
             # ✅ جلب الفروع
             st.session_state["branches"] = get_branches_list()
             
-            # ✅ جلب التصنيفات (per_page=60)
+            # ✅ جلب التصنيفات
             st.session_state["all_categories"] = fetch_pages_with_progress(
                 "https://api.salla.dev/admin/v2/categories",
                 headers,
                 "جاري سحب التصنيفات"
             )
             
-            # ✅ جلب الماركات (per_page=60)
+            # ✅ جلب الماركات
             st.session_state["all_brands"] = fetch_pages_with_progress(
                 "https://api.salla.dev/admin/v2/brands",
                 headers,
-                "جاري سحب الماركات التجارية"
+                "جاري سحب الماركات"
             )
             
-            # ✅ جلب العروض مع شريط تقدم (per_page=60)
+            # ✅ جلب العروض مع شريط تقدم
             all_o = fetch_pages_with_progress(
                 "https://api.salla.dev/admin/v2/specialoffers",
                 headers,
