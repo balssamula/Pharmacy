@@ -99,10 +99,18 @@ def get_flat_price(price_field: Any) -> float:
 
 def safe_api_request(method: str, url: str, headers: Dict, **kwargs) -> Optional[Dict]:
     try:
+        # ✅ إذا كان هناك json، تأكد من ترميزه بشكل صحيح
+        if 'json' in kwargs:
+            # التأكد من أن headers تحتوي على Content-Type: application/json
+            headers = headers.copy()
+            headers['Content-Type'] = 'application/json; charset=utf-8'
+            
         response = requests.request(method, url, headers=headers, timeout=30, **kwargs)
         if response.status_code >= 400:
-            try: error_detail = json.dumps(response.json(), ensure_ascii=False)
-            except: error_detail = response.text[:500]
+            try:
+                error_detail = json.dumps(response.json(), ensure_ascii=False)
+            except:
+                error_detail = response.text[:500]
             if response.status_code != 404:
                 st.error(f"⚠️ خطأ {response.status_code}: {error_detail}")
             return None
