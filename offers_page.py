@@ -705,7 +705,7 @@ def render_offers_page():
                 st.rerun()
     
     st.markdown("---")
-    render_pagination()
+    render_pagination_top()
     st.markdown("---")
     
     # ✅ عرض العروض
@@ -946,5 +946,5 @@ def render_offers_page():
     
     # ✅ ترقيم الصفحات في الأسفل
     st.markdown("---")
-    render_pagination()
+    render_pagination_bottom()
     st.markdown("---")
