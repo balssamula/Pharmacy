@@ -13,7 +13,8 @@ from utils import (
     update_product_tax_secure, get_branches_list, generate_quantities_template, 
     process_quantities_import, fill_salla_template, generate_salla_new_products_file, 
     delete_product, update_product_price, update_product_sale_price, 
-    update_group_product_quantity, remove_product_from_group, add_product_to_group
+    update_group_product_quantity, remove_product_from_group, add_product_to_group,
+    get_product_details, get_group_products 
 )
 
 TAX_EXEMPTION_CAUSES = [
@@ -508,13 +509,55 @@ def render_products_page():
         sq = st.text_input("ابحث باسم أو SKU:", placeholder="أدخل اسم المنتج أو الكود...", label_visibility="collapsed")
 
     # ✅ فلاتر سريعة بتصميم احترافي
-    st.markdown("#### 🎯 فلاتر سريعة")
-    col_f1, col_f2, col_f3, col_f4, col_f5 = st.columns(5)
+    st.markdown("""
+    <div style='
+        background: linear-gradient(145deg, #0a0e17 0%, #1a1a2e 100%);
+        border: 2px solid #FFD700;
+        border-radius: 16px;
+        padding: 20px 15px;
+        margin: 15px 0 20px 0;
+        box-shadow: 0 0 30px rgba(255, 215, 0, 0.1), inset 0 0 30px rgba(255, 215, 0, 0.02);
+    '>
+        <div style='
+            text-align: center;
+            margin-bottom: 15px;
+            font-size: 18px;
+            font-weight: bold;
+            color: #FFD700;
+            text-shadow: 0 0 20px rgba(255, 215, 0, 0.3);
+            letter-spacing: 2px;
+            border-bottom: 1px solid rgba(255, 215, 0, 0.2);
+            padding-bottom: 10px;
+        '>
+            🎯 فلاتر سريعة متقدمة
+        </div>
+        <div style='display: flex; gap: 8px; flex-wrap: wrap; justify-content: center;'>
+    """, unsafe_allow_html=True)
+
+    # ✅ 5 فلاتر في صف واحد
+    col_f1, col_f2, col_f3, col_f4, col_f5 = st.columns(5, gap="small")
 
     with col_f1:
         st.markdown("""
-        <div style='background: linear-gradient(135deg, #0d1b2a 0%, #1b2838 100%); border: 1px solid #2d3a4a; border-radius: 10px; padding: 12px 8px 8px 8px; box-shadow: inset 0 0 20px rgba(0,0,0,0.3); height: 100%; min-height: 110px;'>
-            <div style='text-align: center; font-size: 13px; font-weight: bold; color: #00EBCF; padding: 4px 0 6px 0; border-bottom: 1px solid rgba(0, 235, 207, 0.15); margin-bottom: 6px; text-shadow: 0 0 10px rgba(0, 235, 207, 0.2);'>
+        <div style='
+            background: linear-gradient(135deg, #0d1b2a 0%, #1b2838 100%);
+            border: 1px solid #2d3a4a;
+            border-radius: 10px;
+            padding: 12px 8px 8px 8px;
+            box-shadow: inset 0 0 20px rgba(0,0,0,0.3);
+            height: 100%;
+            min-height: 110px;
+        '>
+            <div style='
+                text-align: center;
+                font-size: 13px;
+                font-weight: bold;
+                color: #00EBCF;
+                padding: 4px 0 6px 0;
+                border-bottom: 1px solid rgba(0, 235, 207, 0.15);
+                margin-bottom: 6px;
+                text-shadow: 0 0 10px rgba(0, 235, 207, 0.2);
+            '>
                 📌 الحالة
             </div>
         </div>
@@ -529,8 +572,25 @@ def render_products_page():
 
     with col_f2:
         st.markdown("""
-        <div style='background: linear-gradient(135deg, #0d1b2a 0%, #1b2838 100%); border: 1px solid #2d3a4a; border-radius: 10px; padding: 12px 8px 8px 8px; box-shadow: inset 0 0 20px rgba(0,0,0,0.3); height: 100%; min-height: 110px;'>
-            <div style='text-align: center; font-size: 13px; font-weight: bold; color: #00EBCF; padding: 4px 0 6px 0; border-bottom: 1px solid rgba(0, 235, 207, 0.15); margin-bottom: 6px; text-shadow: 0 0 10px rgba(0, 235, 207, 0.2);'>
+        <div style='
+            background: linear-gradient(135deg, #0d1b2a 0%, #1b2838 100%);
+            border: 1px solid #2d3a4a;
+            border-radius: 10px;
+            padding: 12px 8px 8px 8px;
+            box-shadow: inset 0 0 20px rgba(0,0,0,0.3);
+            height: 100%;
+            min-height: 110px;
+        '>
+            <div style='
+                text-align: center;
+                font-size: 13px;
+                font-weight: bold;
+                color: #00EBCF;
+                padding: 4px 0 6px 0;
+                border-bottom: 1px solid rgba(0, 235, 207, 0.15);
+                margin-bottom: 6px;
+                text-shadow: 0 0 10px rgba(0, 235, 207, 0.2);
+            '>
                 🖼️ الصورة
             </div>
         </div>
@@ -545,8 +605,25 @@ def render_products_page():
 
     with col_f3:
         st.markdown("""
-        <div style='background: linear-gradient(135deg, #0d1b2a 0%, #1b2838 100%); border: 1px solid #2d3a4a; border-radius: 10px; padding: 12px 8px 8px 8px; box-shadow: inset 0 0 20px rgba(0,0,0,0.3); height: 100%; min-height: 110px;'>
-            <div style='text-align: center; font-size: 13px; font-weight: bold; color: #00EBCF; padding: 4px 0 6px 0; border-bottom: 1px solid rgba(0, 235, 207, 0.15); margin-bottom: 6px; text-shadow: 0 0 10px rgba(0, 235, 207, 0.2);'>
+        <div style='
+            background: linear-gradient(135deg, #0d1b2a 0%, #1b2838 100%);
+            border: 1px solid #2d3a4a;
+            border-radius: 10px;
+            padding: 12px 8px 8px 8px;
+            box-shadow: inset 0 0 20px rgba(0,0,0,0.3);
+            height: 100%;
+            min-height: 110px;
+        '>
+            <div style='
+                text-align: center;
+                font-size: 13px;
+                font-weight: bold;
+                color: #00EBCF;
+                padding: 4px 0 6px 0;
+                border-bottom: 1px solid rgba(0, 235, 207, 0.15);
+                margin-bottom: 6px;
+                text-shadow: 0 0 10px rgba(0, 235, 207, 0.2);
+            '>
                 📢 العناوين
             </div>
         </div>
@@ -561,8 +638,25 @@ def render_products_page():
 
     with col_f4:
         st.markdown("""
-        <div style='background: linear-gradient(135deg, #0d1b2a 0%, #1b2838 100%); border: 1px solid #2d3a4a; border-radius: 10px; padding: 12px 8px 8px 8px; box-shadow: inset 0 0 20px rgba(0,0,0,0.3); height: 100%; min-height: 110px;'>
-            <div style='text-align: center; font-size: 13px; font-weight: bold; color: #00EBCF; padding: 4px 0 6px 0; border-bottom: 1px solid rgba(0, 235, 207, 0.15); margin-bottom: 6px; text-shadow: 0 0 10px rgba(0, 235, 207, 0.2);'>
+        <div style='
+            background: linear-gradient(135deg, #0d1b2a 0%, #1b2838 100%);
+            border: 1px solid #2d3a4a;
+            border-radius: 10px;
+            padding: 12px 8px 8px 8px;
+            box-shadow: inset 0 0 20px rgba(0,0,0,0.3);
+            height: 100%;
+            min-height: 110px;
+        '>
+            <div style='
+                text-align: center;
+                font-size: 13px;
+                font-weight: bold;
+                color: #00EBCF;
+                padding: 4px 0 6px 0;
+                border-bottom: 1px solid rgba(0, 235, 207, 0.15);
+                margin-bottom: 6px;
+                text-shadow: 0 0 10px rgba(0, 235, 207, 0.2);
+            '>
                 💰 السعر
             </div>
         </div>
@@ -577,8 +671,25 @@ def render_products_page():
 
     with col_f5:
         st.markdown("""
-        <div style='background: linear-gradient(135deg, #0d1b2a 0%, #1b2838 100%); border: 1px solid #2d3a4a; border-radius: 10px; padding: 12px 8px 8px 8px; box-shadow: inset 0 0 20px rgba(0,0,0,0.3); height: 100%; min-height: 110px;'>
-            <div style='text-align: center; font-size: 13px; font-weight: bold; color: #00EBCF; padding: 4px 0 6px 0; border-bottom: 1px solid rgba(0, 235, 207, 0.15); margin-bottom: 6px; text-shadow: 0 0 10px rgba(0, 235, 207, 0.2);'>
+        <div style='
+            background: linear-gradient(135deg, #0d1b2a 0%, #1b2838 100%);
+            border: 1px solid #2d3a4a;
+            border-radius: 10px;
+            padding: 12px 8px 8px 8px;
+            box-shadow: inset 0 0 20px rgba(0,0,0,0.3);
+            height: 100%;
+            min-height: 110px;
+        '>
+            <div style='
+                text-align: center;
+                font-size: 13px;
+                font-weight: bold;
+                color: #00EBCF;
+                padding: 4px 0 6px 0;
+                border-bottom: 1px solid rgba(0, 235, 207, 0.15);
+                margin-bottom: 6px;
+                text-shadow: 0 0 10px rgba(0, 235, 207, 0.2);
+            '>
                 📦 النوع
             </div>
         </div>
@@ -590,6 +701,12 @@ def render_products_page():
             key="f_type",
             label_visibility="collapsed"
         )
+
+    # إغلاق الحاوية
+    st.markdown("""
+        </div>
+    </div>
+    """, unsafe_allow_html=True)
 
     # تطبيق الفلاتر
     filtered = []
