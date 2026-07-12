@@ -1039,29 +1039,53 @@ def render_product_card(idx: int, p: Dict, headers: Dict[str, str]):
                                 st.success("✅ تم تحديث حالة الضريبة بنجاح!")
                                 st.rerun()
                 
-                # ✅ كميات الفروع (مع زر تشخيص)
+                # ✅ كميات الفروع مع أداة الكشف التلقائي الحي
                 with st.popover("🏢 كميات الفروع"):
                     if not branches:
-                        st.warning("لا توجد فروع مسجلة.")
+                        st.warning("⚠️ لا توجد فروع مسجلة في المتجر.")
                     else:
-                        # ✅ جلب الكميات الفعلية من الفروع
-                        branch_quantities = get_branch_quantities(int(p_id))
+                        st.markdown("**📊 الكميات الحالية في الفروع:**")
         
-                        st.markdown("**الكميات الحالية في الفروع:**")
+                        # ✅ زر الكشف التلقائي الحي
+                        if st.button("🔍 كشف تلقائي حي للأرصدة", key=f"live_fetch_{p_id}_{idx}", use_container_width=True):
+                            with st.spinner("جاري جلب الأرصدة الحية من سلة..."):
+                                live_qty = get_live_branch_quantities(int(p_id), headers)
+                                if live_qty:
+                                    st.session_state[f"live_qty_{p_id}"] = live_qty
+                                    st.success("✅ تم جلب الأرصدة الحية بنجاح!")
+                                    st.rerun()
+                                else:
+                                    st.error("❌ فشل جلب الأرصدة. تأكد من أن المنتج مدار بواسطة الفروع.")
+        
+                        # عرض الكميات
                         branch_updates = []
+                        live_qty = st.session_state.get(f"live_qty_{p_id}", {})
         
                         for b in branches:
                             branch_id = b.get('id')
                             branch_name = b.get('name', f'فرع {branch_id}')
-                            current_qty = branch_quantities.get(branch_id, 0)
+            
+                            # استخدام الأرصدة الحية إذا وجدت، وإلا استخدام القيم المخزنة
+                            current_qty = live_qty.get(branch_id, 0)
             
                             # عرض الكمية الحالية
-                            st.write(f"🏪 **{branch_name}**: الكمية الحالية = **{current_qty}**")
-            
-                            col_qty, col_btn = st.columns([2, 1])
+                            st.markdown(f"""
+                            <div style='
+                                background: #f8f9fa; 
+                                border-radius: 8px; 
+                                padding: 8px 12px; 
+                                margin-bottom: 6px;
+                                border-right: 3px solid {"#00EBCF" if current_qty > 0 else "#e74c3c"};
+                            '>
+                                🏪 **{branch_name}**: الكمية الحالية = <b style='color: {"#2ecc71" if current_qty > 0 else "#e74c3c"};'>{current_qty}</b>
+                            </div>
+                            """, unsafe_allow_html=True)
+                            
+                            # حقل تعديل الكمية
+                            col_qty, col_btn = st.columns([3, 1])
                             with col_qty:
                                 new_q = st.number_input(
-                                    f"تعديل الكمية",
+                                    f"تعديل كمية {branch_name}",
                                     min_value=0, 
                                     value=current_qty,
                                     step=1, 
@@ -1069,7 +1093,7 @@ def render_product_card(idx: int, p: Dict, headers: Dict[str, str]):
                                     label_visibility="collapsed"
                                 )
                             with col_btn:
-                                if st.button(f"تحديث", key=f"bq_btn_{p_id}_{branch_id}_{idx}", use_container_width=True):
+                                if st.button(f"💾", key=f"bq_btn_{p_id}_{branch_id}_{idx}", use_container_width=True):
                                     if new_q != current_qty:
                                         branch_updates.append({
                                             "identifer": p_sku, 
@@ -1080,15 +1104,12 @@ def render_product_card(idx: int, p: Dict, headers: Dict[str, str]):
                                         })
                                         st.success(f"✅ تم تحديث كمية {branch_name} إلى {new_q}")
                                         st.rerun()
+                                    else:
+                                        st.info("ℹ️ لم يتم تغيير الكمية")
         
-                        # ✅ زر تشخيص كميات الفروع
-                        if st.button("🔍 تشخيص كميات الفروع", key=f"diag_branch_{p_id}_{idx}", use_container_width=True):
-                            st.session_state["diagnose_branch_product_id"] = int(p_id)
-                            st.session_state["show_branch_diagnose"] = True
-                            st.rerun()
-        
-                        if branch_updates and st.button("💾 حفظ جميع التغييرات", key=f"save_bq_{p_id}_{idx}", type="primary"):
-                            with st.spinner("جاري التوزيع في سلة..."):
+                        # ✅ زر حفظ جميع التغييرات
+                        if branch_updates and st.button("💾 حفظ جميع التغييرات", key=f"save_bq_{p_id}_{idx}", type="primary", use_container_width=True):
+                            with st.spinner("جاري حفظ الكميات..."):
                                 res = safe_api_request(
                                     "POST", 
                                     "https://api.salla.dev/admin/v2/products/quantities/bulk", 
@@ -1096,7 +1117,10 @@ def render_product_card(idx: int, p: Dict, headers: Dict[str, str]):
                                     json={"products": branch_updates}
                                 )
                                 if res:
-                                    st.success("✅ تم تحديث وتوزيع الكميات!")
+                                    st.success("✅ تم تحديث جميع الكميات بنجاح!")
+                                    # مسح الكميات المخزنة مؤقتاً
+                                    if f"live_qty_{p_id}" in st.session_state:
+                                        del st.session_state[f"live_qty_{p_id}"]
                                     st.rerun()
                                 else:
                                     st.error("❌ فشل تحديث الكميات")
@@ -1488,3 +1512,53 @@ def diagnose_branch_quantities(product_id: int, headers: Dict[str, str]):
                 st.json(test_res['data'])
             else:
                 st.error("❌ فشل جلب كميات المنتج من API")
+
+# ==========================================
+# 🔍 أداة كشف تلقائي حي للأرصدة
+# ==========================================
+
+def get_live_branch_quantities(product_id: int, headers: Dict[str, str]) -> Dict:
+    """
+    جلب الأرصدة الحية من API سلة مباشرة
+    """
+    try:
+        # ✅ الطريقة الصحيحة: استخدام API كميات المنتج
+        res = safe_api_request("GET", f"https://api.salla.dev/admin/v2/products/quantities?product={product_id}", headers)
+        if res and res.get('data'):
+            branch_qty = {}
+            for item in res['data']:
+                branch_id = item.get('branch_id')
+                if branch_id:
+                    branch_qty[branch_id] = item.get('quantity', 0)
+            return branch_qty
+    except Exception as e:
+        pass
+    
+    try:
+        # ✅ طريقة بديلة: من product details
+        res = safe_api_request("GET", f"https://api.salla.dev/admin/v2/products/{product_id}", headers)
+        if res and res.get('data'):
+            product = res['data']
+            branch_qty = {}
+            
+            # طريقة branches_quantities
+            if product.get('branches_quantities'):
+                for item in product['branches_quantities']:
+                    branch_qty[item.get('id')] = item.get('quantity', 0)
+                return branch_qty
+            
+            # طريقة scoped_prices
+            if product.get('scoped_prices'):
+                for item in product['scoped_prices']:
+                    branch_qty[item.get('scope_id')] = item.get('quantity', 0)
+                return branch_qty
+            
+            # طريقة branches
+            if product.get('branches'):
+                for item in product['branches']:
+                    branch_qty[item.get('id')] = item.get('quantity', 0)
+                return branch_qty
+    except:
+        pass
+    
+    return {}
