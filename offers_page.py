@@ -195,7 +195,10 @@ def render_offers_page():
     # ✅ جلب العروض
     with st.spinner("🔄 جاري جلب كافة العروض الحالية من المتجر..."):
         raw_offers = fetch_all_pages(SALLA_API_URL, "جاري سحب العروض من متجرك")
-
+        
+    # ✅ عرض تنبيهات انتهاء العروض (في أعلى الصفحة)
+    render_expiry_alerts(raw_offers)
+    
     # ==========================================
     # ⚡ نظام الإجراءات السريعة الجانبية (الأزرار واللوحات)
     # ==========================================
@@ -205,6 +208,86 @@ def render_offers_page():
     # ✅ جلب العروض مع شريط تقدم وعداد
     with st.spinner("🔄 جاري جلب كافة العروض الحالية من المتجر..."):
         raw_offers = fetch_all_pages(SALLA_API_URL, "جاري سحب العروض من متجرك")
+
+    # ==========================================
+    # ⚡ نظام الإجراءات السريعة الجانبية (متوافق مع الجوال)
+    # ==========================================
+
+    # ✅ CSS محسّن للجوال مع زر ظهور دائم
+    st.markdown("""
+    <style>
+        /* ✅ للأجهزة التي تعمل باللمس (جوال/تابلت) */
+        @media (pointer: coarse) {
+            /* إظهار الأزرار دائماً على الجوال */
+            div[data-testid="stElementContainer"]:has(span[id^="qa-marker-"]) + div[data-testid="stElementContainer"] {
+                right: 0px !important;
+                width: 200px !important;
+                opacity: 0.85 !important;
+            }
+        
+            /* تصغير حجم الأزرار على الجوال */
+            div[data-testid="stElementContainer"]:has(span[id^="qa-marker-"]) + div[data-testid="stElementContainer"] button {
+                font-size: 12px !important;
+                padding-right: 10px !important;
+                padding: 4px 8px !important;
+            }
+        
+            /* إخفاء المؤشر الجانبي */
+            div[data-testid="stElementContainer"]:has(span[id^="qa-marker-"]) + div[data-testid="stElementContainer"]::before {
+                display: none !important;
+            }
+        }
+    
+        /* ✅ للأجهزة التي تعمل بالماوس */
+        @media (pointer: fine) {
+            div[data-testid="stElementContainer"]:has(span[id^="qa-marker-"]) + div[data-testid="stElementContainer"] {
+                right: -240px !important;
+                transition: right 0.4s cubic-bezier(0.4, 0, 0.2, 1) !important;
+            }
+            div[data-testid="stElementContainer"]:has(span[id^="qa-marker-"]) + div[data-testid="stElementContainer"]:hover {
+                right: 0px !important;
+            }
+        }
+    
+        /* ✅ إضافة زر توسيع للأزرار على الجوال */
+        .mobile-toggle-btn {
+            position: fixed;
+            right: 0px;
+            top: 50%;
+            transform: translateY(-50%);
+            background: #00EBCF;
+            color: #0f1c2e;
+            border: none;
+            border-radius: 8px 0 0 8px;
+            padding: 10px 6px;
+            font-size: 14px;
+            cursor: pointer;
+            z-index: 999998;
+            writing-mode: vertical-rl;
+            font-weight: bold;
+            box-shadow: -2px 2px 10px rgba(0,0,0,0.3);
+            display: none;
+        }
+    
+        @media (pointer: coarse) {
+            .mobile-toggle-btn {
+                display: block !important;
+            }
+        }
+    </style>
+
+    <!-- ✅ زر جانبي للجوال لفتح الأزرار -->
+    <button class="mobile-toggle-btn" onclick="
+        var btns = document.querySelectorAll('div[data-testid=\\'stElementContainer\\']:has(span[id^=\\'qa-marker-\\']) + div[data-testid=\\'stElementContainer\\']');
+        btns.forEach(function(el) {
+            if (el.style.right === '0px' || el.style.right === '0') {
+                el.style.right = '-200px';
+            } else {
+                el.style.right = '0px';
+            }
+        });
+    ">⚡ إجراءات</button>
+    """, unsafe_allow_html=True)
 
     # 1. إيقاف العروض
     st.markdown('<span id="qa-marker-1"></span>', unsafe_allow_html=True)
@@ -948,3 +1031,123 @@ def render_offers_page():
     st.markdown("---")
     render_pagination_bottom()
     st.markdown("---")
+
+# ==========================================
+# 🚨 نظام التنبيه لقرب انتهاء العروض
+# ==========================================
+
+def render_expiry_alerts(raw_offers):
+    """
+    عرض تنبيهات للعروض التي ستنتهي خلال يومين
+    """
+    now = datetime.now()
+    expiring_soon = []
+    
+    for offer in raw_offers:
+        if offer.get('status') != 'active':
+            continue
+        
+        expiry_date = safe_parse_date(offer.get('expiry_date'))
+        if not expiry_date:
+            continue
+        
+        days_left = (expiry_date - now).days
+        
+        # ✅ تنبيه للعروض التي ستنتهي خلال يومين
+        if 0 <= days_left <= 2:
+            expiring_soon.append({
+                'id': offer.get('id'),
+                'name': offer.get('name'),
+                'days_left': days_left,
+                'expiry_date': expiry_date.strftime('%Y-%m-%d')
+            })
+    
+    if expiring_soon:
+        # ✅ CSS للتنبيه المتحرك
+        st.markdown("""
+        <style>
+            @keyframes blink-red {
+                0% { background-color: #ff0000; transform: scale(1); }
+                50% { background-color: #cc0000; transform: scale(1.02); }
+                100% { background-color: #ff0000; transform: scale(1); }
+            }
+            .expiry-alert {
+                animation: blink-red 0.8s ease-in-out infinite;
+                padding: 15px 20px;
+                border-radius: 10px;
+                color: white;
+                font-weight: bold;
+                text-align: center;
+                border: 3px solid #ff6b6b;
+                box-shadow: 0 0 30px rgba(255, 0, 0, 0.3);
+                margin-bottom: 20px;
+                direction: rtl;
+            }
+            .expiry-alert .count {
+                font-size: 20px;
+                background: rgba(255,255,255,0.2);
+                padding: 2px 12px;
+                border-radius: 20px;
+                margin: 0 5px;
+            }
+            .expiry-alert .offer-name {
+                color: #ffd700;
+            }
+        </style>
+        
+        <div class="expiry-alert">
+            <div style="display: flex; align-items: center; justify-content: center; gap: 15px; flex-wrap: wrap;">
+                <span style="font-size: 32px;">🚨</span>
+                <span style="font-size: 18px;">
+                    <b style="font-size: 22px;">تنبيه عاجل!</b>
+                    هناك <span class="count">{len(expiring_soon)}</span> عرض على وشك الانتهاء خلال يومين!
+                </span>
+            </div>
+            <div style="margin-top: 10px; font-size: 14px; display: flex; gap: 10px; flex-wrap: wrap; justify-content: center;">
+        """, unsafe_allow_html=True)
+        
+        for offer in expiring_soon:
+            days_text = "اليوم" if offer['days_left'] == 0 else f"غداً" if offer['days_left'] == 1 else f"بعد غد"
+            st.markdown(f"""
+                <span style="background: rgba(255,255,255,0.15); padding: 4px 12px; border-radius: 15px;">
+                    🎯 <span class="offer-name">{offer['name']}</span>
+                    ينتهي <b>{days_text}</b> ({offer['expiry_date']})
+                </span>
+            """, unsafe_allow_html=True)
+        
+        # ✅ أزرار الإجراءات السريعة
+        st.markdown("""
+            </div>
+            <div style="margin-top: 15px; display: flex; gap: 10px; justify-content: center; flex-wrap: wrap;">
+        """, unsafe_allow_html=True)
+        
+        col_btn1, col_btn2 = st.columns(2)
+        with col_btn1:
+            if st.button("📅 تمديد العروض المنتهية بيومين", use_container_width=True, type="primary"):
+                st.session_state["qa_action"] = "end_dates"
+                st.rerun()
+        with col_btn2:
+            if st.button("🧹 إزالة العناوين الترويجية للمنتجات المنتهية", use_container_width=True, type="secondary"):
+                st.session_state["qa_action"] = "end_dates"
+                st.session_state["qa_action_sub"] = "remove_promo"
+                st.rerun()
+        
+        st.markdown("</div></div>", unsafe_allow_html=True)
+        
+        # 🔊 تشغيل صوت التنبيه (اختياري - يعمل في بعض المتصفحات)
+        st.markdown("""
+        <audio id="alert-sound" style="display:none;">
+            <source src="data:audio/wav;base64,UklGRnoAAABXQVZFZm10IBAAAAABAAEAQB8AAEAfAAABAAgAZGF0YQoAAACBhYqFhYqFhYqFhYqFhYqFhYqFhYqFhYqFhYqFhYqFhYqFhYqFhYqFhYqFhYqFhYqFhYqFhYqFhYqFhYqFhYqFhYqFhYqFhYqFhYqFhYqFhYqFhYqFhYqFhYqFhYqFhYqFhYqFhYqFhYqFhYqFhYqFhYqFhYqFhYqFhYqFhYqFhYqFhYqFhYqFhYqFhYqFhYqFhYqFhYqFhYqFhYqFhYqFg==" type="audio/wav">
+        </audio>
+        <script>
+            try {
+                var audio = document.getElementById('alert-sound');
+                if (audio) {
+                    audio.play().catch(function(e) {});
+                }
+            } catch(e) {}
+        </script>
+        """, unsafe_allow_html=True)
+    else:
+        # ✅ إذا لم تكن هناك عروض منتهية، عرض رسالة مطمئنة
+        st.success("✅ جميع العروض النشطة سارية المفعول ولا توجد عروض على وشك الانتهاء.")
