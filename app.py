@@ -497,7 +497,7 @@ def fetch_all_pages(url_base, headers):
 
 def get_alert_sound_base64():
     """قراءة ملف الصوت وتحويله إلى base64"""
-    sound_path = os.path.join(os.path.dirname(__file__), "alert.wav")
+    sound_path = os.path.join(os.path.dirname(__file__), "alert.mp3")
     if os.path.exists(sound_path):
         with open(sound_path, "rb") as f:
             return base64.b64encode(f.read()).decode()
