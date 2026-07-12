@@ -387,6 +387,12 @@ def render_product_card(idx: int, p: Dict, headers: Dict[str, str]):
 def render_products_page():
     initialize_session()
     
+    # ✅ استخدام البيانات المخزنة من المزامنة الموحدة
+    if not st.session_state.get("all_products_fetched", False):
+        st.warning("⚠️ جاري تحميل البيانات... يرجى الانتظار.")
+        return
+    
+    all_products = st.session_state.get("all_products", [])    
     st.markdown("""
     <div style="background: linear-gradient(135deg, #0F1C2E 0%, #00EBCF 100%); padding: 15px 25px; border-radius: 12px; color: white; margin-bottom: 20px; box-shadow: 0 4px 6px rgba(0,0,0,0.1);">
         <h2 style="color: white; margin: 0;">📦 مركز إدارة المنتجات الذكي والمتقدم</h2>
