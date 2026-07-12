@@ -1278,6 +1278,7 @@ def update_group_product_quantity(parent_product_id: int, child_product_id: int,
     """
     تحديث عدد حبات المنتج الفرعي داخل المجموعة
     ✅ يدعم: consisted_products و bundle.products
+    ✅ الإصلاح: تحديث quantity_in_group فقط وليس quantity الإجمالي
     """
     headers = get_headers()
     if not headers: 
@@ -1288,12 +1289,14 @@ def update_group_product_quantity(parent_product_id: int, child_product_id: int,
     if not parent:
         return False
     
-    # ✅ تحديث الكمية في consisted_products
+    # ✅ تحديث الكمية في consisted_products (تحديث quantity_in_group فقط)
     consisted_products = parent.get('consisted_products', [])
     updated = False
     
     for item in consisted_products:
         if item.get('id') == child_product_id:
+            # ✅ تحديث quantity_in_group فقط (عدد الحبات في المجموعة)
+            # لا نغير quantity (المخزون الإجمالي للمنتج الفرعي)
             item['quantity_in_group'] = new_quantity
             updated = True
             break
@@ -1304,6 +1307,7 @@ def update_group_product_quantity(parent_product_id: int, child_product_id: int,
         bundle_products = bundle.get('products', [])
         for item in bundle_products:
             if item.get('id') == child_product_id:
+                # ✅ تحديث quantity_in_group فقط
                 item['quantity_in_group'] = new_quantity
                 updated = True
                 break
@@ -1312,7 +1316,7 @@ def update_group_product_quantity(parent_product_id: int, child_product_id: int,
         st.error(f"❌ لم يتم العثور على المنتج ID: {child_product_id} في المجموعة")
         return False
     
-    # ✅ تحديث المنتج الأب
+    # ✅ تحديث المنتج الأب مع الحفاظ على الهيكل الصحيح
     payload = {
         "name": parent.get('name'),
         "price": get_flat_price(parent.get('price', 0)),
