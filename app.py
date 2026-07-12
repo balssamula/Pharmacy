@@ -364,3 +364,108 @@ elif page == "مركز إدارة المنتجات":
     render_products_page()
 elif page == "مركز إدارة العملاء والمجموعات":
     render_customers_page()
+
+# ==========================================
+# 🌐 المزامنة الموحدة (مرة واحدة لجميع الصفحات)
+# ==========================================
+
+def perform_unified_sync():
+    """مزامنة موحدة لجميع الصفحات (تتم مرة واحدة فقط)"""
+    headers = get_headers()
+    if not headers:
+        return
+    
+    # ✅ التحقق من عدم وجود مزامنة قيد التنفيذ
+    if st.session_state.get("sync_in_progress", False):
+        return
+    
+    # ✅ التحقق من أن البيانات تم تحميلها مسبقاً
+    if st.session_state.get("all_products_fetched", False):
+        return
+    
+    st.session_state["sync_in_progress"] = True
+    
+    with st.spinner("⏳ جاري المزامنة الشاملة للمنتجات والعروض..."):
+        try:
+            # 1. جلب المنتجات
+            all_p = []
+            page = 1
+            progress_bar = st.progress(0)
+            status_text = st.empty()
+            
+            while True:
+                res = safe_api_request("GET", f"https://api.salla.dev/admin/v2/products?per_page=60&page={page}", headers)
+                if not res or not res.get("data"):
+                    break
+                all_p.extend(res["data"])
+                total_pages = res.get("pagination", {}).get("totalPages", 1)
+                progress_bar.progress(page / total_pages)
+                status_text.info(f"📥 تحميل المنتجات: صفحة {page} من {total_pages} | تم تحميل {len(all_p)} منتج")
+                if page >= total_pages:
+                    break
+                page += 1
+            
+            st.session_state["all_products"] = all_p
+            progress_bar.empty()
+            status_text.empty()
+            
+            # 2. جلب الفروع
+            st.session_state["branches"] = get_branches_list()
+            
+            # 3. جلب التصنيفات
+            st.session_state["all_categories"] = fetch_all_pages("https://api.salla.dev/admin/v2/categories", headers)
+            
+            # 4. جلب الماركات
+            st.session_state["all_brands"] = fetch_all_pages("https://api.salla.dev/admin/v2/brands", headers)
+            
+            # 5. جلب العروض
+            all_o = fetch_all_pages(SALLA_API_URL, headers)
+            st.session_state["all_offers"] = all_o
+            
+            # 6. بناء خريطة العروض مع المنتجات
+            po_map = {}
+            for o in all_o:
+                if o.get("status") != "active":
+                    continue
+                oid = o.get("id")
+                full_o = safe_api_request("GET", f"https://api.salla.dev/admin/v2/specialoffers/{oid}", headers)
+                if full_o and full_o.get("data"):
+                    pids = set()
+                    for px in full_o["data"].get("buy", {}).get("products", []):
+                        pid = str(px.get("id", px) if isinstance(px, dict) else px)
+                        if pid.isdigit():
+                            pids.add(pid)
+                    for px in full_o["data"].get("get", {}).get("products", []):
+                        pid = str(px.get("id", px) if isinstance(px, dict) else px)
+                        if pid.isdigit():
+                            pids.add(pid)
+                    for pid in pids:
+                        if pid not in po_map:
+                            po_map[pid] = []
+                        po_map[pid].append({"id": oid, "name": o.get("name")})
+            
+            st.session_state["product_offers_map"] = po_map
+            st.session_state["all_products_fetched"] = True
+            st.session_state["last_sync_time"] = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+            st.session_state["sync_in_progress"] = False
+            
+            st.success(f"✅ تمت المزامنة الشاملة! ({len(all_p)} منتج، {len(all_o)} عرض)")
+            st.rerun()
+            
+        except Exception as e:
+            st.session_state["sync_in_progress"] = False
+            st.error(f"❌ فشل المزامنة: {str(e)}")
+
+# في app.py - استدعاء المزامنة عند تحميل أي صفحة
+def initialize_app():
+    """تهيئة التطبيق والمزامنة الموحدة"""
+    if "all_products_fetched" not in st.session_state:
+        st.session_state["all_products_fetched"] = False
+    if "sync_in_progress" not in st.session_state:
+        st.session_state["sync_in_progress"] = False
+    
+    # ✅ إذا لم يتم تحميل البيانات، قم بالمزامنة
+    if not st.session_state["all_products_fetched"] and not st.session_state["sync_in_progress"]:
+        perform_unified_sync()
+
+# استدعاء التهيئة في بداية كل صفحة
