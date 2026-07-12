@@ -354,6 +354,12 @@ st.sidebar.divider()
 if st.sidebar.button("🔄 تحديث البيانات", use_container_width=True, type="primary"):
     st.rerun()
 
+if st.sidebar.button("🔄 تحديث جميع البيانات", use_container_width=True, type="primary"):
+    st.session_state["all_products_fetched"] = False
+    st.session_state["sync_in_progress"] = False
+    perform_unified_sync()
+    st.rerun()
+    
 if st.sidebar.button("🚪 تسجيل الخروج", use_container_width=True, type="primary"):
     st.session_state["logged_in"] = False
     st.rerun()
@@ -469,3 +475,20 @@ def initialize_app():
         perform_unified_sync()
 
 # استدعاء التهيئة في بداية كل صفحة
+
+def fetch_all_pages(url_base, headers):
+    """جلب جميع الصفحات من API (بدون شريط تقدم)"""
+    all_data = []
+    page = 1
+    
+    while True:
+        url = f"{url_base}?per_page=60&page={page}" if "?" not in url_base else f"{url_base}&per_page=60&page={page}"
+        res = safe_api_request("GET", url, headers)
+        if not res or not res.get("data"):
+            break
+        all_data.extend(res["data"])
+        if page >= res.get("pagination", {}).get("totalPages", 1):
+            break
+        page += 1
+    
+    return all_data
