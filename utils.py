@@ -1277,8 +1277,7 @@ def get_group_products(product_id: int) -> List[Dict]:
 def update_group_product_quantity(parent_product_id: int, child_product_id: int, new_quantity: int) -> bool:
     """
     تحديث عدد حبات المنتج الفرعي داخل المجموعة
-    ✅ يدعم: consisted_products و bundle.products
-    ✅ الإصلاح: تحديث quantity_in_group فقط وليس quantity الإجمالي
+    ✅ الإصلاح: تحديث quantity_in_group فقط، وليس quantity الإجمالي
     """
     headers = get_headers()
     if not headers: 
@@ -1287,27 +1286,25 @@ def update_group_product_quantity(parent_product_id: int, child_product_id: int,
     # جلب المنتج الأب
     parent = get_product_details(parent_product_id)
     if not parent:
+        st.error("❌ لم يتم العثور على المنتج الأب")
         return False
     
-    # ✅ تحديث الكمية في consisted_products (تحديث quantity_in_group فقط)
+    # ✅ البحث عن المنتج الفرعي في consisted_products
     consisted_products = parent.get('consisted_products', [])
     updated = False
     
     for item in consisted_products:
         if item.get('id') == child_product_id:
-            # ✅ تحديث quantity_in_group فقط (عدد الحبات في المجموعة)
-            # لا نغير quantity (المخزون الإجمالي للمنتج الفرعي)
             item['quantity_in_group'] = new_quantity
             updated = True
             break
     
-    # ✅ إذا لم يتم العثور في consisted_products، جرب bundle.products
+    # ✅ إذا لم يتم العثور، جرب bundle.products
     if not updated:
         bundle = parent.get('bundle', {})
         bundle_products = bundle.get('products', [])
         for item in bundle_products:
             if item.get('id') == child_product_id:
-                # ✅ تحديث quantity_in_group فقط
                 item['quantity_in_group'] = new_quantity
                 updated = True
                 break
@@ -1316,19 +1313,22 @@ def update_group_product_quantity(parent_product_id: int, child_product_id: int,
         st.error(f"❌ لم يتم العثور على المنتج ID: {child_product_id} في المجموعة")
         return False
     
-    # ✅ تحديث المنتج الأب مع الحفاظ على الهيكل الصحيح
+    # ✅ بناء الـ payload مع الحفاظ على الهيكل
     payload = {
         "name": parent.get('name'),
         "price": get_flat_price(parent.get('price', 0)),
         "type": "group_products"
     }
     
-    # حفظ التغييرات في consisted_products أو bundle
     if 'consisted_products' in parent:
         payload["consisted_products"] = consisted_products
     elif 'bundle' in parent:
         payload["bundle"] = bundle
+    else:
+        # ✅ إذا لم يكن هناك هيكل، أنشئ واحداً
+        payload["consisted_products"] = consisted_products
     
+    # ✅ إرسال الطلب
     res = safe_api_request("PUT", f"https://api.salla.dev/admin/v2/products/{parent_product_id}", headers, json=payload)
     
     if res:
@@ -1342,8 +1342,10 @@ def update_group_product_quantity(parent_product_id: int, child_product_id: int,
                     all_products[i]['bundle']['products'] = bundle_products
                 break
         st.session_state["all_products"] = all_products
+        st.success(f"✅ تم تحديث كمية المنتج الفرعي إلى {new_quantity}")
+        return True
     
-    return res is not None
+    return False
 
 def remove_product_from_group(parent_product_id: int, child_product_id: int) -> bool:
     """إزالة منتج من المجموعة (بأمان دون حذفه من المتجر)"""
