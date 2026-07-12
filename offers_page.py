@@ -3,12 +3,53 @@ from datetime import datetime, timedelta
 import pandas as pd
 import io
 import re
+import base64
+import os
 from utils import (
     get_headers, safe_api_request, SALLA_API_URL, generate_salla_excel_template,
     process_excel_import, export_offers_to_excel, safe_parse_date,
     OFFER_TYPES_MAP, CHANNELS_MAP, APPLIED_TO_MAP, safe_float,
     update_product_promotions_secure
 )
+
+# ==========================================
+# 🔊 صوت التنبيه (base64)
+# ==========================================
+ALERT_SOUND_BASE64 = """
+UklGRnoAAABXQVZFZm10IBAAAAABAAEAQB8AAEAfAAABAAgAZGF0YQoAAACBhYqFhYqFhYqFhYqFhYqFhYqFhYqFhYqFhYqFhYqFhYqFhYqFhYqFhYqFhYqFhYqFhYqFhYqFhYqFhYqFhYqFhYqFhYqFhYqFhYqFhYqFhYqFhYqFhYqFhYqFhYqFhYqFhYqFhYqFhYqFhYqFhYqFhYqFhYqFhYqFhYqFhYqFhYqFhYqFhYqFhYqFhYqFhYqFhYqFhYqFhYqFhYqFhYqFg=="
+"""
+
+def play_alert_sound():
+    """تشغيل صوت التنبيه"""
+    sound_html = f"""
+    <audio id="alert-sound" style="display:none;" autoplay>
+        <source src="data:audio/wav;base64,{ALERT_SOUND_BASE64}" type="audio/wav">
+    </audio>
+    <script>
+        try {{
+            var audio = document.getElementById('alert-sound');
+            if (audio) {{
+                audio.play().catch(function(e) {{}});
+            }}
+        }} catch(e) {{}}
+    </script>
+    """
+    return sound_html
+
+def stop_alert_sound():
+    """إيقاف صوت التنبيه"""
+    sound_html = """
+    <script>
+        try {
+            var audio = document.getElementById('alert-sound');
+            if (audio) {
+                audio.pause();
+                audio.currentTime = 0;
+            }
+        } catch(e) {}
+    </script>
+    """
+    return sound_html
 
 def render_offers_page():
     st.markdown("""
@@ -101,7 +142,68 @@ def render_offers_page():
             background-color: #00EBCF !important;
             color: #0f1c2e !important;
         }
+        
+        /* ✅ تنسيق التنبيه */
+        @keyframes blink-red {
+            0% { background-color: #ff0000; transform: scale(1); }
+            50% { background-color: #cc0000; transform: scale(1.02); }
+            100% { background-color: #ff0000; transform: scale(1); }
+        }
+        @keyframes pulse {
+            0% { opacity: 1; }
+            50% { opacity: 0.5; }
+            100% { opacity: 1; }
+        }
+        .expiry-alert {
+            animation: blink-red 0.8s ease-in-out infinite;
+            padding: 15px 20px;
+            border-radius: 10px;
+            color: white;
+            font-weight: bold;
+            text-align: center;
+            border: 3px solid #ff6b6b;
+            box-shadow: 0 0 30px rgba(255, 0, 0, 0.3);
+            margin-bottom: 20px;
+            direction: rtl;
+        }
+        .expiry-alert .count {
+            font-size: 24px;
+            background: rgba(255,255,255,0.25);
+            padding: 2px 16px;
+            border-radius: 25px;
+            margin: 0 5px;
+            animation: pulse 1s ease-in-out infinite;
+        }
+        .expiry-alert .offer-name {
+            color: #ffd700;
+        }
+        .stop-sound-btn {
+            background: rgba(255,255,255,0.2);
+            border: 1px solid rgba(255,255,255,0.3);
+            color: white;
+            padding: 5px 15px;
+            border-radius: 20px;
+            cursor: pointer;
+            font-size: 12px;
+            transition: all 0.3s;
+        }
+        .stop-sound-btn:hover {
+            background: rgba(255,0,0,0.5);
+            border-color: #ff0000;
+        }
     </style>
+    
+    <!-- ✅ زر جانبي للجوال لفتح الأزرار -->
+    <button class="mobile-toggle-btn" onclick="
+        var btns = document.querySelectorAll('div[data-testid=\\'stElementContainer\\']:has(span[id^=\\'qa-marker-\\']) + div[data-testid=\\'stElementContainer\\']');
+        btns.forEach(function(el) {
+            if (el.style.right === '0px' || el.style.right === '0') {
+                el.style.right = '-200px';
+            } else {
+                el.style.right = '0px';
+            }
+        });
+    ">⚡ إجراءات</button>
     """, unsafe_allow_html=True)
 
     # ==========================================
@@ -197,7 +299,7 @@ def render_offers_page():
         raw_offers = fetch_all_pages(SALLA_API_URL, "جاري سحب العروض من متجرك")
         
     # ✅ عرض تنبيهات انتهاء العروض (في أعلى الصفحة)
-    render_expiry_alerts(raw_offers)
+    render_expiry_alerts(raw_offers, headers)
     
     # ==========================================
     # ⚡ نظام الإجراءات السريعة الجانبية (الأزرار واللوحات)
@@ -1036,7 +1138,7 @@ def render_offers_page():
 # 🚨 نظام التنبيه لقرب انتهاء العروض
 # ==========================================
 
-def render_expiry_alerts(raw_offers):
+def render_expiry_alerts(raw_offers, headers=None):
     """
     عرض تنبيهات للعروض التي ستنتهي خلال يومين
     """
@@ -1062,14 +1164,23 @@ def render_expiry_alerts(raw_offers):
                 'expiry_date': expiry_date.strftime('%Y-%m-%d')
             })
     
+    # ✅ حالة تشغيل الصوت
+    if "sound_playing" not in st.session_state:
+        st.session_state["sound_playing"] = True
+    
     if expiring_soon:
         # ✅ CSS للتنبيه المتحرك
         st.markdown("""
         <style>
             @keyframes blink-red {
-                0% { background-color: #ff0000; transform: scale(1); }
-                50% { background-color: #cc0000; transform: scale(1.02); }
-                100% { background-color: #ff0000; transform: scale(1); }
+                0% { background: linear-gradient(135deg, #ff0000, #cc0000); transform: scale(1); }
+                50% { background: linear-gradient(135deg, #cc0000, #990000); transform: scale(1.02); }
+                100% { background: linear-gradient(135deg, #ff0000, #cc0000); transform: scale(1); }
+            }
+            @keyframes pulse {
+                0% { opacity: 1; transform: scale(1); }
+                50% { opacity: 0.6; transform: scale(1.1); }
+                100% { opacity: 1; transform: scale(1); }
             }
             .expiry-alert {
                 animation: blink-red 0.8s ease-in-out infinite;
@@ -1084,23 +1195,57 @@ def render_expiry_alerts(raw_offers):
                 direction: rtl;
             }
             .expiry-alert .count {
-                font-size: 20px;
-                background: rgba(255,255,255,0.2);
-                padding: 2px 12px;
-                border-radius: 20px;
+                font-size: 24px;
+                background: rgba(255,255,255,0.25);
+                padding: 2px 16px;
+                border-radius: 25px;
                 margin: 0 5px;
+                animation: pulse 1s ease-in-out infinite;
+                display: inline-block;
             }
             .expiry-alert .offer-name {
                 color: #ffd700;
             }
+            .alert-buttons {
+                margin-top: 15px;
+                display: flex;
+                gap: 10px;
+                justify-content: center;
+                flex-wrap: wrap;
+            }
+            .alert-buttons .stButton button {
+                font-size: 13px !important;
+                padding: 6px 20px !important;
+            }
         </style>
+        """, unsafe_allow_html=True)
         
+        # ✅ تشغيل الصوت (إذا كان مفعلاً)
+        if st.session_state["sound_playing"]:
+            st.markdown(f"""
+            <audio id="alert-sound" style="display:none;" autoplay loop>
+                <source src="data:audio/wav;base64,{ALERT_SOUND_BASE64}" type="audio/wav">
+            </audio>
+            <script>
+                try {{
+                    var audio = document.getElementById('alert-sound');
+                    if (audio) {{
+                        audio.loop = true;
+                        audio.play().catch(function(e) {{ console.log('Sound play error:', e); }});
+                    }}
+                }} catch(e) {{}}
+            </script>
+            """, unsafe_allow_html=True)
+        
+        # ✅ عرض التنبيه مع العدد الصحيح
+        count = len(expiring_soon)
+        st.markdown(f"""
         <div class="expiry-alert">
             <div style="display: flex; align-items: center; justify-content: center; gap: 15px; flex-wrap: wrap;">
                 <span style="font-size: 32px;">🚨</span>
                 <span style="font-size: 18px;">
                     <b style="font-size: 22px;">تنبيه عاجل!</b>
-                    هناك <span class="count">{len(expiring_soon)}</span> عرض على وشك الانتهاء خلال يومين!
+                    هناك <span class="count">{count}</span> عرض على وشك الانتهاء خلال يومين!
                 </span>
             </div>
             <div style="margin-top: 10px; font-size: 14px; display: flex; gap: 10px; flex-wrap: wrap; justify-content: center;">
@@ -1115,39 +1260,31 @@ def render_expiry_alerts(raw_offers):
                 </span>
             """, unsafe_allow_html=True)
         
-        # ✅ أزرار الإجراءات السريعة
         st.markdown("""
             </div>
-            <div style="margin-top: 15px; display: flex; gap: 10px; justify-content: center; flex-wrap: wrap;">
+            <div class="alert-buttons">
         """, unsafe_allow_html=True)
         
-        col_btn1, col_btn2 = st.columns(2)
+        # ✅ أزرار الإجراءات
+        col_btn1, col_btn2, col_btn3 = st.columns(3)
         with col_btn1:
-            if st.button("📅 تمديد العروض المنتهية بيومين", use_container_width=True, type="primary"):
+            if st.button("📅 تمديد العروض", use_container_width=True, type="primary", key="extend_offers_btn"):
                 st.session_state["qa_action"] = "end_dates"
                 st.rerun()
         with col_btn2:
-            if st.button("🧹 إزالة العناوين الترويجية للمنتجات المنتهية", use_container_width=True, type="secondary"):
+            if st.button("🧹 إزالة العناوين الترويجية", use_container_width=True, type="secondary", key="remove_promo_btn"):
                 st.session_state["qa_action"] = "end_dates"
                 st.session_state["qa_action_sub"] = "remove_promo"
+                st.rerun()
+        with col_btn3:
+            # ✅ زر إيقاف الصوت
+            sound_label = "🔇 إيقاف الصوت" if st.session_state["sound_playing"] else "🔊 تشغيل الصوت"
+            if st.button(sound_label, use_container_width=True, key="toggle_sound_btn"):
+                st.session_state["sound_playing"] = not st.session_state["sound_playing"]
                 st.rerun()
         
         st.markdown("</div></div>", unsafe_allow_html=True)
         
-        # 🔊 تشغيل صوت التنبيه (اختياري - يعمل في بعض المتصفحات)
-        st.markdown("""
-        <audio id="alert-sound" style="display:none;">
-            <source src="data:audio/wav;base64,UklGRnoAAABXQVZFZm10IBAAAAABAAEAQB8AAEAfAAABAAgAZGF0YQoAAACBhYqFhYqFhYqFhYqFhYqFhYqFhYqFhYqFhYqFhYqFhYqFhYqFhYqFhYqFhYqFhYqFhYqFhYqFhYqFhYqFhYqFhYqFhYqFhYqFhYqFhYqFhYqFhYqFhYqFhYqFhYqFhYqFhYqFhYqFhYqFhYqFhYqFhYqFhYqFhYqFhYqFhYqFhYqFhYqFhYqFhYqFhYqFhYqFhYqFhYqFhYqFhYqFhYqFg==" type="audio/wav">
-        </audio>
-        <script>
-            try {
-                var audio = document.getElementById('alert-sound');
-                if (audio) {
-                    audio.play().catch(function(e) {});
-                }
-            } catch(e) {}
-        </script>
-        """, unsafe_allow_html=True)
     else:
-        # ✅ إذا لم تكن هناك عروض منتهية، عرض رسالة مطمئنة
+        # ✅ إذا لم تكن هناك عروض منتهية
         st.success("✅ جميع العروض النشطة سارية المفعول ولا توجد عروض على وشك الانتهاء.")
