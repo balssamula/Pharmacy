@@ -560,7 +560,6 @@ def render_products_page():
             '>
                 📌 الحالة
             </div>
-        </div>
         filter_status_type = st.radio(
             "",
             ["الكل", "مخفي", "معروض"], 
@@ -568,6 +567,7 @@ def render_products_page():
             key="f_status_type",
             label_visibility="collapsed"
         )
+        </div>
         """, unsafe_allow_html=True)
 
 
