@@ -1039,7 +1039,7 @@ def render_product_card(idx: int, p: Dict, headers: Dict[str, str]):
                                 st.success("✅ تم تحديث حالة الضريبة بنجاح!")
                                 st.rerun()
                 
-                # ✅ كميات الفروع مع أداة الكشف التلقائي الحي
+                # ✅ كميات الفروع مع زر تحديث عام
                 with st.popover("🏢 كميات الفروع"):
                     if not branches:
                         st.warning("⚠️ لا توجد فروع مسجلة في المتجر.")
@@ -1047,7 +1047,7 @@ def render_product_card(idx: int, p: Dict, headers: Dict[str, str]):
                         st.markdown("**📊 الكميات الحالية في الفروع:**")
         
                         # ✅ زر الكشف التلقائي الحي
-                        if st.button("🔍 كشف تلقائي حي للأرصدة", key=f"live_fetch_{p_id}_{idx}", use_container_width=True):
+                        if st.button("🔍 كشف الأرصدة الحية", key=f"live_fetch_{p_id}_{idx}", use_container_width=True):
                             with st.spinner("جاري جلب الأرصدة الحية من سلة..."):
                                 live_qty = get_live_branch_quantities(int(p_id), headers)
                                 if live_qty:
@@ -1064,8 +1064,6 @@ def render_product_card(idx: int, p: Dict, headers: Dict[str, str]):
                         for b in branches:
                             branch_id = b.get('id')
                             branch_name = b.get('name', f'فرع {branch_id}')
-            
-                            # استخدام الأرصدة الحية إذا وجدت، وإلا استخدام القيم المخزنة
                             current_qty = live_qty.get(branch_id, 0)
             
                             # عرض الكمية الحالية
@@ -1080,36 +1078,30 @@ def render_product_card(idx: int, p: Dict, headers: Dict[str, str]):
                                 🏪 **{branch_name}**: الكمية الحالية = <b style='color: {"#2ecc71" if current_qty > 0 else "#e74c3c"};'>{current_qty}</b>
                             </div>
                             """, unsafe_allow_html=True)
-                            
+            
                             # حقل تعديل الكمية
-                            col_qty, col_btn = st.columns([3, 1])
-                            with col_qty:
-                                new_q = st.number_input(
-                                    f"تعديل كمية {branch_name}",
-                                    min_value=0, 
-                                    value=current_qty,
-                                    step=1, 
-                                    key=f"bq_{p_id}_{branch_id}_{idx}",
-                                    label_visibility="collapsed"
-                                )
-                            with col_btn:
-                                if st.button(f"💾", key=f"bq_btn_{p_id}_{branch_id}_{idx}", use_container_width=True):
-                                    if new_q != current_qty:
-                                        branch_updates.append({
-                                            "identifer": p_sku, 
-                                            "identifer_type": "sku", 
-                                            "branch_id": branch_id, 
-                                            "quantity": new_q, 
-                                            "mode": "overwrite"
-                                        })
-                                        st.success(f"✅ تم تحديث كمية {branch_name} إلى {new_q}")
-                                        st.rerun()
-                                    else:
-                                        st.info("ℹ️ لم يتم تغيير الكمية")
+                            new_q = st.number_input(
+                                f"تعديل كمية {branch_name}",
+                                min_value=0, 
+                                value=current_qty,
+                                step=1, 
+                                key=f"bq_{p_id}_{branch_id}_{idx}",
+                                label_visibility="collapsed"
+                            )
+            
+                            # تخزين التغييرات
+                            branch_updates.append({
+                                "identifer": p_sku, 
+                                "identifer_type": "sku", 
+                                "branch_id": branch_id, 
+                                "quantity": new_q, 
+                                "mode": "overwrite"
+                            })
         
-                        # ✅ زر حفظ جميع التغييرات
-                        if branch_updates and st.button("💾 حفظ جميع التغييرات", key=f"save_bq_{p_id}_{idx}", type="primary", use_container_width=True):
-                            with st.spinner("جاري حفظ الكميات..."):
+                        # ✅ زر تحديث الكميات العام (لجميع الفروع دفعة واحدة)
+                        st.markdown("---")
+                        if st.button("💾 حفظ جميع الكميات (لجميع الفروع)", key=f"save_all_bq_{p_id}_{idx}", type="primary", use_container_width=True):
+                            with st.spinner("جاري حفظ جميع الكميات في سلة..."):
                                 res = safe_api_request(
                                     "POST", 
                                     "https://api.salla.dev/admin/v2/products/quantities/bulk", 
@@ -1118,12 +1110,14 @@ def render_product_card(idx: int, p: Dict, headers: Dict[str, str]):
                                 )
                                 if res:
                                     st.success("✅ تم تحديث جميع الكميات بنجاح!")
-                                    # مسح الكميات المخزنة مؤقتاً
                                     if f"live_qty_{p_id}" in st.session_state:
                                         del st.session_state[f"live_qty_{p_id}"]
                                     st.rerun()
                                 else:
                                     st.error("❌ فشل تحديث الكميات")
+        
+                        # ✅ زر تحديث الكميات لفرع واحد (بجانب كل فرع)
+                        # هذا موجود بالفعل في الحقل أعلاه
             
             st.markdown("</div>", unsafe_allow_html=True)
 
