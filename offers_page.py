@@ -19,6 +19,99 @@ ALERT_SOUND_BASE64 = """
 UklGRnoAAABXQVZFZm10IBAAAAABAAEAQB8AAEAfAAABAAgAZGF0YQoAAACBhYqFhYqFhYqFhYqFhYqFhYqFhYqFhYqFhYqFhYqFhYqFhYqFhYqFhYqFhYqFhYqFhYqFhYqFhYqFhYqFhYqFhYqFhYqFhYqFhYqFhYqFhYqFhYqFhYqFhYqFhYqFhYqFhYqFhYqFhYqFhYqFhYqFhYqFhYqFhYqFhYqFhYqFhYqFhYqFhYqFhYqFhYqFhYqFhYqFhYqFhYqFhYqFhYqFg=="
 """
 
+def get_audio_base64(file_path):
+    """قراءة ملف الصوت وتحويله إلى base64"""
+    try:
+        with open(file_path, "rb") as f:
+            return base64.b64encode(f.read()).decode()
+    except Exception as e:
+        print(f"خطأ في قراءة ملف الصوت: {e}")
+        return None
+
+def render_expiry_alerts(raw_offers):
+    """عرض تنبيهات انتهاء العروض مع صوت MP3"""
+    now = datetime.now()
+    expiring_soon = []
+    
+    for offer in raw_offers:
+        if offer.get('status') != 'active':
+            continue
+        expiry_date = safe_parse_date(offer.get('expiry_date'))
+        if not expiry_date:
+            continue
+        days_left = (expiry_date - now).days
+        if 0 <= days_left <= 2:
+            expiring_soon.append({
+                'id': offer.get('id'),
+                'name': offer.get('name'),
+                'days_left': days_left,
+                'expiry_date': expiry_date.strftime('%Y-%m-%d')
+            })
+    
+    if expiring_soon:
+        # ✅ تحميل ملف الصوت
+        audio_path = os.path.join(os.path.dirname(__file__), "alert.mp3")
+        audio_base64 = get_audio_base64(audio_path)
+        
+        if audio_base64:
+            # ✅ تشغيل الصوت
+            st.markdown(f"""
+            <audio id="alert-sound" style="display:none;" autoplay loop>
+                <source src="data:audio/mp3;base64,{audio_base64}" type="audio/mp3">
+            </audio>
+            <script>
+                try {{
+                    var audio = document.getElementById('alert-sound');
+                    if (audio) {{
+                        audio.loop = true;
+                        audio.volume = 0.7;
+                        audio.play().catch(function(e) {{ console.log('Sound error:', e); }});
+                    }}
+                }} catch(e) {{}}
+            </script>
+            """, unsafe_allow_html=True)
+        
+        # ✅ عرض التنبيه
+        st.markdown(f"""
+        <div class="expiry-alert">
+            <div style="display: flex; align-items: center; justify-content: center; gap: 15px; flex-wrap: wrap;">
+                <span style="font-size: 32px;">🚨</span>
+                <span style="font-size: 18px;">
+                    <b style="font-size: 22px;">تنبيه عاجل!</b>
+                    هناك <span class="count">{len(expiring_soon)}</span> عرض على وشك الانتهاء!
+                </span>
+            </div>
+            <div style="margin-top: 10px; display: flex; gap: 10px; flex-wrap: wrap; justify-content: center;">
+        """, unsafe_allow_html=True)
+        
+        for offer in expiring_soon:
+            days_text = "اليوم" if offer['days_left'] == 0 else f"غداً" if offer['days_left'] == 1 else f"بعد غد"
+            st.markdown(f"""
+                <span style="background: rgba(255,255,255,0.15); padding: 4px 12px; border-radius: 15px;">
+                    🎯 <span class="offer-name">{offer['name']}</span>
+                    ينتهي <b>{days_text}</b> ({offer['expiry_date']})
+                </span>
+            """, unsafe_allow_html=True)
+        
+        # ✅ زر إيقاف الصوت
+        if st.button("🔇 إيقاف الصوت", key="stop_alert_sound", use_container_width=True):
+            st.markdown("""
+            <script>
+                try {
+                    var audio = document.getElementById('alert-sound');
+                    if (audio) {
+                        audio.pause();
+                        audio.currentTime = 0;
+                    }
+                } catch(e) {}
+            </script>
+            """, unsafe_allow_html=True)
+            st.rerun()
+        
+        st.markdown("</div></div>", unsafe_allow_html=True)
+    else:
+        st.success("✅ جميع العروض النشطة سارية المفعول.")
+        
 def play_alert_sound():
     """تشغيل صوت التنبيه"""
     sound_html = f"""
