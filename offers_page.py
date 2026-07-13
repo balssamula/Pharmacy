@@ -28,17 +28,21 @@ def get_audio_base64(file_path):
         print(f"خطأ في قراءة ملف الصوت: {e}")
         return None
 
-def render_expiry_alerts(raw_offers):
-    """عرض تنبيهات انتهاء العروض مع صوت MP3"""
+# ==========================================
+# 🚨 نظام التنبيه لقرب انتهاء العروض
+# ==========================================
+
+def render_expiry_alerts(raw_offers, headers=None):
+    """عرض تنبيهات للعروض التي ستنتهي خلال يومين مع صوت مدمج"""
     now = datetime.now()
     expiring_soon = []
     
     for offer in raw_offers:
-        if offer.get('status') != 'active':
-            continue
+        if offer.get('status') != 'active': continue
+        
         expiry_date = safe_parse_date(offer.get('expiry_date'))
-        if not expiry_date:
-            continue
+        if not expiry_date: continue
+        
         days_left = (expiry_date - now).days
         if 0 <= days_left <= 2:
             expiring_soon.append({
@@ -48,69 +52,88 @@ def render_expiry_alerts(raw_offers):
                 'expiry_date': expiry_date.strftime('%Y-%m-%d')
             })
     
+    if "sound_playing" not in st.session_state:
+        st.session_state["sound_playing"] = True
+    
     if expiring_soon:
-        # ✅ تحميل ملف الصوت
-        audio_path = os.path.join(os.path.dirname(__file__), "alert.mp3")
-        audio_base64 = get_audio_base64(audio_path)
+        st.markdown("""
+        <style>
+            @keyframes blink-red {
+                0% { background: linear-gradient(135deg, #ff0000, #cc0000); transform: scale(1); }
+                50% { background: linear-gradient(135deg, #cc0000, #990000); transform: scale(1.02); }
+                100% { background: linear-gradient(135deg, #ff0000, #cc0000); transform: scale(1); }
+            }
+            .expiry-alert {
+                animation: blink-red 0.8s ease-in-out infinite;
+                padding: 15px 20px;
+                border-radius: 10px;
+                color: white;
+                font-weight: bold;
+                text-align: center;
+                border: 3px solid #ff6b6b;
+                box-shadow: 0 0 30px rgba(255, 0, 0, 0.3);
+                margin-bottom: 20px;
+                direction: rtl;
+            }
+        </style>
+        """, unsafe_allow_html=True)
         
-        if audio_base64:
-            # ✅ تشغيل الصوت
+        if st.session_state["sound_playing"]:
+            # ✅ استخدام رابط صوت خارجي موثوق جداً وجافاسكريبت تتجاوز حظر المتصفحات
+            audio_url = "https://assets.mixkit.co/active_storage/sfx/2869/2869-preview.mp3"
             st.markdown(f"""
-            <audio id="alert-sound" style="display:none;" autoplay loop>
-                <source src="data:audio/mp3;base64,{audio_base64}" type="audio/mp3">
-            </audio>
+            <audio id="alert-sound" src="{audio_url}" loop style="display:none;"></audio>
             <script>
-                try {{
-                    var audio = document.getElementById('alert-sound');
-                    if (audio) {{
-                        audio.loop = true;
-                        audio.volume = 0.7;
-                        audio.play().catch(function(e) {{ console.log('Sound error:', e); }});
+                var audio = document.getElementById('alert-sound');
+                if (audio) {{
+                    audio.volume = 0.6;
+                    var playPromise = audio.play();
+                    if (playPromise !== undefined) {{
+                        playPromise.catch(function(error) {{
+                            console.log('سياسة المتصفح تمنع التشغيل التلقائي للصوت حتى ينقر المستخدم على الشاشة.');
+                            // تشغيل الصوت فور نقر المستخدم في أي مكان بالصفحة
+                            document.body.addEventListener('click', function() {{ audio.play(); }}, {{ once: true }});
+                        }});
                     }}
-                }} catch(e) {{}}
+                }}
             </script>
             """, unsafe_allow_html=True)
         
-        # ✅ عرض التنبيه
+        count = len(expiring_soon)
         st.markdown(f"""
         <div class="expiry-alert">
             <div style="display: flex; align-items: center; justify-content: center; gap: 15px; flex-wrap: wrap;">
                 <span style="font-size: 32px;">🚨</span>
                 <span style="font-size: 18px;">
-                    <b style="font-size: 22px;">تنبيه عاجل!</b>
-                    هناك <span class="count">{len(expiring_soon)}</span> عرض على وشك الانتهاء!
+                    <b style="font-size: 22px;">تنبيه عاجل!</b> هناك <span style="background: rgba(255,255,255,0.25); padding: 2px 10px; border-radius: 20px;">{count}</span> عرض انتهى أو على وشك الإنتهاء!
                 </span>
             </div>
-            <div style="margin-top: 10px; display: flex; gap: 10px; flex-wrap: wrap; justify-content: center;">
+            <div style="margin-top: 10px; font-size: 14px; display: flex; gap: 10px; flex-wrap: wrap; justify-content: center;">
         """, unsafe_allow_html=True)
         
         for offer in expiring_soon:
             days_text = "اليوم" if offer['days_left'] == 0 else f"غداً" if offer['days_left'] == 1 else f"بعد غد"
-            st.markdown(f"""
-                <span style="background: rgba(255,255,255,0.15); padding: 4px 12px; border-radius: 15px;">
-                    🎯 <span class="offer-name">{offer['name']}</span>
-                    ينتهي <b>{days_text}</b> ({offer['expiry_date']})
-                </span>
-            """, unsafe_allow_html=True)
+            st.markdown(f"<span style='background: rgba(255,255,255,0.15); padding: 4px 12px; border-radius: 15px;'>🎯 <span style='color: #ffd700;'>{offer['name']}</span> ينتهي <b>{days_text}</b> ({offer['expiry_date']})</span>", unsafe_allow_html=True)
         
-        # ✅ زر إيقاف الصوت
-        if st.button("🔇 إيقاف الصوت", key="stop_alert_sound", use_container_width=True):
-            st.markdown("""
-            <script>
-                try {
-                    var audio = document.getElementById('alert-sound');
-                    if (audio) {
-                        audio.pause();
-                        audio.currentTime = 0;
-                    }
-                } catch(e) {}
-            </script>
-            """, unsafe_allow_html=True)
-            st.rerun()
+        st.markdown("</div><div style='margin-top: 15px; display: flex; gap: 10px; justify-content: center; flex-wrap: wrap;'>", unsafe_allow_html=True)
         
+        col_btn1, col_btn2, col_btn3 = st.columns(3)
+        with col_btn1:
+            if st.button("📅 تمديد العروض", use_container_width=True, type="primary"):
+                st.session_state["qa_action"] = "end_dates"
+                st.rerun()
+        with col_btn2:
+            if st.button("🧹 إزالة العناوين", use_container_width=True):
+                st.session_state["qa_action"] = "end_dates"
+                st.rerun()
+        with col_btn3:
+            sound_label = "🔇 إيقاف الصوت" if st.session_state["sound_playing"] else "🔊 تشغيل الصوت"
+            if st.button(sound_label, use_container_width=True):
+                st.session_state["sound_playing"] = not st.session_state["sound_playing"]
+                st.rerun()
         st.markdown("</div></div>", unsafe_allow_html=True)
     else:
-        st.success("✅ جميع العروض النشطة سارية المفعول.")
+        st.success("✅ جميع العروض النشطة سارية المفعول ولا توجد عروض على وشك الانتهاء.")
         
 def play_alert_sound():
     """تشغيل صوت التنبيه"""
