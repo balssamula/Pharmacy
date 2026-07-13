@@ -23,6 +23,71 @@ from offers_page import render_offers_page
 from products_page import render_products_page
 from customers_page import render_customers_page
 
+def fetch_products(headers):
+    """جلب المنتجات"""
+    products = []
+    page = 1
+    while True:
+        res = safe_api_request("GET", f"https://api.salla.dev/admin/v2/products?per_page=100&page={page}", headers)
+        if not res or not res.get("data"):
+            break
+        products.extend(res["data"])
+        if page >= res.get("pagination", {}).get("totalPages", 1):
+            break
+        page += 1
+    return products
+
+def fetch_offers(headers):
+    """جلب العروض"""
+    offers = []
+    page = 1
+    while True:
+        res = safe_api_request("GET", f"https://api.salla.dev/admin/v2/specialoffers?per_page=100&page={page}", headers)
+        if not res or not res.get("data"):
+            break
+        offers.extend(res["data"])
+        if page >= res.get("pagination", {}).get("totalPages", 1):
+            break
+        page += 1
+    return offers
+
+def load_all_data():
+    """تحميل جميع البيانات"""
+    headers = get_headers()
+    if not headers:
+        return None
+    
+    products = fetch_products(headers)
+    offers = fetch_offers(headers)
+    branches = get_branches_list()
+    
+    return {
+        "products": products,
+        "offers": offers,
+        "branches": branches,
+        "fetched_at": datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    }
+
+@st.cache_resource(ttl=3600)
+def get_cached_data():
+    """جلب البيانات مع التخزين المؤقت"""
+    return load_all_data()
+
+def preload_data():
+    """تحميل البيانات مسبقاً"""
+    if st.session_state.get("all_products_fetched", False):
+        return True
+    
+    data = get_cached_data()
+    if data:
+        st.session_state["all_products"] = data["products"]
+        st.session_state["all_offers"] = data["offers"]
+        st.session_state["branches"] = data["branches"]
+        st.session_state["all_products_fetched"] = True
+        st.session_state["last_sync_time"] = data["fetched_at"]
+        return True
+    return False
+    
 def initialize_global_products():
     """تهيئة المنتجات بشكل عام لجميع الصفحات"""
     if "all_products" not in st.session_state:
@@ -93,6 +158,23 @@ def perform_global_sync():
         
         st.success(f"✅ تم تحميل {len(all_p)} منتج و {len(all_o)} عرض بنجاح!")
         
+def fetch_all_pages(url_base, headers):
+    """جلب جميع الصفحات من API (بدون شريط تقدم)"""
+    all_data = []
+    page = 1
+    
+    while True:
+        url = f"{url_base}?per_page=60&page={page}" if "?" not in url_base else f"{url_base}&per_page=60&page={page}"
+        res = safe_api_request("GET", url, headers)
+        if not res or not res.get("data"):
+            break
+        all_data.extend(res["data"])
+        if page >= res.get("pagination", {}).get("totalPages", 1):
+            break
+        page += 1
+    
+    return all_data
+    
 # ==============================================================================================
 # CSS الاحترافي الحاسم لعزل خط كايرو عن عناصر الرموز والـ Ligatures (expand_more و arrow_down)
 # وتصميم القائمة الجانبية المائلة الديناميكية
@@ -578,23 +660,6 @@ def initialize_app():
 
 # استدعاء التهيئة في بداية كل صفحة
 
-def fetch_all_pages(url_base, headers):
-    """جلب جميع الصفحات من API (بدون شريط تقدم)"""
-    all_data = []
-    page = 1
-    
-    while True:
-        url = f"{url_base}?per_page=60&page={page}" if "?" not in url_base else f"{url_base}&per_page=60&page={page}"
-        res = safe_api_request("GET", url, headers)
-        if not res or not res.get("data"):
-            break
-        all_data.extend(res["data"])
-        if page >= res.get("pagination", {}).get("totalPages", 1):
-            break
-        page += 1
-    
-    return all_data
-
 def get_alert_sound_base64():
     """قراءة ملف الصوت وتحويله إلى base64"""
     sound_path = os.path.join(os.path.dirname(__file__), "alert.wav")
@@ -602,74 +667,6 @@ def get_alert_sound_base64():
         with open(sound_path, "rb") as f:
             return base64.b64encode(f.read()).decode()
     return None
-
-# ==========================================
-# 🚀 التحميل المسبق للبيانات عند بدء التطبيق
-# ==========================================
-def preload_data():
-    """تحميل البيانات مسبقاً عند بدء التطبيق"""
-    # ✅ إذا كانت البيانات موجودة بالفعل، لا نعيد التحميل
-    if st.session_state.get("all_products_fetched", False):
-        return
-    
-    # ✅ استخدام st.cache_resource للتخزين المؤقت
-    @st.cache_resource(ttl=3600)
-    def get_cached_data():
-        return load_all_data()
-    
-    data = get_cached_data()
-    if data:
-        st.session_state["all_products"] = data["products"]
-        st.session_state["all_offers"] = data["offers"]
-        st.session_state["branches"] = data["branches"]
-        st.session_state["all_products_fetched"] = True
-        st.session_state["last_sync_time"] = data["fetched_at"]
-        
-def fetch_products(headers):
-    """جلب المنتجات"""
-    products = []
-    page = 1
-    while True:
-        res = safe_api_request("GET", f"https://api.salla.dev/admin/v2/products?per_page=100&page={page}", headers)
-        if not res or not res.get("data"):
-            break
-        products.extend(res["data"])
-        if page >= res.get("pagination", {}).get("totalPages", 1):
-            break
-        page += 1
-    return products
-
-def fetch_offers(headers):
-    """جلب العروض"""
-    offers = []
-    page = 1
-    while True:
-        res = safe_api_request("GET", f"https://api.salla.dev/admin/v2/specialoffers?per_page=100&page={page}", headers)
-        if not res or not res.get("data"):
-            break
-        offers.extend(res["data"])
-        if page >= res.get("pagination", {}).get("totalPages", 1):
-            break
-        page += 1
-    return offers
-
-def load_all_data():
-    """تحميل جميع البيانات باستخدام الكاش"""
-    headers = get_headers()
-    if not headers:
-        return None
-    
-    # جلب جميع البيانات
-    products = fetch_products(headers)
-    offers = fetch_offers(headers)
-    branches = get_branches_list()
-    
-    return {
-        "products": products,
-        "offers": offers,
-        "branches": branches,
-        "fetched_at": datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-    }
 
 # ✅ بعد نجاح تسجيل الدخول
 if st.session_state.get("logged_in", False):
