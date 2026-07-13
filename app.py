@@ -3,6 +3,14 @@ import os
 import base64
 import requests
 from datetime import datetime, timedelta
+# ✅ استيراد الدوال من utils
+from utils import (
+    get_headers, 
+    safe_api_request, 
+    get_branches_list,
+    safe_parse_date,
+    SALLA_API_URL
+)
 
 st.set_page_config(
     page_title="منظومة إدارة العروض الخاصة والمنتجات",
@@ -584,44 +592,6 @@ def get_alert_sound_base64():
 # 🚀 التحميل المسبق للبيانات عند بدء التطبيق
 # ==========================================
 
-def preload_data():
-    """تحميل البيانات مسبقاً عند بدء التطبيق"""
-    if "all_products_fetched" in st.session_state and st.session_state["all_products_fetched"]:
-        return
-    
-    # ✅ استخدام st.cache_resource
-    @st.cache_resource(ttl=3600)
-    def load_all_data():
-        headers = get_headers()
-        if not headers:
-            return None
-        
-        # جلب جميع البيانات بسرعة باستخدام threading
-        import concurrent.futures
-        
-        with concurrent.futures.ThreadPoolExecutor(max_workers=4) as executor:
-            future_products = executor.submit(fetch_products, headers)
-            future_offers = executor.submit(fetch_offers, headers)
-            future_branches = executor.submit(get_branches_list)
-            
-            products = future_products.result()
-            offers = future_offers.result()
-            branches = future_branches.result()
-        
-        return {
-            "products": products,
-            "offers": offers,
-            "branches": branches
-        }
-    
-    data = load_all_data()
-    if data:
-        st.session_state["all_products"] = data["products"]
-        st.session_state["all_offers"] = data["offers"]
-        st.session_state["branches"] = data["branches"]
-        st.session_state["all_products_fetched"] = True
-        st.session_state["last_sync_time"] = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-
 def fetch_products(headers):
     """جلب المنتجات"""
     products = []
@@ -649,6 +619,43 @@ def fetch_offers(headers):
             break
         page += 1
     return offers
+
+def load_all_data():
+    """تحميل جميع البيانات باستخدام الكاش"""
+    headers = get_headers()
+    if not headers:
+        return None
+    
+    # جلب جميع البيانات
+    products = fetch_products(headers)
+    offers = fetch_offers(headers)
+    branches = get_branches_list()
+    
+    return {
+        "products": products,
+        "offers": offers,
+        "branches": branches,
+        "fetched_at": datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    }
+
+def preload_data():
+    """تحميل البيانات مسبقاً عند بدء التطبيق"""
+    # ✅ إذا كانت البيانات موجودة بالفعل، لا نعيد التحميل
+    if st.session_state.get("all_products_fetched", False):
+        return
+    
+    # ✅ استخدام st.cache_resource للتخزين المؤقت
+    @st.cache_resource(ttl=3600)
+    def get_cached_data():
+        return load_all_data()
+    
+    data = get_cached_data()
+    if data:
+        st.session_state["all_products"] = data["products"]
+        st.session_state["all_offers"] = data["offers"]
+        st.session_state["branches"] = data["branches"]
+        st.session_state["all_products_fetched"] = True
+        st.session_state["last_sync_time"] = data["fetched_at"]
 
 # ✅ في app.py - استدعاء التحميل المسبق
 if st.session_state.get("logged_in", False):
