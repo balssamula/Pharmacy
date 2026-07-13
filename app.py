@@ -291,14 +291,17 @@ if not st.session_state["logged_in"]:
                         if res.status_code < 400:
                             st.session_state["store_name"] = res.json().get("data", {}).get("name", "متجر سلة")
                     except Exception:
-                        pass # استخدام الاسم الافتراضي في حال الفشل
-                        
-                    # تسجيل توقيت الدخول (بتوقيت السعودية +3)
+                        pass
+                    
                     ksa_time = datetime.now() + timedelta(hours=3)
                     st.session_state["login_time"] = ksa_time.strftime("%Y-%m-%d %I:%M %p")
-                    
                     st.session_state["logged_in"] = True
                     st.session_state["access_token"] = token.strip()
+                    
+                    # ✅ تحميل البيانات بعد تسجيل الدخول
+                    with st.spinner("⏳ جاري تحميل بيانات المتجر..."):
+                        preload_data()
+                    
                     st.rerun()
             else:
                 st.error("❌ عذراً، تأكد من صحة البيانات والتوكن المرفق!")
@@ -657,6 +660,8 @@ def preload_data():
         st.session_state["all_products_fetched"] = True
         st.session_state["last_sync_time"] = data["fetched_at"]
 
-# ✅ في app.py - استدعاء التحميل المسبق
+# ✅ بعد نجاح تسجيل الدخول
 if st.session_state.get("logged_in", False):
-    preload_data()  # تحميل البيانات في الخلفية
+    # ✅ تحميل البيانات في الخلفية
+    with st.spinner("⏳ جاري تحميل بيانات المتجر..."):
+        preload_data()
