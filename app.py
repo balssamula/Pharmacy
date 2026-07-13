@@ -606,7 +606,25 @@ def get_alert_sound_base64():
 # ==========================================
 # 🚀 التحميل المسبق للبيانات عند بدء التطبيق
 # ==========================================
-
+def preload_data():
+    """تحميل البيانات مسبقاً عند بدء التطبيق"""
+    # ✅ إذا كانت البيانات موجودة بالفعل، لا نعيد التحميل
+    if st.session_state.get("all_products_fetched", False):
+        return
+    
+    # ✅ استخدام st.cache_resource للتخزين المؤقت
+    @st.cache_resource(ttl=3600)
+    def get_cached_data():
+        return load_all_data()
+    
+    data = get_cached_data()
+    if data:
+        st.session_state["all_products"] = data["products"]
+        st.session_state["all_offers"] = data["offers"]
+        st.session_state["branches"] = data["branches"]
+        st.session_state["all_products_fetched"] = True
+        st.session_state["last_sync_time"] = data["fetched_at"]
+        
 def fetch_products(headers):
     """جلب المنتجات"""
     products = []
@@ -652,25 +670,6 @@ def load_all_data():
         "branches": branches,
         "fetched_at": datetime.now().strftime("%Y-%m-%d %H:%M:%S")
     }
-
-def preload_data():
-    """تحميل البيانات مسبقاً عند بدء التطبيق"""
-    # ✅ إذا كانت البيانات موجودة بالفعل، لا نعيد التحميل
-    if st.session_state.get("all_products_fetched", False):
-        return
-    
-    # ✅ استخدام st.cache_resource للتخزين المؤقت
-    @st.cache_resource(ttl=3600)
-    def get_cached_data():
-        return load_all_data()
-    
-    data = get_cached_data()
-    if data:
-        st.session_state["all_products"] = data["products"]
-        st.session_state["all_offers"] = data["offers"]
-        st.session_state["branches"] = data["branches"]
-        st.session_state["all_products_fetched"] = True
-        st.session_state["last_sync_time"] = data["fetched_at"]
 
 # ✅ بعد نجاح تسجيل الدخول
 if st.session_state.get("logged_in", False):
