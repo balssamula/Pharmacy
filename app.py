@@ -451,7 +451,7 @@ if st.sidebar.button("🔄 تحديث البيانات", use_container_width=Tru
 
 col_refresh1, col_refresh2 = st.sidebar.columns(2)
 with col_refresh1:
-    if st.button("🔄 تحديث جميع البيانات", type="primary", use_container_width=True):
+    if st.sidebar.button("🔄 تحديث جميع البيانات", type="primary", use_container_width=True):
         # ✅ مسح الكاش وإعادة التحميل
         st.cache_resource.clear()
         st.session_state["all_products_fetched"] = False
