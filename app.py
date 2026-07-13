@@ -13,7 +13,7 @@ from utils import (
 )
 
 st.set_page_config(
-    page_title="منظومة إدارة العروض الخاصة والمنتجات",
+    page_title="منظومة إدارة المنتجات والعروض الخاصة",
     layout="wide",
     page_icon="🎁",
     initial_sidebar_state="expanded"
@@ -277,7 +277,7 @@ if "login_time" not in st.session_state: st.session_state["login_time"] = ""
 if not st.session_state["logged_in"]:
     _, col2, _ = st.columns([1, 2, 1])
     with col2:
-        st.markdown("<h3 style='text-align:center;'>🏥 تسجيل الدخول - مدير العروض الخاصة والمنتجات الذكي</h3>", unsafe_allow_html=True)
+        st.markdown("<h3 style='text-align:center;'>🏥 تسجيل الدخول - مدير المنتجات والعروض الخاصة الذكي</h3>", unsafe_allow_html=True)
         st.divider()
         token = st.text_input("🔑 مفتاح الربط (Access Token):", type="password")
         un = st.text_input("👤 اسم المستخدم:")
@@ -309,7 +309,7 @@ if not st.session_state["logged_in"]:
 
 st.markdown("""
 <div style="background: linear-gradient(135deg, #1E293B 0%, #3B82F6 100%); padding: 25px; border-radius: 12px; color: white; text-align: center; margin-bottom: 20px; box-shadow: 0 4px 6px rgba(0,0,0,0.1);">
-    <h1 style="color: white; margin: 0; font-size: 2.2rem;">🎁 منظومة إدارة العروض الخاصة والمنتجات</h1>
+    <h1 style="color: white; margin: 0; font-size: 2.2rem;">🎁 منظومة إدارة المنتجات والعروض الخاصة</h1>
     <p style="margin: 5px 0 0 0; opacity: 0.9; font-size: 1.1rem;">تحكم كامل وسريع بمتجرك على منصة سلة</p>
 </div>
 """, unsafe_allow_html=True)
@@ -359,7 +359,7 @@ st.sidebar.markdown(f"""
 # أزرار القائمة الجانبية
 page = st.sidebar.radio(
     "القائمة الرئيسية",
-    ["لوحة إدارة العروض الخاصة الحالية", "مركز إدارة المنتجات","مركز إدارة العملاء والمجموعات"],
+    ["مركز إدارة المنتجات", "لوحة إدارة العروض الخاصة الحالية", "مركز إدارة العملاء والمجموعات"],
     label_visibility="collapsed"
 )
 
@@ -367,20 +367,32 @@ st.sidebar.divider()
 if st.sidebar.button("🔄 تحديث البيانات", use_container_width=True, type="primary"):
     st.rerun()
 
-if st.sidebar.button("🔄 تحديث جميع البيانات", use_container_width=True, type="primary"):
-    st.session_state["all_products_fetched"] = False
-    st.session_state["sync_in_progress"] = False
-    perform_unified_sync()
-    st.rerun()
-    
-if st.sidebar.button("🚪 تسجيل الخروج", use_container_width=True, type="primary"):
-    st.session_state["logged_in"] = False
-    st.rerun()
+col_refresh1, col_refresh2 = st.sidebar.columns(2)
+with col_refresh1:
+    if st.button("🔄 تحديث جميع البيانات", use_container_width=True, type="primary"):
+        # ✅ مسح الكاش وإعادة التحميل
+        st.cache_resource.clear()
+        st.session_state["all_products_fetched"] = False
+        with st.spinner("⏳ جاري تحديث البيانات..."):
+            preload_data()
+        st.rerun()
 
-if page == "لوحة إدارة العروض الخاصة الحالية":
-    render_offers_page()
-elif page == "مركز إدارة المنتجات":
+with col_refresh2:
+    if st.sidebar.button("🚪 تسجيل الخروج", use_container_width=True, type="secondary"):
+        st.session_state["logged_in"] = False
+        st.rerun()
+
+# في القائمة الجانبية - عرض حالة البيانات
+if st.session_state.get("all_products_fetched", False):
+    st.sidebar.success(f"✅ {len(st.session_state.get('all_products', []))} منتج")
+    st.sidebar.info(f"🕐 {st.session_state.get('last_sync_time', '')}")
+else:
+    st.sidebar.warning("⏳ جاري التحميل...")
+    
+if page == "مركز إدارة المنتجات":
     render_products_page()
+elif page == "لوحة إدارة العروض الخاصة الحالية":
+    render_offers_page()
 elif page == "مركز إدارة العملاء والمجموعات":
     render_customers_page()
 
