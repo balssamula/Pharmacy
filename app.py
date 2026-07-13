@@ -464,17 +464,94 @@ def perform_unified_sync():
             st.session_state["sync_in_progress"] = False
             st.error(f"❌ فشل المزامنة: {str(e)}")
 
-# في app.py - استدعاء المزامنة عند تحميل أي صفحة
+# ==========================================
+# 🌐 التهيئة العامة في app.py
+# ==========================================
+
 def initialize_app():
-    """تهيئة التطبيق والمزامنة الموحدة"""
-    if "all_products_fetched" not in st.session_state:
-        st.session_state["all_products_fetched"] = False
-    if "sync_in_progress" not in st.session_state:
-        st.session_state["sync_in_progress"] = False
+    """تهيئة البيانات مرة واحدة لجميع الصفحات"""
+    # ✅ التحقق من وجود البيانات
+    if st.session_state.get("all_products_fetched", False):
+        return
     
-    # ✅ إذا لم يتم تحميل البيانات، قم بالمزامنة
-    if not st.session_state["all_products_fetched"] and not st.session_state["sync_in_progress"]:
-        perform_unified_sync()
+    # ✅ استخدام st.cache_data لتخزين البيانات
+    @st.cache_data(ttl=3600)  # تخزين لمدة ساعة
+    def fetch_all_store_data():
+        headers = get_headers()
+        if not headers:
+            return None
+        
+        # جلب جميع البيانات دفعة واحدة
+        with st.spinner("⏳ جاري تحميل جميع بيانات المتجر..."):
+            # جلب المنتجات
+            products = []
+            page = 1
+            while True:
+                res = safe_api_request("GET", f"https://api.salla.dev/admin/v2/products?per_page=100&page={page}", headers)
+                if not res or not res.get("data"):
+                    break
+                products.extend(res["data"])
+                if page >= res.get("pagination", {}).get("totalPages", 1):
+                    break
+                page += 1
+            
+            # جلب العروض
+            offers = []
+            page = 1
+            while True:
+                res = safe_api_request("GET", f"https://api.salla.dev/admin/v2/specialoffers?per_page=100&page={page}", headers)
+                if not res or not res.get("data"):
+                    break
+                offers.extend(res["data"])
+                if page >= res.get("pagination", {}).get("totalPages", 1):
+                    break
+                page += 1
+            
+            # جلب الفروع
+            branches = get_branches_list()
+            
+            # جلب التصنيفات
+            categories = []
+            page = 1
+            while True:
+                res = safe_api_request("GET", f"https://api.salla.dev/admin/v2/categories?per_page=100&page={page}", headers)
+                if not res or not res.get("data"):
+                    break
+                categories.extend(res["data"])
+                if page >= res.get("pagination", {}).get("totalPages", 1):
+                    break
+                page += 1
+            
+            # جلب الماركات
+            brands = []
+            page = 1
+            while True:
+                res = safe_api_request("GET", f"https://api.salla.dev/admin/v2/brands?per_page=100&page={page}", headers)
+                if not res or not res.get("data"):
+                    break
+                brands.extend(res["data"])
+                if page >= res.get("pagination", {}).get("totalPages", 1):
+                    break
+                page += 1
+            
+            return {
+                "products": products,
+                "offers": offers,
+                "branches": branches,
+                "categories": categories,
+                "brands": brands
+            }
+    
+    # ✅ جلب البيانات
+    data = fetch_all_store_data()
+    if data:
+        st.session_state["all_products"] = data["products"]
+        st.session_state["all_offers"] = data["offers"]
+        st.session_state["branches"] = data["branches"]
+        st.session_state["all_categories"] = data["categories"]
+        st.session_state["all_brands"] = data["brands"]
+        st.session_state["all_products_fetched"] = True
+        st.session_state["last_sync_time"] = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
 
 # استدعاء التهيئة في بداية كل صفحة
 
@@ -502,3 +579,77 @@ def get_alert_sound_base64():
         with open(sound_path, "rb") as f:
             return base64.b64encode(f.read()).decode()
     return None
+
+# ==========================================
+# 🚀 التحميل المسبق للبيانات عند بدء التطبيق
+# ==========================================
+
+def preload_data():
+    """تحميل البيانات مسبقاً عند بدء التطبيق"""
+    if "all_products_fetched" in st.session_state and st.session_state["all_products_fetched"]:
+        return
+    
+    # ✅ استخدام st.cache_resource
+    @st.cache_resource(ttl=3600)
+    def load_all_data():
+        headers = get_headers()
+        if not headers:
+            return None
+        
+        # جلب جميع البيانات بسرعة باستخدام threading
+        import concurrent.futures
+        
+        with concurrent.futures.ThreadPoolExecutor(max_workers=4) as executor:
+            future_products = executor.submit(fetch_products, headers)
+            future_offers = executor.submit(fetch_offers, headers)
+            future_branches = executor.submit(get_branches_list)
+            
+            products = future_products.result()
+            offers = future_offers.result()
+            branches = future_branches.result()
+        
+        return {
+            "products": products,
+            "offers": offers,
+            "branches": branches
+        }
+    
+    data = load_all_data()
+    if data:
+        st.session_state["all_products"] = data["products"]
+        st.session_state["all_offers"] = data["offers"]
+        st.session_state["branches"] = data["branches"]
+        st.session_state["all_products_fetched"] = True
+        st.session_state["last_sync_time"] = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+
+def fetch_products(headers):
+    """جلب المنتجات"""
+    products = []
+    page = 1
+    while True:
+        res = safe_api_request("GET", f"https://api.salla.dev/admin/v2/products?per_page=100&page={page}", headers)
+        if not res or not res.get("data"):
+            break
+        products.extend(res["data"])
+        if page >= res.get("pagination", {}).get("totalPages", 1):
+            break
+        page += 1
+    return products
+
+def fetch_offers(headers):
+    """جلب العروض"""
+    offers = []
+    page = 1
+    while True:
+        res = safe_api_request("GET", f"https://api.salla.dev/admin/v2/specialoffers?per_page=100&page={page}", headers)
+        if not res or not res.get("data"):
+            break
+        offers.extend(res["data"])
+        if page >= res.get("pagination", {}).get("totalPages", 1):
+            break
+        page += 1
+    return offers
+
+# ✅ في app.py - استدعاء التحميل المسبق
+if st.session_state.get("logged_in", False):
+    preload_data()  # تحميل البيانات في الخلفية
