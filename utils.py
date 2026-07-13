@@ -1175,6 +1175,114 @@ def _get_clean_grouped_items(parent_data: dict) -> list:
                 clean_items.append({"product_id": p_id, "quantity": item.get('quantity', 1)})
     return clean_items
 
+def get_group_products(product_id: int) -> List[Dict]:
+    """
+    جلب المنتجات المضمنة داخل مجموعة منتجات
+    ✅ يدعم: consisted_products, bundle.products, grouped_items, skus
+    """
+    headers = get_headers()
+    if not headers: 
+        return []
+    
+    product = get_product_details(product_id)
+    if not product:
+        return []
+    
+    # ✅ التحقق من نوع المنتج
+    if product.get('type') != 'group_products':
+        return []
+    
+    group_products = []
+    
+    # ✅ الطريقة 1: consisted_products (الأحدث والأكثر دقة)
+    consisted_products = product.get('consisted_products', [])
+    for item in consisted_products:
+        # البيانات موجودة مباشرة في item
+        group_products.append({
+            'id': item.get('id'),
+            'name': item.get('name', 'منتج بدون اسم'),
+            'sku': item.get('sku', 'لا يوجد'),
+            'price': get_flat_price(item.get('price', 0)),
+            'bundle_quantity': item.get('quantity_in_group', 1),
+            'stock_quantity': item.get('quantity', 0),
+            'sold_quantity': item.get('sold_quantity', 0),
+            'status': item.get('status', 'sale'),
+            'image': item.get('thumbnail') or item.get('main_image'),
+            'url': item.get('url'),
+            'with_tax': item.get('with_tax', True),
+            'regular_price': get_flat_price(item.get('regular_price', 0))
+        })
+    
+    # ✅ الطريقة 2: bundle.products
+    if not group_products:
+        bundle = product.get('bundle', {})
+        bundle_products = bundle.get('products', [])
+        for item in bundle_products:
+            group_products.append({
+                'id': item.get('id'),
+                'name': item.get('name', 'منتج بدون اسم'),
+                'sku': item.get('sku', 'لا يوجد'),
+                'price': item.get('price', 0),
+                'bundle_quantity': item.get('quantity_in_group', 1),
+                'stock_quantity': item.get('qty', 0),
+                'sold_quantity': 0,
+                'status': 'sale',
+                'image': item.get('main_image'),
+                'url': None,
+                'with_tax': True,
+                'regular_price': get_flat_price(item.get('regular_price', 0))
+            })
+    
+    # ✅ الطريقة 3: grouped_items
+    if not group_products:
+        grouped_items = product.get('grouped_items', [])
+        for item in grouped_items:
+            prod = item.get('product', {})
+            if prod and prod.get('id'):
+                # جلب تفاصيل المنتج الفرعي
+                sku_details = get_product_details(prod.get('id'))
+                if sku_details:
+                    group_products.append({
+                        'id': sku_details.get('id'),
+                        'name': sku_details.get('name', 'منتج بدون اسم'),
+                        'sku': sku_details.get('sku', 'لا يوجد'),
+                        'price': get_flat_price(sku_details.get('price', 0)),
+                        'bundle_quantity': item.get('quantity', 1),
+                        'stock_quantity': sku_details.get('quantity', 0),
+                        'sold_quantity': sku_details.get('sold_quantity', 0),
+                        'status': sku_details.get('status', 'sale'),
+                        'image': sku_details.get('thumbnail') or sku_details.get('main_image'),
+                        'url': sku_details.get('url'),
+                        'with_tax': sku_details.get('with_tax', True),
+                        'regular_price': get_flat_price(sku_details.get('regular_price', 0))
+                    })
+    
+    # ✅ الطريقة 4: skus (الطريقة القديمة)
+    if not group_products:
+        skus = product.get('skus', [])
+        for sku in skus:
+            sku_product_id = sku.get('id')
+            if not sku_product_id:
+                continue
+            sku_details = get_product_details(sku_product_id)
+            if sku_details:
+                group_products.append({
+                    'id': sku_details.get('id'),
+                    'name': sku_details.get('name', 'منتج بدون اسم'),
+                    'sku': sku_details.get('sku', 'لا يوجد'),
+                    'price': get_flat_price(sku_details.get('price', 0)),
+                    'bundle_quantity': sku.get('quantity', 1),
+                    'stock_quantity': sku_details.get('quantity', 0),
+                    'sold_quantity': sku_details.get('sold_quantity', 0),
+                    'status': sku_details.get('status', 'sale'),
+                    'image': sku_details.get('thumbnail') or sku_details.get('main_image'),
+                    'url': sku_details.get('url'),
+                    'with_tax': sku_details.get('with_tax', True),
+                    'regular_price': get_flat_price(sku_details.get('regular_price', 0))
+                })
+    
+    return group_products
+
 def update_group_product_quantity(parent_product_id: int, child_product_id: int, new_quantity: int) -> bool:
     """تحديث عدد حبات المنتج الفرعي داخل المجموعة بأمان"""
     headers = get_headers()
