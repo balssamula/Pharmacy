@@ -1302,39 +1302,6 @@ def get_group_products(product_id: int) -> List[Dict]:
     
     return group_products
 
-def update_group_product_quantity(parent_product_id: int, child_product_id: int, new_quantity: int) -> bool:
-    headers = get_headers()
-    parent = get_product_details(parent_product_id)
-    if not parent: return False
-    
-    # استخراج العناصر الحالية
-    items = parent.get('grouped_items', [])
-    updated = False
-    
-    # تحديث الكمية داخل المجموعة فقط
-    for item in items:
-        # البحث عن المنتج الفرعي
-        pid = item.get('product_id') or item.get('product', {}).get('id')
-        if str(pid) == str(child_product_id):
-            item['quantity'] = new_quantity
-            updated = True
-            break
-            
-    if not updated: return False
-        
-    # إرسال البيانات المجمعة فقط
-    payload = {
-        "name": parent.get('name'),
-        "type": "group_products",
-        "grouped_items": items 
-    }
-    
-    res = safe_api_request("PUT", f"https://api.salla.dev/admin/v2/products/{parent_product_id}", headers, json=payload)
-    if res:
-        st.success(f"✅ تم تحديث كمية المنتج الفرعي بنجاح!")
-        return True
-    return False
-
 def remove_product_from_group(parent_product_id: int, child_product_id: int) -> bool:
     """إزالة منتج من المجموعة بأمان"""
     headers = get_headers()
