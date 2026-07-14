@@ -16,7 +16,7 @@ from utils import (
 # 🔊 صوت التنبيه (base64)
 # ==========================================
 ALERT_SOUND_BASE64 = """
-UklGRnoAAABXQVZFZm10IBAAAAABAAEAQB8AAEAfAAABAAgAZGF0YQoAAACBhYqFhYqFhYqFhYqFhYqFhYqFhYqFhYqFhYqFhYqFhYqFhYqFhYqFhYqFhYqFhYqFhYqFhYqFhYqFhYqFhYqFhYqFhYqFhYqFhYqFhYqFhYqFhYqFhYqFhYqFhYqFhYqFhYqFhYqFhYqFhYqFhYqFhYqFhYqFhYqFhYqFhYqFhYqFhYqFhYqFhYqFhYqFhYqFhYqFhYqFhYqFhYqFhYqFhYqFhYqFhYqFhYqFhYqFhYqFhYqFhYqFhYqFhYqFhYqFhYqFhYqFhYqFhYqFhYqFhYqFhYqFhYqFhYqFhYqFhYqFhYqFhYqFhYqFhYqFhYqFhYqFhYqFhYqFhYqFhYqFhYqFhYqFhYqFhYqFhYqFhYqFhYqFhYqFhYqFhYqFhYqFhYqFhYqFhYqFhYqFhYqFhYqFhYqFhYqFhYqFhYqFhYqFhYqFhYqFhYqFhYqFhYqFhYqFhYqFhYqFhYqFhYqFhYqFhYqFhYqFhYqFhYqFhYqFhYqFhYqF......"
+UklGRnoAAABXQVZFZm10IBAAAAABAAEAQB8AAEAfAAABAAgAZGF0YQoAAACBhYqFhYqFhYqFhYqFhYqFhYqFhYqFhYqFhYqFhYqFhYqFhYqFhYqFhYqFhYqFhYqFhYqFhYqFhYqFhYqFhYqFhYqFhYqFhYqFhYqFhYqFhYqFhYqFhYqFhYqFhYqFhYqFhYqFhYqFhYqFhYqFhYqFhYqFhYqFhYqFhYqFhYqFhYqFhYqFhYqFhYqFhYqFhYqFhYqFhYqFhYqFhYqFhYqFhYqFhYqFhYqFhYqFhYqFhYqFhYqFhYqFhYqFhYqFhYqFhYqFhYqFhYqFhYqFhYqFhYqFhYqFhYqFhYqFhYqFhYqFhYqFhYqFhYqFhYqFhYqFhYqFhYqFhYqFhYqFhYqFhYqFhYqFhYqFhYqFhYqFhYqFhYqFhYqFhYqFhYqFhYqFhYqFhYqFhYqFhYqFhYqFhYqFhYqFhYqFhYqFhYqFhYqFhYqFhYqFhYqFhYqFhYqFhYqFhYqFhYqFhYqFhYqFhYqFhYqFhYqFhYqFhYqFhYqFhYqF......
 """
 
 def get_audio_base64(file_path):
@@ -1064,7 +1064,16 @@ def render_offers_page():
         elif exp_date and exp_date < now_ksa: exp_badge = "⚠️ منتهي الصلاحية"
         else: exp_badge = "⏳ ساري الصلاحية"
         
-        st.markdown(f"<div style="background: linear-gradient(135deg, #0f1c2e 0%, #1a365d 100%); padding: 14px 20px; border-radius: 12px 12px 0px 0px; margin-top: 25px; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 10px; border-bottom: 3px solid #00b4d8;"><span style="color: #ffffff; font-weight: bold; font-size: 16px;">🎯 {offer_name} (ID: {offer_id})</span><div style="display: flex; gap: 8px; flex-wrap: wrap;"><span style="background: rgba(255,255,255,0.2); color: #fff; padding: 4px 12px; border-radius: 20px; font-size: 11px; font-weight:600;">{badge}</span><span style="background: rgba(255,193,7,0.25); color: #ffca28; padding: 4px 12px; border-radius: 20px; font-size: 11px; font-weight:600;">{exp_badge}</span></div></div>", unsafe_allow_html=True)
+        # ✅ Fixed: Properly escaped quotes in the HTML string
+        st.markdown(f"""
+        <div style="background: linear-gradient(135deg, #0f1c2e 0%, #1a365d 100%); padding: 14px 20px; border-radius: 12px 12px 0px 0px; margin-top: 25px; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 10px; border-bottom: 3px solid #00b4d8;">
+            <span style="color: #ffffff; font-weight: bold; font-size: 16px;">🎯 {offer_name} (ID: {offer_id})</span>
+            <div style="display: flex; gap: 8px; flex-wrap: wrap;">
+                <span style="background: rgba(255,255,255,0.2); color: #fff; padding: 4px 12px; border-radius: 20px; font-size: 11px; font-weight:600;">{badge}</span>
+                <span style="background: rgba(255,193,7,0.25); color: #ffca28; padding: 4px 12px; border-radius: 20px; font-size: 11px; font-weight:600;">{exp_badge}</span>
+            </div>
+        </div>
+        """, unsafe_allow_html=True)
         
         cx, cy = st.columns(2)
         with cx:
@@ -1097,7 +1106,7 @@ def render_offers_page():
                 p_id = p.get('id', p) if isinstance(p, dict) else p
                 p_name = p.get('name', 'بدون اسم') if isinstance(p, dict) else 'منتج'
                 p_sku = p.get('sku', 'لا يوجد') if isinstance(p, dict) else 'لا يوجد'
-                promo_badge = get_promo_badge(p_id) # جلب الشارة
+                promo_badge = get_promo_badge(p_id)
                 buy_html += f"<li style='margin-bottom:8px;'>📦 <b>{p_name}</b><br><span style='color:#64748b; font-size:11px; background:#e2e8f0; padding:2px 6px; border-radius:4px;'>SKU: {p_sku}</span> <span style='color:#64748b; font-size:11px; background:#e2e8f0; padding:2px 6px; border-radius:4px;'>ID: {p_id}</span> {promo_badge}</li>"
                 has_items = True
             for c in buy_obj.get('categories', []):
@@ -1128,7 +1137,7 @@ def render_offers_page():
                 p_id = p.get('id', p) if isinstance(p, dict) else p
                 p_name = p.get('name', 'بدون اسم') if isinstance(p, dict) else 'منتج'
                 p_sku = p.get('sku', 'لا يوجد') if isinstance(p, dict) else 'لا يوجد'
-                promo_badge = get_promo_badge(p_id) # جلب الشارة
+                promo_badge = get_promo_badge(p_id)
                 get_html += f"<li style='margin-bottom:8px;'>📦 <b>{p_name}</b><br><span style='color:#166534; font-size:11px; background:#dcfce7; padding:2px 6px; border-radius:4px;'>SKU: {p_sku}</span> <span style='color:#166534; font-size:11px; background:#dcfce7; padding:2px 6px; border-radius:4px;'>ID: {p_id}</span> {promo_badge}</li>"
                 has_items_y = True
             for c in get_obj.get('categories', []):
@@ -1260,172 +1269,41 @@ def render_offers_page():
     render_pagination_bottom()
     st.markdown("---")
 
-# ==========================================
-# 🚨 نظام التنبيه لقرب انتهاء العروض
-# ==========================================
-
-def render_expiry_alerts(raw_offers, headers=None):
-    """
-    عرض تنبيهات للعروض التي ستنتهي خلال يومين
-    """
-    now = datetime.now()
-    expiring_soon = []
+def rebuild_offer_payload(existing_data, overrides=None):
+    """إعادة بناء payload العرض من البيانات الموجودة"""
+    if overrides is None:
+        overrides = {}
     
-    for offer in raw_offers:
-        if offer.get('status') != 'active':
-            continue
-        
-        expiry_date = safe_parse_date(offer.get('expiry_date'))
-        if not expiry_date:
-            continue
-        
-        days_left = (expiry_date - now).days
-        
-        # ✅ تنبيه للعروض التي ستنتهي خلال يومين
-        if 0 <= days_left <= 2:
-            expiring_soon.append({
-                'id': offer.get('id'),
-                'name': offer.get('name'),
-                'days_left': days_left,
-                'expiry_date': expiry_date.strftime('%Y-%m-%d')
-            })
+    payload = {
+        "name": existing_data.get('name', 'عرض بدون اسم'),
+        "offer_type": existing_data.get('offer_type', 'buy_x_get_y'),
+        "applied_channel": existing_data.get('applied_channel', 'browser_and_application'),
+        "applied_to": existing_data.get('applied_to', 'product'),
+        "start_date": existing_data.get('start_date', ''),
+        "expiry_date": existing_data.get('expiry_date', ''),
+        "status": existing_data.get('status', 'active'),
+        "applied_with_coupon": existing_data.get('applied_with_coupon', False),
+        "max_discount_amount": existing_data.get('max_discount_amount', 0),
+        "min_purchase_amount": existing_data.get('min_purchase_amount', 0),
+        "min_items_count": existing_data.get('min_items_count', 0),
+        "message": existing_data.get('message', ''),
+        "buy": existing_data.get('buy', {"type": "product", "quantity": 1}),
+        "get": existing_data.get('get', {"type": "product", "quantity": 1, "discount_type": "percentage"})
+    }
     
-    # ✅ حالة تشغيل الصوت
-    if "sound_playing" not in st.session_state:
-        st.session_state["sound_playing"] = True
+    # إضافة customer_groups إذا وجدت
+    if existing_data.get('customer_groups'):
+        payload["customer_groups"] = existing_data.get('customer_groups')
     
-    if expiring_soon:
-        # ✅ CSS للتنبيه المتحرك
-        st.markdown("""
-        <style>
-            @keyframes blink-red {
-                0% { background: linear-gradient(135deg, #ff0000, #cc0000); transform: scale(1); }
-                50% { background: linear-gradient(135deg, #cc0000, #990000); transform: scale(1.02); }
-                100% { background: linear-gradient(135deg, #ff0000, #cc0000); transform: scale(1); }
-            }
-            @keyframes pulse {
-                0% { opacity: 1; transform: scale(1); }
-                50% { opacity: 0.6; transform: scale(1.1); }
-                100% { opacity: 1; transform: scale(1); }
-            }
-            .expiry-alert {
-                animation: blink-red 0.8s ease-in-out infinite;
-                padding: 15px 20px;
-                border-radius: 10px;
-                color: white;
-                font-weight: bold;
-                text-align: center;
-                border: 3px solid #ff6b6b;
-                box-shadow: 0 0 30px rgba(255, 0, 0, 0.3);
-                margin-bottom: 20px;
-                direction: rtl;
-            }
-            .expiry-alert .count {
-                font-size: 24px;
-                background: rgba(255,255,255,0.25);
-                padding: 2px 16px;
-                border-radius: 25px;
-                margin: 0 5px;
-                animation: pulse 1s ease-in-out infinite;
-                display: inline-block;
-            }
-            .expiry-alert .offer-name {
-                color: #ffd700;
-            }
-            .alert-buttons {
-                margin-top: 15px;
-                display: flex;
-                gap: 10px;
-                justify-content: center;
-                flex-wrap: wrap;
-            }
-            .alert-buttons .stButton button {
-                font-size: 13px !important;
-                padding: 6px 20px !important;
-            }
-        </style>
-        """, unsafe_allow_html=True)
-        
-        # ✅ تشغيل الصوت (إذا كان مفعلاً)
-        if st.session_state["sound_playing"]:
-            st.markdown(f"""
-            <audio id="alert-sound" style="display:none;" loop>
-                <source src="data:audio/wav;base64,{ALERT_SOUND_BASE64}" type="audio/wav">
-            </audio>
-            <script>
-                try {{
-                    var audio = document.getElementById('alert-sound');
-                    if (audio) {{
-                        // محاولة التشغيل عند تفاعل المستخدم
-                        var playPromise = audio.play();
-                        if (playPromise !== undefined) {{
-                            playPromise.then(function() {{
-                                console.log('تم تشغيل الصوت بنجاح');
-                            }}).catch(function(error) {{
-                                console.log('فشل تشغيل الصوت:', error);
-                                // محاولة ثانية بعد تفاعل المستخدم
-                                document.addEventListener('click', function() {{
-                                    audio.play().catch(function(e) {{
-                                        console.log('محاولة ثانية لتشغيل الصوت:', e);
-                                    }});
-                                }}, {{ once: true }});
-                            }});
-                        }}
-                    }}
-                }} catch(e) {{
-                    console.log('خطأ في تشغيل الصوت:', e);
-                }}
-            </script>
-            """, unsafe_allow_html=True)
-        
-        # ✅ عرض التنبيه مع العدد الصحيح
-        count = len(expiring_soon)
-        st.markdown(f"""
-        <div class="expiry-alert">
-            <div style="display: flex; align-items: center; justify-content: center; gap: 15px; flex-wrap: wrap;">
-                <span style="font-size: 32px;">🚨</span>
-                <span style="font-size: 18px;">
-                    <b style="font-size: 22px;">تنبيه عاجل!</b>
-                    هناك <span class="count">{count}</span> عرض على وشك الانتهاء خلال يومين!
-                </span>
-            </div>
-            <div style="margin-top: 10px; font-size: 14px; display: flex; gap: 10px; flex-wrap: wrap; justify-content: center;">
-        """, unsafe_allow_html=True)
-        
-        for offer in expiring_soon:
-            days_text = "اليوم" if offer['days_left'] == 0 else f"غداً" if offer['days_left'] == 1 else f"بعد غد"
-            st.markdown(f"""
-                <span style="background: rgba(255,255,255,0.15); padding: 4px 12px; border-radius: 15px;">
-                    🎯 <span class="offer-name">{offer['name']}</span>
-                    ينتهي <b>{days_text}</b> ({offer['expiry_date']})
-                </span>
-            """, unsafe_allow_html=True)
-        
-        st.markdown("""
-            </div>
-            <div class="alert-buttons">
-        """, unsafe_allow_html=True)
-        
-        # ✅ أزرار الإجراءات
-        col_btn1, col_btn2, col_btn3 = st.columns(3)
-        with col_btn1:
-            if st.button("📅 تمديد العروض", use_container_width=True, type="primary", key="extend_offers_btn"):
-                st.session_state["qa_action"] = "end_dates"
-                st.rerun()
-        with col_btn2:
-            if st.button("🧹 إزالة العناوين الترويجية", use_container_width=True, type="secondary", key="remove_promo_btn"):
-                st.session_state["qa_action"] = "end_dates"
-                st.session_state["qa_action_sub"] = "remove_promo"
-                st.rerun()
-        with col_btn3:
-            # ✅ زر إيقاف الصوت
-            sound_label = "🔇 إيقاف الصوت" if st.session_state["sound_playing"] else "🔊 تشغيل الصوت"
-            if st.button(sound_label, use_container_width=True, key="toggle_sound_btn"):
-                st.session_state["sound_playing"] = not st.session_state["sound_playing"]
-                st.rerun()
-        
-        st.markdown("</div></div>", unsafe_allow_html=True)
-        
-    else:
-        # ✅ إذا لم تكن هناك عروض منتهية
-        st.success("✅ جميع العروض النشطة سارية المفعول ولا توجد عروض على وشك الانتهاء.")
+    # تحديث الحقول المطلوبة
+    for key, value in overrides.items():
+        if key == "expiry_date":
+            payload["expiry_date"] = value
+        elif key == "start_date":
+            payload["start_date"] = value
+        elif key == "status":
+            payload["status"] = value
+        elif key == "applied_with_coupon":
+            payload["applied_with_coupon"] = value
+    
+    return payload
