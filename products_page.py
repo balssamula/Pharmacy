@@ -748,6 +748,24 @@ def render_products_page():
         
     st.info(f"📊 النتائج: {len(filtered)} منتج مطابِق للبحث")
 
+    # ✅ زر تنزيل المنتجات المفلترة
+    if filtered:
+        col_download1, col_download2 = st.columns([2, 1])
+        with col_download1:
+            st.download_button(
+                label="📥 تحميل المنتجات المفلترة (Excel)",
+                data=export_products_to_excel(filtered),
+                file_name=f"Filtered_Products_{datetime.now().strftime('%Y%m%d_%H%M%S')}.xlsx",
+                mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                type="primary",
+                key="download_filtered_products",
+                use_container_width=True
+            )
+    
+        # ✅ عرض عدد المنتجات في الملف
+        with col_download2:
+            st.info(f"📄 يحتوي الملف على {len(filtered)} منتج")
+        
     # في render_products_page() بعد عرض عدد المنتجات
     if st.session_state.get("product_offers_map"):
         # ✅ عرض عدد المنتجات المرتبطة بعروض
@@ -1018,25 +1036,20 @@ def render_matching_section(headers: Dict[str, str]):
 # ==========================================
 
 def render_group_product_section(p_id: str, p_name: str, idx: int, headers: Dict[str, str]):
-    """يعرض محتويات مجموعة المنتجات"""
+    """يعرض محتويات مجموعة المنتجات مع تفاصيل الحساب"""
     st.markdown("---")
     
     with st.spinner(f"جاري تحميل منتجات المجموعة..."):
-        # ✅ استخدام الدالة المُصححة
         group_products = get_group_products(int(p_id))
     
     with st.expander(f"📦 تفاصيل مجموعة المنتجات ({len(group_products)} منتج)", expanded=False):
         if not group_products:
             st.info("ℹ️ لا توجد منتجات في هذه المجموعة.")
-            
-            # ✅ عرض خيار اختبار API مع تنسيق أفضل
-            with st.expander("🔍 اختبار جلب المجموعة (للتشخيص)"):
-                res = safe_api_request("GET", f"https://api.salla.dev/admin/v2/products/{int(p_id)}", headers)
-                if res and res.get('data'):
-                    st.json(res['data'])
-                else:
-                    st.error("فشل جلب بيانات المجموعة")
         else:
+            # ✅ عرض إجمالي كمية المجموعة
+            total_qty = sum([gp.get('bundle_quantity', 1) * gp.get('stock_quantity', 0) for gp in group_products])
+            st.info(f"📊 إجمالي كمية المجموعة: {total_qty} وحدة")
+            
             for gp_idx, gp in enumerate(group_products):
                 gp_id = str(gp.get('id', 'N/A'))
                 gp_name_sub = gp.get('name', 'بدون اسم')
@@ -1046,19 +1059,23 @@ def render_group_product_section(p_id: str, p_name: str, idx: int, headers: Dict
                 gp_stock = gp.get('stock_quantity', 0)
                 gp_image = gp.get('image')
                 
+                # ✅ حساب الكمية الفعلية للمجموعة من هذا المنتج
+                group_qty = gp_stock / gp_bundle_qty
+                
                 st.markdown(f"""
                 <div style='background: #f8f9fa; border-radius: 10px; padding: 15px; margin-bottom: 12px; border-right: 4px solid #6C2BD9;'>
-                    <div style='display: flex; gap: 15px; align-items: center;'>
+                    <div style='display: flex; gap: 15px; align-items: center; flex-wrap: wrap;'>
                         <div style='flex: 0 0 60px;'>
                             {f"<img src='{gp_image}' style='width: 60px; height: 60px; border-radius: 8px;'>" if gp_image else "🚫"}
                         </div>
-                        <div style='flex: 1;'>
+                        <div style='flex: 1; min-width: 150px;'>
                             <b>{gp_name_sub}</b><br>
                             <span style='font-size: 12px; color: #666;'>🆔 {gp_id} | 🔢 {gp_sku} | 💰 {gp_price:.2f} SAR</span>
                         </div>
-                        <div style='flex: 0 0 120px; font-size: 12px; font-weight: bold;'>
-                            حبات: <span style='color:#6C2BD9;'>{gp_bundle_qty}</span><br>
-                            مخزون: {gp_stock}
+                        <div style='flex: 0 0 160px; font-size: 13px;'>
+                            <div>📦 حبات بالمجموعة: <b style='color:#6C2BD9;'>{gp_bundle_qty}</b></div>
+                            <div>🏪 مخزون المنتج: <b>{gp_stock}</b></div>
+                            <div>📊 إجمالي المجموعة: <b style='color:#2ecc71;'>{group_qty}</b></div>
                         </div>
                     </div>
                 </div>
@@ -1066,40 +1083,49 @@ def render_group_product_section(p_id: str, p_name: str, idx: int, headers: Dict
                 
                 c_q, c_act = st.columns(2)
                 with c_q:
-                    new_q = st.number_input("تحديث الحبات", min_value=1, value=int(gp_bundle_qty), key=f"gq_{gp_id}_{idx}_{gp_idx}", label_visibility="collapsed")
-                    if st.button("💾 حفظ", key=f"gqs_{gp_id}_{idx}_{gp_idx}", use_container_width=True):
-                        with st.spinner("تحديث..."):
+                    new_q = st.number_input(
+                        "تعديل الحبات",
+                        min_value=1,
+                        value=int(gp_bundle_qty),
+                        step=1,
+                        key=f"gq_{gp_id}_{idx}_{gp_idx}",
+                        label_visibility="collapsed"
+                    )
+                    if st.button(f"💾 تحديث الكمية", key=f"gqs_{gp_id}_{idx}_{gp_idx}", use_container_width=True):
+                        with st.spinner("جاري تحديث الكمية..."):
                             if update_group_product_quantity(int(p_id), int(gp_id), new_q):
-                                st.success("✅ تم تحديث الكمية!")
                                 st.rerun()
                             else:
                                 st.error("❌ فشل التحديث")
+                
                 with c_act:
-                    if gp.get('url'): 
-                        st.markdown(f"[🔗 عرض بالمتجر]({gp.get('url')})")
-                    if st.button("🗑️ إزالة", key=f"gqr_{gp_id}_{idx}_{gp_idx}", use_container_width=True):
+                    if gp.get('url'):
+                        st.markdown(f"[🔗 عرض]({gp.get('url')})")
+                    if st.button(f"🗑️ إزالة", key=f"gqr_{gp_id}_{idx}_{gp_idx}", use_container_width=True):
                         with st.spinner("إزالة..."):
                             if remove_product_from_group(int(p_id), int(gp_id)):
-                                st.success("✅ تمت الإزالة!")
+                                st.success("✅ تم الإزالة!")
                                 st.rerun()
                             else:
                                 st.error("❌ فشل الإزالة")
-                st.markdown("<hr style='margin:10px 0; border:0; border-bottom:1px dashed #ddd;'>", unsafe_allow_html=True)
                 
+                st.markdown("<hr style='margin:10px 0; border:0; border-bottom:1px dashed #ddd;'>", unsafe_allow_html=True)
+        
+        # ✅ إضافة منتج للمجموعة
         st.markdown("#### ➕ إضافة منتج للمجموعة")
         search_p = st.text_input("ابحث باسم أو SKU للإضافة:", key=f"gps_{p_id}_{idx}")
         if search_p:
-            f_prods = [pr for pr in st.session_state.get("all_products", []) 
-                      if str(pr.get('id')) != p_id and 
-                      (search_p.lower() in str(pr.get('name', '')).lower() or 
+            f_prods = [pr for pr in st.session_state.get("all_products", [])
+                      if str(pr.get('id')) != p_id and
+                      (search_p.lower() in str(pr.get('name', '')).lower() or
                        search_p.lower() in str(pr.get('sku', '')).lower())]
             if f_prods:
                 for pr in f_prods[:5]:
                     c1, c2 = st.columns([3, 1])
-                    with c1: 
-                        st.markdown(f"**{pr.get('name')}** | `{pr.get('sku')}`")
+                    with c1:
+                        st.markdown(f"**{pr.get('name')}** | `{pr.get('sku')}` | مخزون: {pr.get('quantity', 0)}")
                     with c2:
-                        if st.button("➕ إضافة", key=f"gpa_{pr.get('id')}_{idx}"):
+                        if st.button(f"➕ إضافة", key=f"gpa_{pr.get('id')}_{idx}"):
                             with st.spinner("إضافة..."):
                                 if add_product_to_group(int(p_id), pr.get('id')):
                                     st.success("✅ تمت الإضافة!")
@@ -1107,7 +1133,7 @@ def render_group_product_section(p_id: str, p_name: str, idx: int, headers: Dict
                                 else:
                                     st.error("❌ فشل الإضافة")
             else:
-                st.info("لا توجد تطابقات.")
+                st.info("لا توجد منتجات مطابقة.")
 
 def render_product_card(idx: int, p: Dict, headers: Dict[str, str]):
     """رسم وإدارة كارت منتج واحد بطريقة معزولة وآمنة (Clean Code)"""
