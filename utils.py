@@ -1165,14 +1165,33 @@ def get_product_details(product_id: int) -> Optional[Dict]:
     return None
 
 def _get_clean_grouped_items(parent_data: dict) -> list:
-    """مصفاة ذكية لاستخراج عناصر المجموعة بصيغة نظيفة ومطابقة 100% لمتطلبات سلة لمنع تضارب المخزون"""
+    """مصفاة ذكية تستخرج العناصر بصيغة grouped_items النظيفة التي تقبلها سلة في طلبات PUT لمنع تخريب المخزون"""
     clean_items = []
-    # البحث في الهيكل الحديث لسلة
-    if parent_data.get('grouped_items'):
-        for item in parent_data['grouped_items']:
-            p_id = item.get('product_id') or (item.get('product', {}).get('id'))
+    
+    # 1. البحث في consisted_products (هيكل سلة الأحدث)
+    if parent_data.get('consisted_products'):
+        for item in parent_data['consisted_products']:
+            p_id = item.get('id')
+            qty = item.get('quantity_in_group', 1)
             if p_id:
-                clean_items.append({"product_id": p_id, "quantity": item.get('quantity', 1)})
+                clean_items.append({"product_id": p_id, "quantity": qty})
+                
+    # 2. البحث في grouped_items (الهيكل القياسي)
+    elif parent_data.get('grouped_items'):
+        for item in parent_data['grouped_items']:
+            p_id = item.get('product_id') or item.get('product', {}).get('id')
+            qty = item.get('quantity', 1)
+            if p_id:
+                clean_items.append({"product_id": p_id, "quantity": qty})
+                
+    # 3. البحث في skus كحل أخير
+    elif parent_data.get('skus'):
+        for item in parent_data['skus']:
+            p_id = item.get('id')
+            qty = item.get('quantity', 1)
+            if p_id:
+                clean_items.append({"product_id": p_id, "quantity": qty})
+                
     return clean_items
 
 def get_group_products(product_id: int) -> List[Dict]:
@@ -1284,27 +1303,27 @@ def get_group_products(product_id: int) -> List[Dict]:
     return group_products
 
 def update_group_product_quantity(parent_product_id: int, child_product_id: int, new_quantity: int) -> bool:
-    """تحديث عدد حبات المنتج الفرعي داخل المجموعة بأمان"""
+    """تحديث عدد حبات المنتج الفرعي داخل المجموعة بأمان تام"""
     headers = get_headers()
     parent = get_product_details(parent_product_id)
     if not parent: return False
     
     clean_items = _get_clean_grouped_items(parent)
     updated = False
+    
     for item in clean_items:
         if str(item['product_id']) == str(child_product_id):
-            item['quantity'] = new_quantity  # تحديث الحبات المطلوبة داخل المجموعة فقط
+            item['quantity'] = new_quantity  # ✅ التحديث هنا للكمية المجمعة فقط!
             updated = True
             break
-    
+            
     if not updated: return False
         
-    # إرسال البيانات النظيفة فقط لمنع تضارب المخزون
     payload = {
         "name": parent.get('name'),
         "price": get_flat_price(parent.get('price', 0)),
         "type": "group_products",
-        "grouped_items": clean_items
+        "grouped_items": clean_items  # ✅ إرسال الصيغة الصحيحة الموحدة
     }
     
     res = safe_api_request("PUT", f"https://api.salla.dev/admin/v2/products/{parent_product_id}", headers, json=payload)
@@ -1319,7 +1338,7 @@ def remove_product_from_group(parent_product_id: int, child_product_id: int) -> 
     clean_items = _get_clean_grouped_items(parent)
     new_items = [item for item in clean_items if str(item['product_id']) != str(child_product_id)]
     
-    if len(new_items) == len(clean_items): return False # المنتج غير موجود
+    if len(new_items) == len(clean_items): return False
     
     payload = {
         "name": parent.get('name'),
@@ -1327,7 +1346,6 @@ def remove_product_from_group(parent_product_id: int, child_product_id: int) -> 
         "type": "group_products",
         "grouped_items": new_items
     }
-    
     res = safe_api_request("PUT", f"https://api.salla.dev/admin/v2/products/{parent_product_id}", headers, json=payload)
     return res is not None
 
@@ -1340,9 +1358,8 @@ def add_product_to_group(parent_product_id: int, child_product_id: int) -> bool:
     clean_items = _get_clean_grouped_items(parent)
     for item in clean_items:
         if str(item['product_id']) == str(child_product_id):
-            return False # المنتج موجود مسبقاً
+            return False
     
-    # إضافة المنتج الجديد بحبة واحدة كافتراضي
     clean_items.append({"product_id": child_product_id, "quantity": 1})
     
     payload = {
@@ -1351,6 +1368,5 @@ def add_product_to_group(parent_product_id: int, child_product_id: int) -> bool:
         "type": "group_products",
         "grouped_items": clean_items
     }
-    
     res = safe_api_request("PUT", f"https://api.salla.dev/admin/v2/products/{parent_product_id}", headers, json=payload)
     return res is not None
