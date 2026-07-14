@@ -28,7 +28,7 @@ def fetch_products(headers):
     products = []
     page = 1
     # جلب الصفحة الأولى لمعرفة عدد الصفحات
-    res = safe_api_request("GET", "https://api.salla.dev/admin/v2/products?per_page=100&page=1", headers)
+    res = safe_api_request("GET", "https://api.salla.dev/admin/v2/products?per_page=60&page=1", headers)
     if not res: return []
     total_pages = res.get("pagination", {}).get("totalPages", 1)
     
@@ -37,7 +37,7 @@ def fetch_products(headers):
     
     while page <= total_pages:
         status_text.info(f"📦 جاري سحب المنتجات: صفحة {page} من {total_pages} | تم تحميل {len(products)} عنصر")
-        res = safe_api_request("GET", f"https://api.salla.dev/admin/v2/products?per_page=100&page={page}", headers)
+        res = safe_api_request("GET", f"https://api.salla.dev/admin/v2/products?per_page=60&page={page}", headers)
         if res and res.get("data"):
             products.extend(res["data"])
         progress_bar.progress(page / total_pages)
@@ -52,7 +52,7 @@ def fetch_offers(headers):
     offers = []
     page = 1
     while True:
-        res = safe_api_request("GET", f"https://api.salla.dev/admin/v2/specialoffers?per_page=100&page={page}", headers)
+        res = safe_api_request("GET", f"https://api.salla.dev/admin/v2/specialoffers?per_page=60&page={page}", headers)
         if not res or not res.get("data"):
             break
         offers.extend(res["data"])
