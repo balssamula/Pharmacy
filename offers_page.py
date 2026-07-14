@@ -869,101 +869,119 @@ def render_offers_page():
     st.divider()
 
     # ==========================================
-    # 🔍 الفلاتر الخاصة بالعروض (بدون فلاتر المنتجات)
+    # 🔍 الفلاتر الخاصة بالعروض (المصححة)
     # ==========================================
     with st.container(border=True):
-        st.markdown("<div style='background: #0F1C2E; color: white; padding: 10px; border-radius: 8px;'>🔍 أدوات التصفية والبحث المتقدمة</div>", unsafe_allow_html=True)
+        st.markdown("<div style='background: #0F1C2E; color: white; padding: 10px; border-radius: 8px; text-align: center; font-weight: bold;'>🔍 أدوات التصفية والبحث المتقدمة</div>", unsafe_allow_html=True)
+    
+        # ✅ صف البحث والحالة
         col_search, col_status = st.columns([2, 1])
         with col_search:
             search_offer = st.text_input("🔎 ابحث باسم العرض أو بالمعرف:", key="filter_search_input")
         with col_status:
             status_filter = st.selectbox("📌 حالة العرض:", ["الكل", "نشط", "غير نشط"], key="filter_status_select")
     
+        # ✅ صف التاريخ والتداخل
         col_date1, col_date2 = st.columns(2)
         with col_date1:
             filter_date = st.date_input("📅 تاريخ الانتهاء:", value=None, key="filter_date_input")
         with col_date2:
             filter_overlap = st.checkbox("🔄 فحص التداخل (منتجات مكررة)", key="f_overlap")
-
-        now_ksa = datetime.now() + timedelta(hours=3)
     
-        # تحليل التداخل
-        overlapping_offer_ids = set()
-        if filter_overlap:
-            with st.spinner("🔄 جاري تحليل تداخل المنتجات..."):
-                product_offer_map = {}
-                for o in raw_offers:
-                    o_id = o.get('id')
-                    if o.get('status') != 'active': 
-                        continue
-                    full_res = safe_api_request("GET", f"{SALLA_API_URL}/{o_id}", headers)
-                    if full_res and full_res.get('data'):
-                        p_ids = set()
-                        for p in full_res['data'].get('buy', {}).get('products', []): 
-                            p_ids.add(str(p.get('id', p) if isinstance(p, dict) else p))
-                        for p in full_res['data'].get('get', {}).get('products', []): 
-                            p_ids.add(str(p.get('id', p) if isinstance(p, dict) else p))
-                        for pid in p_ids:
-                            if pid not in product_offer_map: 
-                                product_offer_map[pid] = []
-                            product_offer_map[pid].append(o_id)
-                for pid, o_ids in product_offer_map.items():
-                    if len(o_ids) > 1: 
-                        overlapping_offer_ids.update(o_ids)
-                if not overlapping_offer_ids: 
-                    st.success("✅ لا يوجد تداخل في منتجات العروض النشطة.")
-                else: 
-                    st.warning(f"⚠️ تم العثور على {len(overlapping_offer_ids)} عرض متداخل.")
-
-        # تصفية العروض
-        filtered_offers = []
-        for offer in raw_offers:
-            offer_id = offer.get('id', 'N/A')
-            offer_name = offer.get('name', 'عرض بدون اسم')
-            status = offer.get('status', 'inactive')
-            start_date = safe_parse_date(offer.get('start_date'))
-            exp_date = safe_parse_date(offer.get('expiry_date'))
-        
-            # بحث بالاسم
-            if search_offer:
-                if search_offer.lower() not in offer_name.lower() and search_offer not in str(offer_id): 
-                    continue
-        
-            # فلتر الحالة
-            if status_filter == "نشط" and status != "active": 
-                continue
-            if status_filter == "غير نشط" and status == "active": 
-                continue
-        
-            # فلتر التاريخ
-            if filter_date and (not exp_date or exp_date.date() != filter_date): 
-                continue
-        
-            # فلتر التداخل
-            if filter_overlap and offer_id not in overlapping_offer_ids: 
-                continue
-        
-            filtered_offers.append(offer)
-    
-        st.session_state["filtered_offers"] = filtered_offers
-    
+        # ✅ صف الفلاتر الإضافية (نوع العرض، قناة النشر، تطبيق على)
         col_f1, col_f2, col_f3 = st.columns(3)
         with col_f1:
-            type_filter = st.selectbox("نوع العرض:", ["الكل"] + list(OFFER_TYPES_MAP.values()))
+            type_filter = st.selectbox("📊 نوع العرض:", ["الكل"] + list(OFFER_TYPES_MAP.values()), key="type_filter")
         with col_f2:
-            channel_filter = st.selectbox("قناة النشر:", ["الكل"] + list(CHANNELS_MAP.values()))
+            channel_filter = st.selectbox("📺 قناة النشر:", ["الكل"] + list(CHANNELS_MAP.values()), key="channel_filter")
         with col_f3:
-            applied_filter = st.selectbox("تطبيق على:", ["الكل"] + list(APPLIED_TO_MAP.values()))
-            
-    # تطبيق الفلاتر
-    filtered_offers = [
-        o for o in raw_offers 
-        if (type_filter == "الكل" or OFFER_TYPES_MAP.get(o.get('offer_type'), "") == type_filter)
-        and (channel_filter == "الكل" or CHANNELS_MAP.get(o.get('applied_channel'), "") == channel_filter)
-        and (applied_filter == "الكل" or APPLIED_TO_MAP.get(o.get('applied_to'), "") == applied_filter)
-    ]
+            applied_filter = st.selectbox("🎯 تطبيق على:", ["الكل"] + list(APPLIED_TO_MAP.values()), key="applied_filter")
+
+    # ✅ تحليل التداخل (إذا تم تفعيله)
+    now_ksa = datetime.now() + timedelta(hours=3)
+    overlapping_offer_ids = set()
+
+    if filter_overlap:
+        with st.spinner("🔄 جاري تحليل تداخل المنتجات..."):
+            product_offer_map = {}
+            for o in raw_offers:
+                o_id = o.get('id')
+                if o.get('status') != 'active': 
+                    continue
+                full_res = safe_api_request("GET", f"{SALLA_API_URL}/{o_id}", headers)
+                if full_res and full_res.get('data'):
+                    p_ids = set()
+                    for p in full_res['data'].get('buy', {}).get('products', []): 
+                        p_ids.add(str(p.get('id', p) if isinstance(p, dict) else p))
+                    for p in full_res['data'].get('get', {}).get('products', []): 
+                        p_ids.add(str(p.get('id', p) if isinstance(p, dict) else p))
+                    for pid in p_ids:
+                        if pid not in product_offer_map: 
+                            product_offer_map[pid] = []
+                        product_offer_map[pid].append(o_id)
+            for pid, o_ids in product_offer_map.items():
+                if len(o_ids) > 1: 
+                    overlapping_offer_ids.update(o_ids)
+            if not overlapping_offer_ids: 
+                st.success("✅ لا يوجد تداخل في منتجات العروض النشطة.")
+            else: 
+                st.warning(f"⚠️ تم العثور على {len(overlapping_offer_ids)} عرض متداخل.")
+
+    # ✅ تطبيق جميع الفلاتر في مكان واحد (بدون تكرار)
+    filtered_offers = []
+    for offer in raw_offers:
+        offer_id = offer.get('id', 'N/A')
+        offer_name = offer.get('name', 'عرض بدون اسم')
+        status = offer.get('status', 'inactive')
+        start_date = safe_parse_date(offer.get('start_date'))
+        exp_date = safe_parse_date(offer.get('expiry_date'))
     
-    # زر تحميل الملفات المفلترة
+        # ✅ فلتر البحث بالاسم
+        if search_offer:
+            if search_offer.lower() not in offer_name.lower() and search_offer not in str(offer_id): 
+                continue
+    
+        # ✅ فلتر الحالة
+        if status_filter == "نشط" and status != "active": 
+            continue
+        if status_filter == "غير نشط" and status == "active": 
+            continue
+    
+        # ✅ فلتر التاريخ
+        if filter_date and (not exp_date or exp_date.date() != filter_date): 
+            continue
+    
+        # ✅ فلتر التداخل
+        if filter_overlap and offer_id not in overlapping_offer_ids: 
+            continue
+    
+        # ✅ فلتر نوع العرض
+        if type_filter != "الكل":
+            offer_type_ar = OFFER_TYPES_MAP.get(offer.get('offer_type', ''), '')
+            if offer_type_ar != type_filter:
+                continue
+    
+        # ✅ فلتر قناة النشر
+        if channel_filter != "الكل":
+            channel_ar = CHANNELS_MAP.get(offer.get('applied_channel', ''), '')
+            if channel_ar != channel_filter:
+                continue
+    
+        # ✅ فلتر "تطبيق على"
+        if applied_filter != "الكل":
+            applied_ar = APPLIED_TO_MAP.get(offer.get('applied_to', ''), '')
+            if applied_ar != applied_filter:
+                continue
+    
+        filtered_offers.append(offer)
+
+    # ✅ تخزين النتائج في session_state
+    st.session_state["filtered_offers"] = filtered_offers
+
+    # ✅ عرض عدد النتائج
+    st.markdown(f"<div style='background: #f0f4f8; padding: 8px 16px; border-radius: 8px; margin-bottom: 14px; border-right: 4px solid #00b4d8;'><strong>📊 عدد العروض المطابقة للبحث: {len(filtered_offers)} عرض</strong></div>", unsafe_allow_html=True)
+
+    # ✅ زر تحميل الملفات المفلترة (إذا كانت أقل من الكل)
     if filtered_offers and len(filtered_offers) < len(raw_offers):
         st.download_button(
             "📥 تحميل العروض المفلترة", 
