@@ -994,7 +994,7 @@ def render_group_product_section(p_id: str, p_name: str, idx: int, headers: Dict
             st.info("ℹ️ لا توجد منتجات في هذه المجموعة.")
         else:
             # ✅ عرض إجمالي كمية المجموعة
-            total_qty = sum([gp.get('bundle_quantity', 1) * gp.get('stock_quantity', 0) for gp in group_products])
+            total_qty = sum([gp.get('bundle_quantity', 1) / gp.get('stock_quantity', 0) for gp in group_products])
             st.info(f"📊 إجمالي كمية المجموعة: {total_qty} وحدة")
             
             for gp_idx, gp in enumerate(group_products):
