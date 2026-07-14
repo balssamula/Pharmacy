@@ -13,8 +13,7 @@ from utils import (
     update_product_tax_secure, get_branches_list, generate_quantities_template, 
     process_quantities_import, fill_salla_template, generate_salla_new_products_file, 
     delete_product, update_product_price, update_product_sale_price, 
-    update_group_product_quantity, remove_product_from_group, add_product_to_group,
-    get_product_details, get_group_products 
+    remove_product_from_group, add_product_to_group, get_product_details, get_group_products 
 )
 
 TAX_EXEMPTION_CAUSES = [
