@@ -36,7 +36,7 @@ def fetch_products(headers):
     status_text = st.empty()
     
     while page <= total_pages:
-        status_text.info(f"📦 جاري سحب المنتجات: صفحة {page} من {total_pages} | تم تحميل {len(all_data)} عنصر")
+        status_text.info(f"📦 جاري سحب المنتجات: صفحة {page} من {total_pages} | تم تحميل {len(products)} عنصر")
         res = safe_api_request("GET", f"https://api.salla.dev/admin/v2/products?per_page=100&page={page}", headers)
         if res and res.get("data"):
             products.extend(res["data"])
