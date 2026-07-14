@@ -128,7 +128,33 @@ def perform_global_sync(headers: Dict[str, str]):
 # ==========================================
 # 📦 2. دوال جلب المجموعات 
 # ==========================================
-
+def update_group_product_quantity(parent_product_id: int, child_product_id: int, new_quantity: int) -> bool:
+    headers = get_headers()
+    parent = get_product_details(parent_product_id)
+    if not parent: return False
+    
+    # استخراج العناصر بشكل نظيف (grouped_items فقط)
+    items = []
+    if parent.get('grouped_items'):
+        for item in parent['grouped_items']:
+            pid = item.get('product_id') or item.get('product', {}).get('id')
+            qty = item.get('quantity', 1)
+            # تحديث الكمية للمنتج المقصود
+            if str(pid) == str(child_product_id):
+                items.append({"product_id": pid, "quantity": new_quantity})
+            else:
+                items.append({"product_id": pid, "quantity": qty})
+    
+    payload = {
+        "name": parent.get('name'),
+        "price": get_flat_price(parent.get('price', 0)),
+        "type": "group_products",
+        "grouped_items": items # إرسال الصيغة التي تقبلها سلة
+    }
+    
+    res = safe_api_request("PUT", f"https://api.salla.dev/admin/v2/products/{parent_product_id}", headers, json=payload)
+    return res is not None
+    
 def fetch_group_products_smart(parent_id: int, headers: Dict[str, str]) -> List[Dict]:
     """جلب دقيق وذكي لمنتجات المجموعة من API سلة لتفادي النقص"""
     items = []
