@@ -33,7 +33,7 @@ def get_audio_base64(file_path):
 # ==========================================
 
 def render_expiry_alerts(raw_offers, headers=None):
-    """عرض تنبيهات للعروض التي ستنتهي خلال يومين مع صوت مدمج"""
+    """عرض تنبيهات للعروض التي ستنتهي خلال يومين مع مشغل صوت مدمج يتجاوز حظر المتصفحات"""
     now = datetime.now()
     expiring_soon = []
     
@@ -78,25 +78,16 @@ def render_expiry_alerts(raw_offers, headers=None):
         </style>
         """, unsafe_allow_html=True)
         
+        # ✅ المشغل الصوتي المرئي لحل مشكلة الحظر الأمني للمتصفحات
         if st.session_state["sound_playing"]:
-            # ✅ استخدام رابط صوت خارجي موثوق جداً وجافاسكريبت تتجاوز حظر المتصفحات
             audio_url = "https://assets.mixkit.co/active_storage/sfx/2869/2869-preview.mp3"
             st.markdown(f"""
-            <audio id="alert-sound" src="{audio_url}" loop style="display:none;"></audio>
-            <script>
-                var audio = document.getElementById('alert-sound');
-                if (audio) {{
-                    audio.volume = 0.6;
-                    var playPromise = audio.play();
-                    if (playPromise !== undefined) {{
-                        playPromise.catch(function(error) {{
-                            console.log('سياسة المتصفح تمنع التشغيل التلقائي للصوت حتى ينقر المستخدم على الشاشة.');
-                            // تشغيل الصوت فور نقر المستخدم في أي مكان بالصفحة
-                            document.body.addEventListener('click', function() {{ audio.play(); }}, {{ once: true }});
-                        }});
-                    }}
-                }}
-            </script>
+            <div style="background: rgba(0,0,0,0.3); padding: 10px; border-radius: 8px; text-align: center; margin-bottom: 15px;">
+                <span style="color: #00EBCF; font-size: 13px;">💡 سياسة المتصفحات تمنع أحياناً تشغيل الصوت تلقائياً. اضغط (Play) لتفعيل جرس الإنذار:</span><br>
+                <audio id="alert-sound" controls autoplay loop style="height: 35px; outline: none; margin-top: 8px; border-radius: 20px;">
+                    <source src="{audio_url}" type="audio/mp3">
+                </audio>
+            </div>
             """, unsafe_allow_html=True)
         
         count = len(expiring_soon)
@@ -127,7 +118,7 @@ def render_expiry_alerts(raw_offers, headers=None):
                 st.session_state["qa_action"] = "end_dates"
                 st.rerun()
         with col_btn3:
-            sound_label = "🔇 إيقاف الصوت" if st.session_state["sound_playing"] else "🔊 تشغيل الصوت"
+            sound_label = "🔇 إخفاء مشغل الصوت" if st.session_state["sound_playing"] else "🔊 إظهار مشغل الصوت"
             if st.button(sound_label, use_container_width=True):
                 st.session_state["sound_playing"] = not st.session_state["sound_playing"]
                 st.rerun()
