@@ -26,6 +26,10 @@ from customers_page import render_customers_page
 def fetch_products(headers):
     """جلب المنتجات"""
     products = []
+    # هنا أضف شريط التقدم الذي طلبته
+    progress_bar = st.progress(0)
+    # ... منطق الجلب ...
+    progress_bar.progress(current_page / total_pages)
     page = 1
     while True:
         res = safe_api_request("GET", f"https://api.salla.dev/admin/v2/products?per_page=100&page={page}", headers)
