@@ -760,18 +760,6 @@ def render_products_page():
         if st.button("الصفحة التالية ➡️", disabled=st.session_state["prod_page"]==pages, use_container_width=True, key="p_next_bot"): 
             st.session_state["prod_page"] += 1; st.rerun()
 
-    for idx, p in enumerate(filtered[start:start+limit]):
-        render_product_card(start + idx, p, headers)
-        
-    st.markdown("---")
-    cp_b, cc_b, cn_b = st.columns([1,2,1])
-    with cp_b:
-        if st.button("⬅️ الصفحة السابقة", disabled=st.session_state["prod_page"]==1, use_container_width=True, key="p_prev_bot"): 
-            st.session_state["prod_page"] -= 1; st.rerun()
-    with cc_b: st.markdown(f"<h4 style='text-align:center;'>📄 صفحة {st.session_state['prod_page']} من {pages}</h4>", unsafe_allow_html=True)
-    with cn_b:
-        if st.button("الصفحة التالية ➡️", disabled=st.session_state["prod_page"]==pages, use_container_width=True, key="p_next_bot"): 
-            st.session_state["prod_page"] += 1; st.rerun()
     st.markdown("---")
 
     # ✅ عرض أداة التشخيص (إذا كانت مفتوحة)
