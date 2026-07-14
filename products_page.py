@@ -733,18 +733,6 @@ def render_products_page():
         if f_type == "مجموعات" and not is_group: continue
             
         filtered.append(p)
-
-    # ✅ زر تنزيل المنتجات المفلترة
-    if filtered:
-        st.download_button(
-            label="📥 تنزيل المنتجات المفلترة (Excel)",
-            data=export_products_to_excel(filtered),
-            file_name=f"Filtered_Products_{datetime.now().strftime('%Y%m%d_%H%M%S')}.xlsx",
-            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-            type="primary",
-            key="download_filtered_products",
-            use_container_width=True
-        )
         
     st.info(f"📊 النتائج: {len(filtered)} منتج مطابِق للبحث")
 
