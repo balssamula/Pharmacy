@@ -16,7 +16,7 @@ from utils import (
 # 🔊 صوت التنبيه (base64)
 # ==========================================
 ALERT_SOUND_BASE64 = """
-UklGRnoAAABXQVZFZm10IBAAAAABAAEAQB8AAEAfAAABAAgAZGF0YQoAAACBhYqFhYqFhYqFhYqFhYqFhYqFhYqFhYqFhYqFhYqFhYqFhYqFhYqFhYqFhYqFhYqFhYqFhYqFhYqFhYqFhYqFhYqFhYqFhYqFhYqFhYqFhYqFhYqFhYqFhYqFhYqFhYqFhYqFhYqFhYqFhYqFhYqFhYqFhYqFhYqFhYqFhYqFhYqFhYqFhYqFhYqFhYqFhYqFhYqFhYqFhYqFhYqFhYqFg=="
+UklGRnoAAABXQVZFZm10IBAAAAABAAEAQB8AAEAfAAABAAgAZGF0YQoAAACBhYqFhYqFhYqFhYqFhYqFhYqFhYqFhYqFhYqFhYqFhYqFhYqFhYqFhYqFhYqFhYqFhYqFhYqFhYqFhYqFhYqFhYqFhYqFhYqFhYqFhYqFhYqFhYqFhYqFhYqFhYqFhYqFhYqFhYqFhYqFhYqFhYqFhYqFhYqFhYqFhYqFhYqFhYqFhYqFhYqFhYqFhYqFhYqFhYqFhYqFhYqFhYqFhYqFhYqFhYqFhYqFhYqFhYqFhYqFhYqFhYqFhYqFhYqFhYqFhYqFhYqFhYqFhYqFhYqFhYqFhYqFhYqFhYqFhYqFhYqFhYqFhYqFhYqFhYqFhYqFhYqFhYqFhYqFhYqFhYqFhYqFhYqFhYqFhYqFhYqFhYqFhYqFhYqFhYqFhYqFhYqFhYqFhYqFhYqFhYqFhYqFhYqFhYqFhYqFhYqFhYqFhYqFhYqFhYqFhYqFhYqFhYqFhYqFhYqFhYqFhYqFhYqFhYqFhYqFhYqFhYqFhYqFhYqFhYqFhYqF......"
 """
 
 def get_audio_base64(file_path):
@@ -136,9 +136,19 @@ def play_alert_sound():
         try {{
             var audio = document.getElementById('alert-sound');
             if (audio) {{
-                audio.play().catch(function(e) {{}});
+                audio.play().catch(function(e) {{
+                    console.log('فشل تشغيل الصوت:', e);
+                    // محاولة ثانية باستخدام تقنية مختلفة
+                    setTimeout(() => {{
+                        audio.play().catch(function(e2) {{
+                            console.log('محاولة ثانية لتشغيل الصوت فشلت:', e2);
+                        }});
+                    }}, 100);
+                }});
             }}
-        }} catch(e) {{}}
+        }} catch(e) {{
+            console.log('خطأ في تشغيل الصوت:', e);
+        }}
     </script>
     """
     return sound_html
@@ -153,7 +163,9 @@ def stop_alert_sound():
                 audio.pause();
                 audio.currentTime = 0;
             }
-        } catch(e) {}
+        } catch(e) {
+            console.log('خطأ في إيقاف الصوت:', e);
+        }
     </script>
     """
     return sound_html
@@ -1088,7 +1100,7 @@ def render_offers_page():
             if isinstance(b_type_raw, dict): b_type_raw = b_type_raw.get("id", "product")
             st.markdown(f"<div style='margin-bottom:8px; font-size:13px; color:#64748b;'>مطبق على: <b>{inv_type_map.get(b_type_raw, 'منتجات')}</b></div>", unsafe_allow_html=True)
                 
-            buy_html = "<div style='background:#f8fafc; padding:12px; border-radius:8px; border:1px solid #e2e8f0; max-height: 180px; overflow-y: auto;'><ul style='margin:0; padding-right:15px; font-size:13px; line-height:1.6;'>"
+            buy_html = "<div style='background:#f8fafc; padding:12px; border-radius:8px; border:1px solid #e2e8f0; max-height: 180px; overflow-y: auto;'><ul style='margin:0; padding-right:15px; font-size:13px; line-height:1.6;'>";
             has_items = False
             for p in buy_obj.get('products', []):
                 p_id = p.get('id', p) if isinstance(p, dict) else p
@@ -1119,7 +1131,7 @@ def render_offers_page():
             if isinstance(g_type_raw, dict): g_type_raw = g_type_raw.get("id", "product")
             st.markdown(f"<div style='margin-bottom:8px; font-size:13px; color:#64748b;'>مطبق على: <b>{inv_type_map.get(g_type_raw, 'منتجات')}</b></div>", unsafe_allow_html=True)
                 
-            get_html = "<div style='background:#f0fdf4; padding:12px; border-radius:8px; border:1px solid #bbf7d0; max-height: 180px; overflow-y: auto;'><ul style='margin:0; padding-right:15px; font-size:13px; line-height:1.6;'>"
+            get_html = "<div style='background:#f0fdf4; padding:12px; border-radius:8px; border:1px solid #bbf7d0; max-height: 180px; overflow-y: auto;'><ul style='margin:0; padding-right:15px; font-size:13px; line-height:1.6;'>";
             has_items_y = False
             for p in get_obj.get('products', []):
                 p_id = p.get('id', p) if isinstance(p, dict) else p
@@ -1252,7 +1264,7 @@ def render_offers_page():
                 except Exception as e: st.error(f"خطأ: {str(e)}")
         st.markdown("</div>", unsafe_allow_html=True)
     
-    # ✅ ترقيم الصفحات في الأسفل
+    # ✅ ترقيق الصفحات في الأسفل
     st.markdown("---")
     render_pagination_bottom()
     st.markdown("---")
@@ -1346,17 +1358,32 @@ def render_expiry_alerts(raw_offers, headers=None):
         # ✅ تشغيل الصوت (إذا كان مفعلاً)
         if st.session_state["sound_playing"]:
             st.markdown(f"""
-            <audio id="alert-sound" style="display:none;" autoplay loop>
+            <audio id="alert-sound" style="display:none;" loop>
                 <source src="data:audio/wav;base64,{ALERT_SOUND_BASE64}" type="audio/wav">
             </audio>
             <script>
                 try {{
                     var audio = document.getElementById('alert-sound');
                     if (audio) {{
-                        audio.loop = true;
-                        audio.play().catch(function(e) {{ console.log('Sound play error:', e); }});
+                        // محاولة التشغيل عند تفاعل المستخدم
+                        var playPromise = audio.play();
+                        if (playPromise !== undefined) {{
+                            playPromise.then(function() {{
+                                console.log('تم تشغيل الصوت بنجاح');
+                            }}).catch(function(error) {{
+                                console.log('فشل تشغيل الصوت:', error);
+                                // محاولة ثانية بعد تفاعل المستخدم
+                                document.addEventListener('click', function() {{
+                                    audio.play().catch(function(e) {{
+                                        console.log('محاولة ثانية لتشغيل الصوت:', e);
+                                    }});
+                                }}, {{ once: true }});
+                            }});
+                        }}
                     }}
-                }} catch(e) {{}}
+                }} catch(e) {{
+                    console.log('خطأ في تشغيل الصوت:', e);
+                }}
             </script>
             """, unsafe_allow_html=True)
         
