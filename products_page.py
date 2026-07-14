@@ -143,31 +143,77 @@ def perform_global_sync(headers: Dict[str, str]):
 # 📦 2. دوال جلب المجموعات 
 # ==========================================
 def update_group_product_quantity(parent_product_id: int, child_product_id: int, new_quantity: int) -> bool:
+    """
+    تحديث عدد حبات المنتج الفرعي داخل المجموعة
+    ✅ يقوم بتحديث الكمية الإجمالية للمجموعة = (كمية المنتج الفرعي / عدد الحبات)
+    """
     headers = get_headers()
+    if not headers:
+        return False
+    
+    # جلب المنتج الأب
     parent = get_product_details(parent_product_id)
-    if not parent: return False
+    if not parent:
+        st.error("❌ لم يتم العثور على المنتج الأب")
+        return False
     
-    # استخراج العناصر بشكل نظيف (grouped_items فقط)
-    items = []
-    if parent.get('grouped_items'):
-        for item in parent['grouped_items']:
-            pid = item.get('product_id') or item.get('product', {}).get('id')
-            qty = item.get('quantity', 1)
-            # تحديث الكمية للمنتج المقصود
-            if str(pid) == str(child_product_id):
-                items.append({"product_id": pid, "quantity": new_quantity})
-            else:
-                items.append({"product_id": pid, "quantity": qty})
+    # جلب المنتج الفرعي
+    child = get_product_details(child_product_id)
+    if not child:
+        st.error("❌ لم يتم العثور على المنتج الفرعي")
+        return False
     
+    # ✅ الحصول على الكمية الأصلية للمنتج الفرعي (المخزون الفعلي)
+    child_stock = child.get('quantity', 0)
+    
+    # ✅ حساب الكمية الجديدة للمجموعة = (كمية المنتج الفرعي / عدد الحبات)
+    new_parent_quantity = child_stock / new_quantity
+    
+    # ✅ تحديث المنتج الأب
     payload = {
         "name": parent.get('name'),
         "price": get_flat_price(parent.get('price', 0)),
         "type": "group_products",
-        "grouped_items": items # إرسال الصيغة التي تقبلها سلة
+        "quantity": new_parent_quantity  # ✅ تحديث الكمية الإجمالية
     }
     
+    # ✅ تحديث grouped_items (إذا كان موجوداً)
+    if parent.get('grouped_items'):
+        grouped_items = []
+        for item in parent['grouped_items']:
+            pid = item.get('product_id') or item.get('product', {}).get('id')
+            if str(pid) == str(child_product_id):
+                # تحديث عدد الحبات للمنتج الفرعي
+                grouped_items.append({
+                    "product_id": pid,
+                    "quantity": new_quantity
+                })
+            else:
+                grouped_items.append(item)
+        payload["grouped_items"] = grouped_items
+    
+    # ✅ إرسال الطلب
     res = safe_api_request("PUT", f"https://api.salla.dev/admin/v2/products/{parent_product_id}", headers, json=payload)
-    return res is not None
+    
+    if res:
+        # ✅ تحديث البيانات في session_state
+        all_products = st.session_state.get("all_products", [])
+        for i, p in enumerate(all_products):
+            if str(p.get('id')) == str(parent_product_id):
+                all_products[i]['quantity'] = new_parent_quantity
+                if 'grouped_items' in all_products[i]:
+                    for item in all_products[i]['grouped_items']:
+                        pid = item.get('product_id') or item.get('product', {}).get('id')
+                        if str(pid) == str(child_product_id):
+                            item['quantity'] = new_quantity
+                            break
+                break
+        st.session_state["all_products"] = all_products
+        
+        st.success(f"✅ تم تحديث الكمية: {child_stock} / {new_quantity} = {new_parent_quantity} وحدة")
+        return True
+    
+    return False
     
 def fetch_group_products_smart(parent_id: int, headers: Dict[str, str]) -> List[Dict]:
     """جلب دقيق وذكي لمنتجات المجموعة من API سلة لتفادي النقص"""
@@ -687,6 +733,18 @@ def render_products_page():
         if f_type == "مجموعات" and not is_group: continue
             
         filtered.append(p)
+
+    # ✅ زر تنزيل المنتجات المفلترة
+    if filtered:
+        st.download_button(
+            label="📥 تنزيل المنتجات المفلترة (Excel)",
+            data=export_products_to_excel(filtered),
+            file_name=f"Filtered_Products_{datetime.now().strftime('%Y%m%d_%H%M%S')}.xlsx",
+            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            type="primary",
+            key="download_filtered_products",
+            use_container_width=True
+        )
         
     st.info(f"📊 النتائج: {len(filtered)} منتج مطابِق للبحث")
 
