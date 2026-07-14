@@ -40,15 +40,20 @@ def initialize_global_products():
         st.session_state["branches"] = []
 
 def initialize_session():
-    """تهيئة متغيرات الجلسة المشتركة"""
+    """تهيئة متغيرات الجلسة المشتركة (مع الحفاظ على البيانات الموجودة)"""
     defaults = {
         "all_products": [], "all_categories": [], "all_brands": [],
         "all_products_fetched": False, "prod_page": 1, "branches": [],
-        "last_sync_time": None, "product_offers_map": {}
+        "last_sync_time": None
     }
+    # ✅ لا نقوم بتهيئة product_offers_map هنا للحفاظ على البيانات
     for key, val in defaults.items():
         if key not in st.session_state:
             st.session_state[key] = val
+    
+    # ✅ التأكد من وجود product_offers_map وعدم مسحها
+    if "product_offers_map" not in st.session_state:
+        st.session_state["product_offers_map"] = {}
 
 def fetch_pages_with_progress(url_base: str, headers: Dict, loading_text: str) -> List[Dict]:
     """
@@ -89,8 +94,8 @@ def fetch_pages_with_progress(url_base: str, headers: Dict, loading_text: str) -
     return all_data
 
 def perform_global_sync(headers: Dict[str, str]):
-    """المزامنة الشاملة (المنتجات، التصنيفات، الماركات، والعروض) وبناء روابطها"""
-    with st.spinner("⏳ جاري المزامنة الشاملة لمتجرك... يرجى الانتظار."):
+    """المزامنة الشاملة (المنتجات، التصنيفات، الماركات، والعروض)"""
+    with st.spinner("⏳ جاري المزامنة الشاملة لمتجرك..."):
         try:
             st.session_state["branches"] = get_branches_list()
             st.session_state["all_products"] = fetch_pages_with_progress("https://api.salla.dev/admin/v2/products", headers, "سحب المنتجات")
@@ -99,28 +104,38 @@ def perform_global_sync(headers: Dict[str, str]):
             
             all_offers = fetch_pages_with_progress("https://api.salla.dev/admin/v2/specialoffers", headers, "سحب العروض النشطة")
             
-            # بناء قاموس الترابط بين المنتجات والعروض
+            # ✅ بناء قاموس الترابط بين المنتجات والعروض
             po_map = {}
             for o in all_offers:
-                if o.get("status") != "active": continue
+                if o.get("status") != "active": 
+                    continue
                 oid = o.get("id")
                 full_o = safe_api_request("GET", f"https://api.salla.dev/admin/v2/specialoffers/{oid}", headers)
                 if full_o and full_o.get("data"):
                     pids = set()
+                    # ✅ جلب المنتجات من buy و get
                     for px in full_o["data"].get("buy", {}).get("products", []):
                         pid = str(px.get("id", px) if isinstance(px, dict) else px)
-                        if pid.isdigit(): pids.add(pid)
+                        if pid.isdigit(): 
+                            pids.add(pid)
                     for px in full_o["data"].get("get", {}).get("products", []):
                         pid = str(px.get("id", px) if isinstance(px, dict) else px)
-                        if pid.isdigit(): pids.add(pid)
+                        if pid.isdigit(): 
+                            pids.add(pid)
+                    # ✅ تسجيل العرض لكل منتج
                     for pid in pids:
-                        if pid not in po_map: po_map[pid] = []
+                        if pid not in po_map: 
+                            po_map[pid] = []
                         po_map[pid].append({"id": oid, "name": o.get("name")})
             
+            # ✅ تخزين الخريطة في session_state
             st.session_state["product_offers_map"] = po_map
             st.session_state["all_products_fetched"] = True
             st.session_state["last_sync_time"] = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-            st.success("✅ تمت المزامنة الشاملة بنجاح! البيانات متاحة الآن لجميع الصفحات.")
+            
+            # ✅ عرض إحصائية للعروض المربوطة
+            total_mapped = len(po_map)
+            st.success(f"✅ تمت المزامنة! {len(st.session_state['all_products'])} منتج، {len(all_offers)} عرض، {total_mapped} منتج مرتبط بعروض")
         except Exception as e:
             st.error(f"❌ حدث خطأ أثناء المزامنة: {str(e)}")
 
@@ -562,7 +577,12 @@ def render_products_page():
         st.warning("⚠️ جاري تحميل البيانات... يرجى الانتظار.")
         return
     
-    all_products = st.session_state.get("all_products", [])    
+    all_products = st.session_state.get("all_products", [])
+    product_offers_map = st.session_state.get("product_offers_map", {})
+    
+    # ✅ عرض حالة العروض المربوطة للتأكد من وجود بيانات
+    if product_offers_map:
+        st.info(f"📊 تم تحميل {len(product_offers_map)} منتج مرتبط بعروض خاصة")
     st.markdown("""
     <div style="background: linear-gradient(135deg, #0F1C2E 0%, #00EBCF 100%); padding: 15px 25px; border-radius: 12px; color: white; margin-bottom: 20px; box-shadow: 0 4px 6px rgba(0,0,0,0.1);">
         <h2 style="color: white; margin: 0;">📦 مركز إدارة المنتجات الذكي والمتقدم</h2>
@@ -664,6 +684,26 @@ def render_products_page():
         
     st.info(f"📊 النتائج: {len(filtered)} منتج مطابِق للبحث")
 
+    # في render_products_page() بعد عرض عدد المنتجات
+    if st.session_state.get("product_offers_map"):
+        # ✅ عرض عدد المنتجات المرتبطة بعروض
+        total_offers = len(st.session_state["product_offers_map"])
+        st.info(f"🎁 {total_offers} منتج مرتبط بعروض خاصة نشطة")
+    
+        # ✅ عرض العروض في expander للتأكد
+        with st.expander("📋 قائمة العروض النشطة في المتجر", expanded=False):
+            # عرض العروض الفريدة
+            offers_set = set()
+            for offers in st.session_state["product_offers_map"].values():
+                for offer in offers:
+                    offers_set.add(offer["name"])
+        
+            if offers_set:
+                for offer_name in sorted(offers_set):
+                    st.write(f"🎯 {offer_name}")
+            else:
+                st.write("لا توجد عروض نشطة")
+            
     # Pagination
     limit = 20
     pages = max(1, (len(filtered) + limit - 1) // limit)
