@@ -24,21 +24,27 @@ from products_page import render_products_page
 from customers_page import render_customers_page
 
 def fetch_products(headers):
-    """جلب المنتجات"""
+    """جلب المنتجات مع شريط تقدم وعداد"""
     products = []
-    # هنا أضف شريط التقدم الذي طلبته
-    progress_bar = st.progress(0)
-    # ... منطق الجلب ...
-    progress_bar.progress(current_page / total_pages)
     page = 1
-    while True:
+    # جلب الصفحة الأولى لمعرفة عدد الصفحات
+    res = safe_api_request("GET", "https://api.salla.dev/admin/v2/products?per_page=100&page=1", headers)
+    if not res: return []
+    total_pages = res.get("pagination", {}).get("totalPages", 1)
+    
+    progress_bar = st.progress(0)
+    status_text = st.empty()
+    
+    while page <= total_pages:
+        status_text.info(f"📦 جاري سحب المنتجات: صفحة {page} من {total_pages}")
         res = safe_api_request("GET", f"https://api.salla.dev/admin/v2/products?per_page=100&page={page}", headers)
-        if not res or not res.get("data"):
-            break
-        products.extend(res["data"])
-        if page >= res.get("pagination", {}).get("totalPages", 1):
-            break
+        if res and res.get("data"):
+            products.extend(res["data"])
+        progress_bar.progress(page / total_pages)
         page += 1
+        
+    progress_bar.empty()
+    status_text.empty()
     return products
 
 def fetch_offers(headers):
