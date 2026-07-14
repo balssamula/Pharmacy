@@ -583,6 +583,7 @@ def render_products_page():
     # ✅ عرض حالة العروض المربوطة للتأكد من وجود بيانات
     if product_offers_map:
         st.info(f"📊 تم تحميل {len(product_offers_map)} منتج مرتبط بعروض خاصة")
+    
     st.markdown("""
     <div style="background: linear-gradient(135deg, #0F1C2E 0%, #00EBCF 100%); padding: 15px 25px; border-radius: 12px; color: white; margin-bottom: 20px; box-shadow: 0 4px 6px rgba(0,0,0,0.1);">
         <h2 style="color: white; margin: 0;">📦 مركز إدارة المنتجات الذكي والمتقدم</h2>
@@ -599,10 +600,15 @@ def render_products_page():
             st.rerun()
 
     if not st.session_state.get("all_products_fetched", False):
-        st.warning("⚠️ يرجى الضغط على زر 'مزامنة وجلب كافة البيانات' أولاً ليتم تحميل منتجات وعروض متجرك وبناء الروابط.")
+        st.warning("⚠️ يرجى الضغط على زر 'مزامنة وجلب كافة البيانات' أولاً.")
         return
 
     st.success(f"✅ متصل ومزامن! تم تحميل {len(st.session_state['all_products'])} منتج.")
+    st.divider()
+    
+    # ✅ ✅ ✅ إضافة استدعاء الدوال المفقودة ✅ ✅ ✅
+    render_settings_and_templates(headers)
+    render_matching_section(headers)
     st.divider()
 
     # ==========================================
@@ -1048,7 +1054,7 @@ def render_group_product_section(p_id: str, p_name: str, idx: int, headers: Dict
 def render_product_card(idx: int, p: Dict, headers: Dict[str, str]):
     """رسم وإدارة كارت منتج واحد بطريقة معزولة وآمنة (Clean Code)"""
     try:
-        p_id = str(p.get('id', 'N/A'))
+        p_id = str(p.get('id', '')).strip()
         p_name = p.get('name', 'بدون اسم')
         p_sku = p.get('sku', 'لا يوجد')
         status = p.get('status', 'sale')
@@ -1096,13 +1102,31 @@ def render_product_card(idx: int, p: Dict, headers: Dict[str, str]):
                     else:
                         st.error("❌ فشل تحديث المنتج")
                         
-        # استخراج العروض المربوطة بالمنتج من الذاكرة
-        p_offers = st.session_state.get("product_offers_map", {}).get(p_id, [])
-        offer_badge = f"<span style='background: linear-gradient(135deg, #F7971E 0%, #FFD200 100%); color: #1a1a2e; padding: 4px 12px; border-radius: 20px; font-size: 11px; font-weight: 700; border: 2px solid #FFD700; box-shadow: 0 2px 8px rgba(255, 215, 0, 0.4);'>🎁 مشمول في ({len(p_offers)}) عروض</span>" if p_offers else ""
-
-        # ✅ رسم شريط العنوان (يظهر دائماً للجميع)
-        st.markdown(f"<div style='background: linear-gradient(135deg, #243b55 0%, #141e30 100%); padding: 14px 20px; border-radius: 12px 12px 0px 0px; margin-top: 25px; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 10px; border-bottom: 3px solid {border_color};'><span style='color: #ffffff; font-weight: bold; font-size: 15px;'>📦 {p_name}</span><div style='display: flex; gap: 8px; flex-wrap: wrap; align-items: center;'><span style='background: rgba(255,255,255,0.2); color: #fff; padding: 4px 12px; border-radius: 20px; font-size: 11px; font-weight:600;'>{disp_status}</span><span style='background: rgba(0, 235, 207, 0.2); color: #00EBCF; padding: 4px 12px; border-radius: 20px; font-size: 11px; font-weight:600;'>{tax_status}</span>{type_badge}{offer_badge}<span style='background: rgba(0,235,207,0.15); color: #00EBCF; padding: 4px 10px; border-radius: 20px; font-size: 11px; font-weight:600;'>🔄 تحديث</span></div></div>", unsafe_allow_html=True)
-
+        # ✅ استخراج العروض المربوطة بالمنتج من الذاكرة مع التحقق من وجود البيانات
+        product_offers_map = st.session_state.get("product_offers_map", {})
+        p_offers = product_offers_map.get(p_id, [])
+        
+        # ✅ عرض عدد العروض للتأكد (يمكن إزالته بعد التأكد)
+        if p_offers:
+            # ✅ شارة العروض
+            offer_badge = f"""<span style='background: linear-gradient(135deg, #F7971E 0%, #FFD200 100%); 
+                color: #1a1a2e; padding: 4px 12px; border-radius: 20px; font-size: 11px; 
+                font-weight: 700; border: 2px solid #FFD700; box-shadow: 0 2px 8px rgba(255, 215, 0, 0.4);'>
+                🎁 مشمول في {len(p_offers)} عرض
+            </span>"""
+        else:
+            offer_badge = ""
+        
+        # ✅ شريط العنوان مع الشارة
+        st.markdown(f"<div style='background: linear-gradient(135deg, #243b55 0%, #141e30 100%); padding: 14px 20px; border-radius: 12px 12px 0px 0px; margin-top: 25px; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 10px; border-bottom: 3px solid {border_color};'><span style='color: #ffffff; font-weight: bold; font-size: 15px;'>📦 {p_name}</span><div style='display: flex; gap: 8px; flex-wrap: wrap; align-items: center;'><span style='background: rgba(255,255,255,0.2); color: #fff; padding: 4px 12px; border-radius: 20px; font-size: 11px; font-weight:600;'>{disp_status}</span><span style='background: rgba(0, 235, 207, 0.2); color: #00EBCF; padding: 4px 12px; border-radius: 20px; font-size: 11px; font-weight:600;'>{tax_status}</span>{type_badge}{offer_badge}</div></div>", unsafe_allow_html=True)
+        
+        # ✅ زر استعراض العروض (يظهر فقط إذا كان هناك عروض)
+        if p_offers:
+            with st.popover(f"🎁 استعراض العروض ({len(p_offers)})", use_container_width=True):
+                st.markdown("<b style='color:#b45309;'>العروض النشطة المشمول بها:</b>", unsafe_allow_html=True)
+                for off in p_offers:
+                    st.markdown(f"- 🎯 **{off['name']}** `(ID: {off['id']})`")
+                    
         with st.container(border=True):
             c_img, c_info, c_prc, c_act = st.columns([1.5, 2.5, 2.5, 2])
             
