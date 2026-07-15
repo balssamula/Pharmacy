@@ -768,8 +768,11 @@ def render_offers_page():
                                 offer_name_col = None
                             
                             if group_col and group_col in df_draft.columns:
-                                # ✅ تعبئة القيم الفارغة في عمود التجميع
-                                df_draft[group_col] = df_draft[group_col].fillna(df_draft.index.astype(str) + "_single_offer")
+                                # ✅ تعبئة القيم الفارغة في عمود التجميع - استخدام Series بدلاً من Index
+                                df_draft[group_col] = df_draft[group_col].fillna('')
+                                # للصفوف الفارغة، استخدم رقم الصف كمعرف فريد
+                                empty_mask = df_draft[group_col] == ''
+                                df_draft.loc[empty_mask, group_col] = df_draft.loc[empty_mask].index.astype(str) + "_single_offer"
                                 
                                 for group_name, group_df in df_draft.groupby(group_col):
                                     first_row = group_df.iloc[0]
