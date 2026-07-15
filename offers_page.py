@@ -684,7 +684,7 @@ def render_offers_page():
 
             elif st.session_state.qa_action == "draft":
                 with col_t: 
-                    st.markdown("### 📝 مصنع ومسودة تأسيس العروض")
+                    st.markdown("### 📝 مسودة تأسيس العروض")
                 st.info("استخدم هذه الأداة لرفع ملف المسودة (ملف قراءة العروض) وسيقوم النظام بإنشاء ملف إكسيل للعروض جاهز للاستيراد في سلة.")
                 
                 def get_draft_template():
@@ -730,7 +730,7 @@ def render_offers_page():
                     wb.save(buf)
                     return buf.getvalue()
 
-                st.download_button("📥 تنزيل نموذج مسودة التأسيس (المنسق مع القوائم)", data=get_draft_template(), file_name="Draft_Offers_Template.xlsx", mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
+                st.download_button("📥 تنزيل نموذج مسودة التأسيس", data=get_draft_template(), file_name="Draft_Offers_Template.xlsx", mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
                 uploaded_draft = st.file_uploader("📂 رفع ملف مسودة العروض المعبأ:", type=["xlsx", "csv"], key="draft_up")
                 
                 if uploaded_draft:
@@ -1115,8 +1115,6 @@ def render_offers_page():
             use_container_width=True
         )
     
-    st.markdown(f"<div style='background: #f0f4f8; padding: 8px 16px; border-radius: 8px; margin-bottom: 14px; border-right: 4px solid #00b4d8;'><strong>📊 عدد العروض المطابقة للبحث: {len(filtered_offers)} عرض</strong></div>", unsafe_allow_html=True)
-
     # ==========================================
     # 📄 عرض بطاقات العروض مع ترقيم الصفحات
     # ==========================================
