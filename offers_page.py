@@ -737,84 +737,203 @@ def render_offers_page():
                     if st.button("⚙️ معالجة المسودة وتوليد ملف العروض الجاهز لرفعه", type="primary"):
                         try:
                             df_draft = pd.read_excel(uploaded_draft) if uploaded_draft.name.endswith('.xlsx') else pd.read_csv(uploaded_draft)
+                            
+                            # ✅ التحقق من وجود الأعمدة المطلوبة
+                            required_columns = ['رقم المنتج sku', 'اسم المنتج', 'نوع الخصم']
+                            missing_cols = [col for col in required_columns if col not in df_draft.columns]
+                            if missing_cols:
+                                st.error(f"❌ الأعمدة التالية غير موجودة في الملف: {', '.join(missing_cols)}")
+                                st.info("تأكد من استخدام القالب الصحيح أو أعد تحميل الملف.")
+                                return
+                            
                             sku_map = {str(p.get('sku', '')).strip(): str(p.get('id', '')) for p in st.session_state["all_products"] if p.get('sku')}
                             offer_name_map = {str(o.get('name', '')).strip(): str(o.get('id', '')) for o in raw_offers}
                             
                             output_rows = []
-                            df_draft['عرض مجمع'] = df_draft['عرض مجمع'].fillna(df_draft.index.astype(str) + "_single_offer")
                             
-                            for group_name, group_df in df_draft.groupby('عرض مجمع'):
-                                first_row = group_df.iloc[0]
-                                skus = [str(x).strip() for x in group_df['رقم المنتج sku'].tolist() if pd.notna(x)]
-                                ids = [sku_map.get(s, '') for s in skus if sku_map.get(s, '')]
+                            # ✅ تحديد عمود التجميع (مرن)
+                            if 'هل عرض مجمع؟' in df_draft.columns:
+                                group_col = 'هل عرض مجمع؟'
+                            elif 'عرض مجمع' in df_draft.columns:
+                                group_col = 'عرض مجمع'
+                            else:
+                                # إذا لم يكن هناك عمود تجميع، اعتبر كل صف عرضاً مستقلاً
+                                group_col = None
+                                st.info("ℹ️ لم يتم العثور على عمود 'هل عرض مجمع؟'، سيتم معاملة كل صف كعرض منفصل.")
+                            
+                            # ✅ تحديد عمود اسم العرض
+                            if 'اسم العرض' in df_draft.columns:
+                                offer_name_col = 'اسم العرض'
+                            else:
+                                offer_name_col = None
+                            
+                            if group_col and group_col in df_draft.columns:
+                                # ✅ تعبئة القيم الفارغة في عمود التجميع
+                                df_draft[group_col] = df_draft[group_col].fillna(df_draft.index.astype(str) + "_single_offer")
                                 
-                                sku_str = "-".join(skus) if skus else "UnknownSKU"
-                                id_str = ",".join(ids)
-                                offer_msg = str(first_row.get('المعتمد لمجلة شهر 6', ''))
-                                offer_name = f"{sku_str} / {offer_msg}"
-                                
-                                action = "تحديث" if offer_name in offer_name_map else "إنشاء"
-                                offer_id = offer_name_map.get(offer_name, "")
-                                start_date = str(first_row.get('تاريخ البدء', '')) if pd.notna(first_row.get('تاريخ البدء')) else ''
-                                end_date = str(first_row.get('تاريخ الانتهاء', '')) if pd.notna(first_row.get('تاريخ الانتهاء')) else ''
-                                
-                                discount_type_raw = str(first_row.get('نوع الخصم', '')).strip()
-                                salla_discount_type = "منتج مجاني" if discount_type_raw == "منتج مجاني" else "خصم بنسبة"
-                                discount_amount = 0.0
-                                buy_qty = 1
-                                get_qty = 1
-                                
-                                if salla_discount_type == "منتج مجاني":
-                                    match = re.search(r'(\d+)\s*(?:حبة)?\s*\+\s*(\d+)', offer_msg)
-                                    if match: 
-                                        buy_qty = int(match.group(1))
-                                        get_qty = int(match.group(2))
-                                else:
-                                    match_price = re.search(r'(\d+)\s*حبة بسعر', offer_msg)
-                                    if match_price:
-                                        total_items = int(match_price.group(1))
-                                        buy_qty = total_items - 1
-                                        get_qty = 1
-                                        L = float(first_row.get('السعر قبل شامل', 0)) if pd.notna(first_row.get('السعر قبل شامل')) else 0
-                                        M = float(first_row.get('السعر بعد شامل', 0)) if pd.notna(first_row.get('السعر بعد شامل')) else 0
-                                        C = float(first_row.get('سعر بيع المنتج', 0)) if pd.notna(first_row.get('سعر بيع المنتج')) else 0
-                                        if C > 0: 
-                                            discount_amount = round(((L - M) / C) * 100, 2)
+                                for group_name, group_df in df_draft.groupby(group_col):
+                                    first_row = group_df.iloc[0]
+                                    skus = [str(x).strip() for x in group_df['رقم المنتج sku'].tolist() if pd.notna(x) and str(x).strip()]
+                                    ids = [sku_map.get(s, '') for s in skus if sku_map.get(s, '')]
+                                    
+                                    sku_str = "-".join(skus) if skus else "UnknownSKU"
+                                    id_str = ",".join(ids)
+                                    
+                                    # ✅ استخدام اسم العرض من العمود المخصص أو إنشاؤه تلقائياً
+                                    if offer_name_col and offer_name_col in group_df.columns:
+                                        offer_msg = str(first_row.get(offer_name_col, ''))
                                     else:
-                                        match_pct = re.search(r'خصم\s*(\d+(\.\d+)?)%', offer_msg)
-                                        if match_pct: 
-                                            discount_amount = float(match_pct.group(1))
-                                        match_buy_get = re.search(r'على الحبة (الثانية|الثالثة|الرابعة)', offer_msg)
-                                        if match_buy_get:
-                                            buy_qty = {"الثانية": 1, "الثالثة": 2, "الرابعة": 3}.get(match_buy_get.group(1), 1)
+                                        offer_msg = str(first_row.get('اسم العرض', '')) if 'اسم العرض' in df_draft.columns else ''
+                                    
+                                    if not offer_msg:
+                                        offer_msg = f"{sku_str} / عرض"
+                                    
+                                    offer_name = f"{sku_str} / {offer_msg}"
+                                    action = "تحديث" if offer_name in offer_name_map else "إنشاء"
+                                    offer_id = offer_name_map.get(offer_name, "")
+                                    
+                                    start_date = str(first_row.get('تاريخ البدء', '')) if pd.notna(first_row.get('تاريخ البدء')) else ''
+                                    end_date = str(first_row.get('تاريخ الانتهاء', '')) if pd.notna(first_row.get('تاريخ الانتهاء')) else ''
+                                    
+                                    discount_type_raw = str(first_row.get('نوع الخصم', '')).strip()
+                                    salla_discount_type = "منتج مجاني" if discount_type_raw == "منتج مجاني" else "خصم بنسبة"
+                                    discount_amount = 0.0
+                                    buy_qty = 1
+                                    get_qty = 1
+                                    
+                                    if salla_discount_type == "منتج مجاني":
+                                        match = re.search(r'(\d+)\s*(?:حبة)?\s*\+\s*(\d+)', offer_msg)
+                                        if match: 
+                                            buy_qty = int(match.group(1))
+                                            get_qty = int(match.group(2))
+                                    else:
+                                        match_price = re.search(r'(\d+)\s*حبة بسعر', offer_msg)
+                                        if match_price:
+                                            total_items = int(match_price.group(1))
+                                            buy_qty = total_items - 1
                                             get_qty = 1
+                                            L = float(first_row.get('السعر قبل شامل', 0)) if pd.notna(first_row.get('السعر قبل شامل')) else 0
+                                            M = float(first_row.get('السعر بعد شامل', 0)) if pd.notna(first_row.get('السعر بعد شامل')) else 0
+                                            C = float(first_row.get('سعر بيع المنتج', 0)) if pd.notna(first_row.get('سعر بيع المنتج')) else 0
+                                            if C > 0: 
+                                                discount_amount = round(((L - M) / C) * 100, 2)
+                                        else:
+                                            match_pct = re.search(r'خصم\s*(\d+(\.\d+)?)%', offer_msg)
+                                            if match_pct: 
+                                                discount_amount = float(match_pct.group(1))
+                                            match_buy_get = re.search(r'على الحبة (الثانية|الثالثة|الرابعة)', offer_msg)
+                                            if match_buy_get:
+                                                buy_qty = {"الثانية": 1, "الثالثة": 2, "الرابعة": 3}.get(match_buy_get.group(1), 1)
+                                                get_qty = 1
 
-                                row = {
-                                    "الإجراء": action, 
-                                    "معرف العرض": offer_id, 
-                                    "اسم العرض": offer_name, 
-                                    "نوع العرض": "اذا اشترى العميل X يحصل على Y",
-                                    "المنصة": "متصفح وتطبيق المتجر", 
-                                    "تطبيق على": "منتجات مختارة", 
-                                    "تاريخ البدء": start_date, 
-                                    "تاريخ الانتهاء": end_date,
-                                    "تطبيق مع كوبون": "نعم", 
-                                    "الحد الأقصى للخصم": 0, 
-                                    "الحد الأدنى للشراء": 0, 
-                                    "الحد الأدنى للكمية": 0,
-                                    "مجموعات العملاء": "", 
-                                    "نوع شراء X": "منتج", 
-                                    "كمية شراء X": buy_qty, 
-                                    "عناصر شراء X (IDs)": id_str,
-                                    "نوع عرض Y": "منتج", 
-                                    "كمية عرض Y": get_qty, 
-                                    "عناصر عرض Y (IDs)": id_str,
-                                    "نوع الخصم": salla_discount_type, 
-                                    "قيمة الخصم": discount_amount, 
-                                    "رسالة العرض": offer_msg, 
-                                    "حالة العرض": "نشط"
-                                }
-                                output_rows.append(row)
+                                    row = {
+                                        "الإجراء": action, 
+                                        "معرف العرض": offer_id, 
+                                        "اسم العرض": offer_name, 
+                                        "نوع العرض": "اذا اشترى العميل X يحصل على Y",
+                                        "المنصة": "متصفح وتطبيق المتجر", 
+                                        "تطبيق على": "منتجات مختارة", 
+                                        "تاريخ البدء": start_date, 
+                                        "تاريخ الانتهاء": end_date,
+                                        "تطبيق مع كوبون": "نعم", 
+                                        "الحد الأقصى للخصم": 0, 
+                                        "الحد الأدنى للشراء": 0, 
+                                        "الحد الأدنى للكمية": 0,
+                                        "مجموعات العملاء": "", 
+                                        "نوع شراء X": "منتج", 
+                                        "كمية شراء X": buy_qty, 
+                                        "عناصر شراء X (IDs)": id_str,
+                                        "نوع عرض Y": "منتج", 
+                                        "كمية عرض Y": get_qty, 
+                                        "عناصر عرض Y (IDs)": id_str,
+                                        "نوع الخصم": salla_discount_type, 
+                                        "قيمة الخصم": discount_amount, 
+                                        "رسالة العرض": offer_msg, 
+                                        "حالة العرض": "نشط"
+                                    }
+                                    output_rows.append(row)
+                            else:
+                                # ✅ معالجة كل صف كعرض منفصل
+                                for idx, row in df_draft.iterrows():
+                                    sku = str(row.get('رقم المنتج sku', '')).strip()
+                                    if not sku:
+                                        continue
+                                    
+                                    sku_str = sku
+                                    id_str = sku_map.get(sku, '')
+                                    
+                                    if offer_name_col and offer_name_col in df_draft.columns:
+                                        offer_msg = str(row.get(offer_name_col, ''))
+                                    else:
+                                        offer_msg = str(row.get('اسم العرض', '')) if 'اسم العرض' in df_draft.columns else ''
+                                    
+                                    if not offer_msg:
+                                        offer_msg = f"{sku_str} / عرض"
+                                    
+                                    offer_name = f"{sku_str} / {offer_msg}"
+                                    action = "تحديث" if offer_name in offer_name_map else "إنشاء"
+                                    offer_id = offer_name_map.get(offer_name, "")
+                                    
+                                    start_date = str(row.get('تاريخ البدء', '')) if pd.notna(row.get('تاريخ البدء')) else ''
+                                    end_date = str(row.get('تاريخ الانتهاء', '')) if pd.notna(row.get('تاريخ الانتهاء')) else ''
+                                    
+                                    discount_type_raw = str(row.get('نوع الخصم', '')).strip()
+                                    salla_discount_type = "منتج مجاني" if discount_type_raw == "منتج مجاني" else "خصم بنسبة"
+                                    discount_amount = 0.0
+                                    buy_qty = 1
+                                    get_qty = 1
+                                    
+                                    if salla_discount_type == "منتج مجاني":
+                                        match = re.search(r'(\d+)\s*(?:حبة)?\s*\+\s*(\d+)', offer_msg)
+                                        if match: 
+                                            buy_qty = int(match.group(1))
+                                            get_qty = int(match.group(2))
+                                    else:
+                                        match_price = re.search(r'(\d+)\s*حبة بسعر', offer_msg)
+                                        if match_price:
+                                            total_items = int(match_price.group(1))
+                                            buy_qty = total_items - 1
+                                            get_qty = 1
+                                            L = float(row.get('السعر قبل شامل', 0)) if pd.notna(row.get('السعر قبل شامل')) else 0
+                                            M = float(row.get('السعر بعد شامل', 0)) if pd.notna(row.get('السعر بعد شامل')) else 0
+                                            C = float(row.get('سعر بيع المنتج', 0)) if pd.notna(row.get('سعر بيع المنتج')) else 0
+                                            if C > 0: 
+                                                discount_amount = round(((L - M) / C) * 100, 2)
+                                        else:
+                                            match_pct = re.search(r'خصم\s*(\d+(\.\d+)?)%', offer_msg)
+                                            if match_pct: 
+                                                discount_amount = float(match_pct.group(1))
+                                            match_buy_get = re.search(r'على الحبة (الثانية|الثالثة|الرابعة)', offer_msg)
+                                            if match_buy_get:
+                                                buy_qty = {"الثانية": 1, "الثالثة": 2, "الرابعة": 3}.get(match_buy_get.group(1), 1)
+                                                get_qty = 1
+
+                                    row_data = {
+                                        "الإجراء": action, 
+                                        "معرف العرض": offer_id, 
+                                        "اسم العرض": offer_name, 
+                                        "نوع العرض": "اذا اشترى العميل X يحصل على Y",
+                                        "المنصة": "متصفح وتطبيق المتجر", 
+                                        "تطبيق على": "منتجات مختارة", 
+                                        "تاريخ البدء": start_date, 
+                                        "تاريخ الانتهاء": end_date,
+                                        "تطبيق مع كوبون": "نعم", 
+                                        "الحد الأقصى للخصم": 0, 
+                                        "الحد الأدنى للشراء": 0, 
+                                        "الحد الأدنى للكمية": 0,
+                                        "مجموعات العملاء": "", 
+                                        "نوع شراء X": "منتج", 
+                                        "كمية شراء X": buy_qty, 
+                                        "عناصر شراء X (IDs)": id_str,
+                                        "نوع عرض Y": "منتج", 
+                                        "كمية عرض Y": get_qty, 
+                                        "عناصر عرض Y (IDs)": id_str,
+                                        "نوع الخصم": salla_discount_type, 
+                                        "قيمة الخصم": discount_amount, 
+                                        "رسالة العرض": offer_msg, 
+                                        "حالة العرض": "نشط"
+                                    }
+                                    output_rows.append(row_data)
                                 
                             df_out = pd.DataFrame(output_rows)
                             st.success("✅ تمت المعالجة بنجاح! راجع النتائج بالأسفل ثم قم بتحميل الملف الجاهز لرفعه لسلة.")
