@@ -432,6 +432,13 @@ def process_excel_import(df) -> dict:
             disc_type_ar = str(row.get('نوع الخصم', '')).strip()
             disc_type = "free-product" if disc_type_ar == "منتج مجاني" else ("percentage" if disc_type_ar == "خصم بنسبة" else "fixed_amount")
             
+            # 🚀 الإصلاح الجذري لخطأ 422:
+            # إذا كان العرض "منتج مجاني"، سلة تتطلب إجبارياً إرسال قيمة خصم = 100%
+            if disc_type == "free-product":
+                discount_amount = 100.0
+            else:
+                discount_amount = float(row.get('قيمة الخصم', 0) or 0)
+            
             cg_raw = str(row.get('مجموعات العملاء', '')).strip()
             c_groups = [int(g.strip()) for g in cg_raw.split(',')] if cg_raw and cg_raw != 'nan' else []
             
@@ -439,13 +446,28 @@ def process_excel_import(df) -> dict:
             status = "active" if status_ar == "نشط" else "inactive"
             
             payload = {
-                "name": str(row.get('اسم العرض', 'عرض')), "offer_type": o_type, "applied_channel": chan,
-                "applied_to": app_to, "start_date": str(row.get('تاريخ البدء', '')).strip(), "expiry_date": str(row.get('تاريخ الانتهاء', '')).strip(),
-                "status": status, "applied_with_coupon": with_coupon, "max_discount_amount": float(row.get('الحد الأقصى للخصم', 0) or 0),
-                "min_purchase_amount": float(row.get('الحد الأدنى للشراء', 0) or 0), "min_items_count": int(row.get('الحد الأدنى للكمية', 0) or 0),
+                "name": str(row.get('اسم العرض', 'عرض')), 
+                "offer_type": o_type, 
+                "applied_channel": chan,
+                "applied_to": app_to, 
+                "start_date": str(row.get('تاريخ البدء', '')).strip(), 
+                "expiry_date": str(row.get('تاريخ الانتهاء', '')).strip(),
+                "status": status, 
+                "applied_with_coupon": with_coupon, 
+                "max_discount_amount": float(row.get('الحد الأقصى للخصم', 0) or 0),
+                "min_purchase_amount": float(row.get('الحد الأدنى للشراء', 0) or 0), 
+                "min_items_count": int(row.get('الحد الأدنى للكمية', 0) or 0),
                 "message": str(row.get('رسالة العرض', '')).strip(),
-                "buy": {"type": b_type, "quantity": int(row.get('كمية شراء X', 1) or 1)},
-                "get": {"type": g_type, "quantity": int(row.get('كمية عرض Y', 1) or 1), "discount_type": disc_type, "discount_amount": float(row.get('قيمة الخصم', 0) or 0)}
+                "buy": {
+                    "type": b_type, 
+                    "quantity": int(row.get('كمية شراء X', 1) or 1)
+                },
+                "get": {
+                    "type": g_type, 
+                    "quantity": int(row.get('كمية عرض Y', 1) or 1), 
+                    "discount_type": disc_type, 
+                    "discount_amount": discount_amount # ✅ القيمة المصححة تلقائياً
+                }
             }
             if c_groups: payload["customer_groups"] = c_groups
             
