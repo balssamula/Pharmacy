@@ -176,7 +176,7 @@ def stop_alert_sound():
 
 def render_create_offer_section(headers: Dict[str, str], section_key: str = "main"):
     """عرض قسم إنشاء عرض جديد مع مفاتيح فريدة"""
-    
+  with st.expander("➕ إنشاء عرض ترويجي جديد", expanded=False): 
     # ✅ استخدام section_key لجعل المفاتيح فريدة
     key_prefix = f"create_offer_{section_key}"
     
