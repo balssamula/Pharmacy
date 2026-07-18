@@ -34,7 +34,6 @@ def get_audio_base64(file_path):
 # ==========================================
 
 def render_expiry_alerts(raw_offers, headers=None):
-    """عرض تنبيهات للعروض التي ستنتهي خلال يومين مع مشغل صوت مدمج يتجاوز حظر المتصفحات"""
     now = datetime.now()
     expiring_soon = []
     
@@ -45,7 +44,9 @@ def render_expiry_alerts(raw_offers, headers=None):
         if not expiry_date: continue
         
         days_left = (expiry_date - now).days
-        if 0 <= days_left <= 2:
+        
+        # ✅ الإصلاح الجذري: إزالة (0 <=) لكي يقرأ العروض التي انتهت ودخلت بالسالب!
+        if days_left <= 2:
             expiring_soon.append({
                 'id': offer.get('id'),
                 'name': offer.get('name'),
@@ -60,52 +61,45 @@ def render_expiry_alerts(raw_offers, headers=None):
         st.markdown("""
         <style>
             @keyframes blink-red {
-                0% { background: linear-gradient(135deg, #ff0000, #cc0000); transform: scale(1); }
-                50% { background: linear-gradient(135deg, #cc0000, #990000); transform: scale(1.02); }
-                100% { background: linear-gradient(135deg, #ff0000, #cc0000); transform: scale(1); }
+                0% { border-color: #ff0000; box-shadow: 0 0 10px rgba(255,0,0,0.2); }
+                50% { border-color: #cc0000; box-shadow: 0 0 30px rgba(255,0,0,0.6); }
+                100% { border-color: #ff0000; box-shadow: 0 0 10px rgba(255,0,0,0.2); }
             }
             .expiry-alert {
-                animation: blink-red 0.8s ease-in-out infinite;
+                animation: blink-red 1s ease-in-out infinite;
                 padding: 15px 20px;
                 border-radius: 10px;
+                background: #2c0b0e;
                 color: white;
-                font-weight: bold;
                 text-align: center;
                 border: 3px solid #ff6b6b;
-                box-shadow: 0 0 30px rgba(255, 0, 0, 0.3);
                 margin-bottom: 20px;
                 direction: rtl;
             }
         </style>
         """, unsafe_allow_html=True)
         
-        # ✅ المشغل الصوتي المرئي لحل مشكلة الحظر الأمني للمتصفحات
-        if st.session_state["sound_playing"]:
-            audio_url = "https://assets.mixkit.co/active_storage/sfx/2869/2869-preview.mp3"
-            st.markdown(f"""
-            <div style="background: rgba(0,0,0,0.3); padding: 10px; border-radius: 8px; text-align: center; margin-bottom: 15px;">
-                <span style="color: #00EBCF; font-size: 13px;">💡 سياسة المتصفحات تمنع أحياناً تشغيل الصوت تلقائياً. اضغط (Play) لتفعيل جرس الإنذار:</span><br>
-                <audio id="alert-sound" controls autoplay loop style="height: 35px; outline: none; margin-top: 8px; border-radius: 20px;">
-                    <source src="{audio_url}" type="audio/mp3">
-                </audio>
-            </div>
-            """, unsafe_allow_html=True)
-        
         count = len(expiring_soon)
         st.markdown(f"""
         <div class="expiry-alert">
-            <div style="display: flex; align-items: center; justify-content: center; gap: 15px; flex-wrap: wrap;">
-                <span style="font-size: 32px;">🚨</span>
-                <span style="font-size: 18px;">
-                    <b style="font-size: 22px;">تنبيه عاجل!</b> هناك <span style="background: rgba(255,255,255,0.25); padding: 2px 10px; border-radius: 20px;">{count}</span> عرض انتهى أو على وشك الإنتهاء!
-                </span>
-            </div>
-            <div style="margin-top: 10px; font-size: 14px; display: flex; gap: 10px; flex-wrap: wrap; justify-content: center;">
+            <h3 style="margin-top:0;">🚨 تنبيه عاجل! هناك <span style='background: white; color: red; padding: 2px 10px; border-radius: 20px;'>{count}</span> عرض انتهى أو سينتهي قريباً!</h3>
         """, unsafe_allow_html=True)
         
+        if st.session_state["sound_playing"]:
+            audio_url = "https://assets.mixkit.co/active_storage/sfx/2869/2869-preview.mp3"
+            st.markdown(f"""
+            <p style='font-size:13px; color:#aaa; margin-bottom:5px;'>سياسة المتصفحات تمنع الصوت التلقائي، اضغط (Play) لتفعيل الإنذار:</p>
+            <audio controls loop style="height: 35px; outline: none; border-radius: 20px; margin-bottom: 15px;">
+                <source src="{audio_url}" type="audio/mp3">
+            </audio>
+            """, unsafe_allow_html=True)
+            
+        st.markdown('<div style="font-size: 14px; display: flex; gap: 10px; flex-wrap: wrap; justify-content: center;">', unsafe_allow_html=True)
+        
         for offer in expiring_soon:
-            days_text = "اليوم" if offer['days_left'] == 0 else f"غداً" if offer['days_left'] == 1 else f"بعد غد"
-            st.markdown(f"<span style='background: rgba(255,255,255,0.15); padding: 4px 12px; border-radius: 15px;'>🎯 <span style='color: #ffd700;'>{offer['name']}</span> ينتهي <b>{days_text}</b> ({offer['expiry_date']})</span>", unsafe_allow_html=True)
+            days_text = "انتهى بالفعل!" if offer['days_left'] < 0 else "ينتهي اليوم" if offer['days_left'] == 0 else f"ينتهي غداً" if offer['days_left'] == 1 else f"بعد يومين"
+            color = "#ff4d4d" if offer['days_left'] < 0 else "#ffca28"
+            st.markdown(f"<span style='background: rgba(255,255,255,0.15); padding: 4px 12px; border-radius: 15px;'>🎯 <span style='color: #ffd700;'>{offer['name']}</span> | <b style='color: {color};'>{days_text}</b> ({offer['expiry_date']})</span>", unsafe_allow_html=True)
         
         st.markdown("</div><div style='margin-top: 15px; display: flex; gap: 10px; justify-content: center; flex-wrap: wrap;'>", unsafe_allow_html=True)
         
@@ -115,7 +109,7 @@ def render_expiry_alerts(raw_offers, headers=None):
                 st.session_state["qa_action"] = "end_dates"
                 st.rerun()
         with col_btn2:
-            if st.button("🧹 إزالة العناوين", use_container_width=True):
+            if st.button("🧹 إزالة العناوين الترويجية", use_container_width=True):
                 st.session_state["qa_action"] = "end_dates"
                 st.rerun()
         with col_btn3:
@@ -125,7 +119,7 @@ def render_expiry_alerts(raw_offers, headers=None):
                 st.rerun()
         st.markdown("</div></div>", unsafe_allow_html=True)
     else:
-        st.success("✅ جميع العروض النشطة سارية المفعول ولا توجد عروض على وشك الانتهاء.")
+        st.success("✅ جميع العروض النشطة سارية المفعول ولا توجد عروض منتهية أو على وشك الانتهاء.")
         
 def play_alert_sound():
     """تشغيل صوت التنبيه"""
