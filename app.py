@@ -77,7 +77,7 @@ def fetch_offers_with_progress(headers):
     return offers
 
 def build_product_offers_map_with_progress(offers, headers):
-    """بناء خريطة المنتجات بالعروض مع شريط تقدم"""
+    """بناء خريطة المنتجات بالعروض مع شريط تقدم وآلية حماية من الحظر"""
     po_map = {}
     active_offers = [o for o in offers if o.get("status") == "active"]
     
@@ -92,20 +92,21 @@ def build_product_offers_map_with_progress(offers, headers):
         status_text.info(f"🔗 جاري بناء روابط المنتجات بالعروض: {idx + 1} من {total}")
         oid = o.get("id")
         full_o = safe_api_request("GET", f"https://api.salla.dev/admin/v2/specialoffers/{oid}", headers)
+        
         if full_o and full_o.get("data"):
             pids = set()
             for px in full_o["data"].get("buy", {}).get("products", []):
                 pid = str(px.get("id", px) if isinstance(px, dict) else px)
-                if pid.isdigit(): 
-                    pids.add(pid)
+                if pid.isdigit(): pids.add(pid)
             for px in full_o["data"].get("get", {}).get("products", []):
                 pid = str(px.get("id", px) if isinstance(px, dict) else px)
-                if pid.isdigit(): 
-                    pids.add(pid)
+                if pid.isdigit(): pids.add(pid)
             for pid in pids:
                 if pid not in po_map:
                     po_map[pid] = []
                 po_map[pid].append({"id": oid, "name": o.get("name")})
+                
+        time.sleep(0.2) # ⏳ حماية من حظر سيرفرات سلة (Rate Limit)
         progress_bar.progress((idx + 1) / total)
     
     progress_bar.empty()
