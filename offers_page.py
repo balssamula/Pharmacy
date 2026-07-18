@@ -176,277 +176,277 @@ def stop_alert_sound():
 
 def render_create_offer_section(headers: Dict[str, str], section_key: str = "main"):
     """عرض قسم إنشاء عرض جديد مع مفاتيح فريدة"""
-  with st.expander("➕ إنشاء عرض ترويجي جديد", expanded=False): 
-    # ✅ استخدام section_key لجعل المفاتيح فريدة
-    key_prefix = f"create_offer_{section_key}"
+    with st.expander("➕ إنشاء عرض ترويجي جديد", expanded=False): 
+        # ✅ استخدام section_key لجعل المفاتيح فريدة
+        key_prefix = f"create_offer_{section_key}"
     
-    st.markdown("#### 🎯 بيانات العرض الأساسية")
+        st.markdown("#### 🎯 بيانات العرض الأساسية")
     
-    col1, col2 = st.columns(2)
-    with col1:
-        offer_name = st.text_input(
-            "📝 اسم العرض:",
-            placeholder="مثال: عرض العيد المميز",
-            key=f"{key_prefix}_name"
-        )
-        offer_type = st.selectbox(
-            "📊 نوع العرض:",
-            list(OFFER_TYPES_MAP.values()),
-            format_func=lambda x: x,
-            key=f"{key_prefix}_type"
-        )
-        # تحويل النوع العربي إلى المفتاح الإنجليزي
-        offer_type_key = [k for k, v in OFFER_TYPES_MAP.items() if v == offer_type][0] if offer_type else "buy_x_get_y"
-        
-    with col2:
-        applied_to = st.selectbox(
-            "🎯 تطبيق العرض على:",
-            list(APPLIED_TO_MAP.values()),
-            format_func=lambda x: x,
-            key=f"{key_prefix}_applied_to"
-        )
-        applied_to_key = [k for k, v in APPLIED_TO_MAP.items() if v == applied_to][0] if applied_to else "product"
-        
-        channel = st.selectbox(
-            "📺 قناة النشر:",
-            list(CHANNELS_MAP.values()),
-            format_func=lambda x: x,
-            key=f"{key_prefix}_channel"
-        )
-        channel_key = [k for k, v in CHANNELS_MAP.items() if v == channel][0] if channel else "browser_and_application"
-    
-    # ✅ تواريخ العرض
-    st.markdown("#### 📅 تواريخ العرض")
-    col_date1, col_date2 = st.columns(2)
-    with col_date1:
-        start_date = st.date_input(
-            "📅 تاريخ البدء:",
-            value=datetime.now().date(),
-            key=f"{key_prefix}_start_date"
-        )
-        start_time = st.time_input(
-            "⏰ وقت البدء:",
-            value=datetime.now().time().replace(hour=0, minute=0, second=0),
-            key=f"{key_prefix}_start_time"
-        )
-    with col_date2:
-        end_date = st.date_input(
-            "📅 تاريخ الانتهاء:",
-            value=datetime.now().date() + timedelta(days=30),
-            key=f"{key_prefix}_end_date"
-        )
-        end_time = st.time_input(
-            "⏰ وقت الانتهاء:",
-            value=datetime.now().time().replace(hour=23, minute=59, second=59),
-            key=f"{key_prefix}_end_time"
-        )
-    
-    start_datetime = datetime.combine(start_date, start_time).strftime('%Y-%m-%d %H:%M:%S')
-    end_datetime = datetime.combine(end_date, end_time).strftime('%Y-%m-%d %H:%M:%S')
-    
-    # ✅ خيارات العرض
-    st.markdown("#### ⚙️ خيارات متقدمة")
-    col_opt1, col_opt2, col_opt3 = st.columns(3)
-    with col_opt1:
-        with_coupon = st.checkbox(
-            "🔖 تطبيق مع كوبون",
-            value=False,
-            key=f"{key_prefix}_with_coupon"
-        )
-    with col_opt2:
-        max_discount = st.number_input(
-            "💰 الحد الأقصى للخصم (SAR):",
-            min_value=0.0,
-            value=0.0,
-            step=5.0,
-            key=f"{key_prefix}_max_discount"
-        )
-    with col_opt3:
-        min_purchase = st.number_input(
-            "💵 الحد الأدنى للشراء (SAR):",
-            min_value=0.0,
-            value=0.0,
-            step=10.0,
-            key=f"{key_prefix}_min_purchase"
-        )
-    
-    # ✅ شروط العرض (Buy X Get Y)
-    st.markdown("#### 🛒 شروط العرض (اشتر X واحصل على Y)")
-    col_buy1, col_buy2, col_buy3 = st.columns(3)
-    with col_buy1:
-        buy_type = st.selectbox(
-            "نوع الشراء (X):",
-            ["منتج", "تصنيف", "ماركة"],
-            key=f"{key_prefix}_buy_type"
-        )
-        buy_type_key = {"منتج": "product", "تصنيف": "category", "ماركة": "brand"}.get(buy_type, "product")
-    with col_buy2:
-        buy_quantity = st.number_input(
-            "كمية الشراء (X):",
-            min_value=1,
-            value=1,
-            step=1,
-            key=f"{key_prefix}_buy_quantity"
-        )
-    with col_buy3:
-        # اختيار المنتجات/التصنيفات/الماركات
-        if buy_type == "منتج":
-            buy_items = st.multiselect(
-                "اختر المنتجات:",
-                options=[f"{p.get('name')} (SKU: {p.get('sku')})" for p in st.session_state.get("all_products", []) if p.get('sku')],
-                key=f"{key_prefix}_buy_products"
+        col1, col2 = st.columns(2)
+        with col1:
+            offer_name = st.text_input(
+                "📝 اسم العرض:",
+                placeholder="مثال: عرض العيد المميز",
+                key=f"{key_prefix}_name"
             )
-            buy_ids = []
-            for item in buy_items:
+            offer_type = st.selectbox(
+                "📊 نوع العرض:",
+                list(OFFER_TYPES_MAP.values()),
+                format_func=lambda x: x,
+                key=f"{key_prefix}_type"
+            )
+            # تحويل النوع العربي إلى المفتاح الإنجليزي
+            offer_type_key = [k for k, v in OFFER_TYPES_MAP.items() if v == offer_type][0] if offer_type else "buy_x_get_y"
+        
+        with col2:
+            applied_to = st.selectbox(
+                "🎯 تطبيق العرض على:",
+                list(APPLIED_TO_MAP.values()),
+                format_func=lambda x: x,
+                key=f"{key_prefix}_applied_to"
+            )
+            applied_to_key = [k for k, v in APPLIED_TO_MAP.items() if v == applied_to][0] if applied_to else "product"
+        
+            channel = st.selectbox(
+                "📺 قناة النشر:",
+                list(CHANNELS_MAP.values()),
+                format_func=lambda x: x,
+                key=f"{key_prefix}_channel"
+            )
+            channel_key = [k for k, v in CHANNELS_MAP.items() if v == channel][0] if channel else "browser_and_application"
+    
+        # ✅ تواريخ العرض
+        st.markdown("#### 📅 تواريخ العرض")
+        col_date1, col_date2 = st.columns(2)
+        with col_date1:
+            start_date = st.date_input(
+                "📅 تاريخ البدء:",
+                value=datetime.now().date(),
+                key=f"{key_prefix}_start_date"
+            )
+            start_time = st.time_input(
+                "⏰ وقت البدء:",
+                value=datetime.now().time().replace(hour=0, minute=0, second=0),
+                key=f"{key_prefix}_start_time"
+            )
+        with col_date2:
+            end_date = st.date_input(
+                "📅 تاريخ الانتهاء:",
+                value=datetime.now().date() + timedelta(days=30),
+                key=f"{key_prefix}_end_date"
+            )
+            end_time = st.time_input(
+                "⏰ وقت الانتهاء:",
+                value=datetime.now().time().replace(hour=23, minute=59, second=59),
+                key=f"{key_prefix}_end_time"
+            )
+    
+        start_datetime = datetime.combine(start_date, start_time).strftime('%Y-%m-%d %H:%M:%S')
+        end_datetime = datetime.combine(end_date, end_time).strftime('%Y-%m-%d %H:%M:%S')
+    
+        # ✅ خيارات العرض
+        st.markdown("#### ⚙️ خيارات متقدمة")
+        col_opt1, col_opt2, col_opt3 = st.columns(3)
+        with col_opt1:
+            with_coupon = st.checkbox(
+                "🔖 تطبيق مع كوبون",
+                value=False,
+                key=f"{key_prefix}_with_coupon"
+            )
+        with col_opt2:
+            max_discount = st.number_input(
+                "💰 الحد الأقصى للخصم (SAR):",
+                min_value=0.0,
+                value=0.0,
+                step=5.0,
+                key=f"{key_prefix}_max_discount"
+            )
+        with col_opt3:
+            min_purchase = st.number_input(
+                "💵 الحد الأدنى للشراء (SAR):",
+                min_value=0.0,
+                value=0.0,
+                step=10.0,
+                key=f"{key_prefix}_min_purchase"
+            )
+    
+        # ✅ شروط العرض (Buy X Get Y)
+        st.markdown("#### 🛒 شروط العرض (اشتر X واحصل على Y)")
+        col_buy1, col_buy2, col_buy3 = st.columns(3)
+        with col_buy1:
+            buy_type = st.selectbox(
+                "نوع الشراء (X):",
+                ["منتج", "تصنيف", "ماركة"],
+                key=f"{key_prefix}_buy_type"
+            )
+            buy_type_key = {"منتج": "product", "تصنيف": "category", "ماركة": "brand"}.get(buy_type, "product")
+        with col_buy2:
+            buy_quantity = st.number_input(
+                "كمية الشراء (X):",
+                min_value=1,
+                value=1,
+                step=1,
+                key=f"{key_prefix}_buy_quantity"
+            )
+        with col_buy3:
+            # اختيار المنتجات/التصنيفات/الماركات
+            if buy_type == "منتج":
+                buy_items = st.multiselect(
+                    "اختر المنتجات:",
+                    options=[f"{p.get('name')} (SKU: {p.get('sku')})" for p in st.session_state.get("all_products", []) if p.get('sku')],
+                    key=f"{key_prefix}_buy_products"
+                )
+                buy_ids = []
+                for item in buy_items:
+                    for p in st.session_state.get("all_products", []):
+                        if f"{p.get('name')} (SKU: {p.get('sku')})" == item:
+                            buy_ids.append(p.get('id'))
+                            break
+            elif buy_type == "تصنيف":
+                buy_items = st.multiselect(
+                    "اختر التصنيفات:",
+                    options=[f"{c.get('name')} (ID: {c.get('id')})" for c in st.session_state.get("all_categories", [])],
+                    key=f"{key_prefix}_buy_categories"
+                )
+                buy_ids = [int(c.split('ID: ')[1].replace(')', '')) for c in buy_items]
+            else:  # ماركة
+                buy_items = st.multiselect(
+                    "اختر الماركات:",
+                    options=[f"{b.get('name')} (ID: {b.get('id')})" for b in st.session_state.get("all_brands", [])],
+                    key=f"{key_prefix}_buy_brands"
+                )
+                buy_ids = [int(b.split('ID: ')[1].replace(')', '')) for b in buy_items]
+    
+        # ✅ العرض (Get Y)
+        st.markdown("#### 🎁 العرض (يحصل على Y)")
+        col_get1, col_get2, col_get3 = st.columns(3)
+        with col_get1:
+            get_type = st.selectbox(
+                "نوع العرض (Y):",
+                ["منتج", "تصنيف", "ماركة"],
+                key=f"{key_prefix}_get_type"
+            )
+            get_type_key = {"منتج": "product", "تصنيف": "category", "ماركة": "brand"}.get(get_type, "product")
+        with col_get2:
+            get_quantity = st.number_input(
+                "كمية العرض (Y):",
+                min_value=1,
+                value=1,
+                step=1,
+                key=f"{key_prefix}_get_quantity"
+            )
+        with col_get3:
+            discount_type = st.selectbox(
+                "نوع الخصم:",
+                ["خصم بنسبة", "منتج مجاني", "مبلغ ثابت"],
+                key=f"{key_prefix}_discount_type"
+            )
+            discount_type_key = {"خصم بنسبة": "percentage", "منتج مجاني": "free-product", "مبلغ ثابت": "fixed_amount"}.get(discount_type, "percentage")
+        
+            discount_amount = 0.0
+            if discount_type != "منتج مجاني":
+                discount_amount = st.number_input(
+                    "قيمة الخصم:",
+                    min_value=0.0,
+                    value=10.0,
+                    step=1.0,
+                    key=f"{key_prefix}_discount_amount"
+                )
+    
+        # ✅ اختيار المنتجات للعرض (Y)
+        if get_type == "منتج":
+            get_items = st.multiselect(
+                "اختر المنتجات للعرض:",
+                options=[f"{p.get('name')} (SKU: {p.get('sku')})" for p in st.session_state.get("all_products", []) if p.get('sku')],
+                key=f"{key_prefix}_get_products"
+            )
+            get_ids = []
+            for item in get_items:
                 for p in st.session_state.get("all_products", []):
                     if f"{p.get('name')} (SKU: {p.get('sku')})" == item:
-                        buy_ids.append(p.get('id'))
+                        get_ids.append(p.get('id'))
                         break
-        elif buy_type == "تصنيف":
-            buy_items = st.multiselect(
-                "اختر التصنيفات:",
+        elif get_type == "تصنيف":
+            get_items = st.multiselect(
+                "اختر التصنيفات للعرض:",
                 options=[f"{c.get('name')} (ID: {c.get('id')})" for c in st.session_state.get("all_categories", [])],
-                key=f"{key_prefix}_buy_categories"
+                key=f"{key_prefix}_get_categories"
             )
-            buy_ids = [int(c.split('ID: ')[1].replace(')', '')) for c in buy_items]
+            get_ids = [int(c.split('ID: ')[1].replace(')', '')) for c in get_items]
         else:  # ماركة
-            buy_items = st.multiselect(
-                "اختر الماركات:",
+            get_items = st.multiselect(
+                "اختر الماركات للعرض:",
                 options=[f"{b.get('name')} (ID: {b.get('id')})" for b in st.session_state.get("all_brands", [])],
-                key=f"{key_prefix}_buy_brands"
+                key=f"{key_prefix}_get_brands"
             )
-            buy_ids = [int(b.split('ID: ')[1].replace(')', '')) for b in buy_items]
+            get_ids = [int(b.split('ID: ')[1].replace(')', '')) for b in get_items]
     
-    # ✅ العرض (Get Y)
-    st.markdown("#### 🎁 العرض (يحصل على Y)")
-    col_get1, col_get2, col_get3 = st.columns(3)
-    with col_get1:
-        get_type = st.selectbox(
-            "نوع العرض (Y):",
-            ["منتج", "تصنيف", "ماركة"],
-            key=f"{key_prefix}_get_type"
+        # ✅ رسالة العرض
+        offer_message = st.text_input(
+            "💬 رسالة العرض:",
+            placeholder="تسوق الآن واستمتع بالخصم!",
+            key=f"{key_prefix}_message"
         )
-        get_type_key = {"منتج": "product", "تصنيف": "category", "ماركة": "brand"}.get(get_type, "product")
-    with col_get2:
-        get_quantity = st.number_input(
-            "كمية العرض (Y):",
-            min_value=1,
-            value=1,
-            step=1,
-            key=f"{key_prefix}_get_quantity"
-        )
-    with col_get3:
-        discount_type = st.selectbox(
-            "نوع الخصم:",
-            ["خصم بنسبة", "منتج مجاني", "مبلغ ثابت"],
-            key=f"{key_prefix}_discount_type"
-        )
-        discount_type_key = {"خصم بنسبة": "percentage", "منتج مجاني": "free-product", "مبلغ ثابت": "fixed_amount"}.get(discount_type, "percentage")
+    
+        # ✅ زر إنشاء العرض
+        if st.button("🚀 إنشاء العرض الجديد", type="primary", use_container_width=True, key=f"{key_prefix}_submit"):
+            if not offer_name:
+                st.error("⚠️ الرجاء إدخال اسم العرض")
+                return
         
-        discount_amount = 0.0
-        if discount_type != "منتج مجاني":
-            discount_amount = st.number_input(
-                "قيمة الخصم:",
-                min_value=0.0,
-                value=10.0,
-                step=1.0,
-                key=f"{key_prefix}_discount_amount"
-            )
-    
-    # ✅ اختيار المنتجات للعرض (Y)
-    if get_type == "منتج":
-        get_items = st.multiselect(
-            "اختر المنتجات للعرض:",
-            options=[f"{p.get('name')} (SKU: {p.get('sku')})" for p in st.session_state.get("all_products", []) if p.get('sku')],
-            key=f"{key_prefix}_get_products"
-        )
-        get_ids = []
-        for item in get_items:
-            for p in st.session_state.get("all_products", []):
-                if f"{p.get('name')} (SKU: {p.get('sku')})" == item:
-                    get_ids.append(p.get('id'))
-                    break
-    elif get_type == "تصنيف":
-        get_items = st.multiselect(
-            "اختر التصنيفات للعرض:",
-            options=[f"{c.get('name')} (ID: {c.get('id')})" for c in st.session_state.get("all_categories", [])],
-            key=f"{key_prefix}_get_categories"
-        )
-        get_ids = [int(c.split('ID: ')[1].replace(')', '')) for c in get_items]
-    else:  # ماركة
-        get_items = st.multiselect(
-            "اختر الماركات للعرض:",
-            options=[f"{b.get('name')} (ID: {b.get('id')})" for b in st.session_state.get("all_brands", [])],
-            key=f"{key_prefix}_get_brands"
-        )
-        get_ids = [int(b.split('ID: ')[1].replace(')', '')) for b in get_items]
-    
-    # ✅ رسالة العرض
-    offer_message = st.text_input(
-        "💬 رسالة العرض:",
-        placeholder="تسوق الآن واستمتع بالخصم!",
-        key=f"{key_prefix}_message"
-    )
-    
-    # ✅ زر إنشاء العرض
-    if st.button("🚀 إنشاء العرض الجديد", type="primary", use_container_width=True, key=f"{key_prefix}_submit"):
-        if not offer_name:
-            st.error("⚠️ الرجاء إدخال اسم العرض")
-            return
-        
-        # بناء الـ payload
-        payload = {
-            "name": offer_name,
-            "offer_type": offer_type_key,
-            "applied_channel": channel_key,
-            "applied_to": applied_to_key,
-            "start_date": start_datetime,
-            "expiry_date": end_datetime,
-            "status": "active",
-            "applied_with_coupon": with_coupon,
-            "max_discount_amount": max_discount,
-            "min_purchase_amount": min_purchase,
-            "min_items_count": 0,
-            "message": offer_message,
-            "buy": {
-                "type": buy_type_key,
-                "quantity": buy_quantity
-            },
-            "get": {
-                "type": get_type_key,
-                "quantity": get_quantity,
-                "discount_type": discount_type_key
+            # بناء الـ payload
+            payload = {
+                "name": offer_name,
+                "offer_type": offer_type_key,
+                "applied_channel": channel_key,
+                "applied_to": applied_to_key,
+                "start_date": start_datetime,
+                "expiry_date": end_datetime,
+                "status": "active",
+                "applied_with_coupon": with_coupon,
+                "max_discount_amount": max_discount,
+                "min_purchase_amount": min_purchase,
+                "min_items_count": 0,
+                "message": offer_message,
+                "buy": {
+                    "type": buy_type_key,
+                    "quantity": buy_quantity
+                },
+                "get": {
+                    "type": get_type_key,
+                    "quantity": get_quantity,
+                    "discount_type": discount_type_key
+                }
             }
-        }
         
-        # إضافة المنتجات/التصنيفات/الماركات
-        if buy_ids:
-            if buy_type_key == "product":
-                payload["buy"]["products"] = buy_ids
-            elif buy_type_key == "category":
-                payload["buy"]["categories"] = buy_ids
-            elif buy_type_key == "brand":
-                payload["buy"]["brands"] = buy_ids
+            # إضافة المنتجات/التصنيفات/الماركات
+            if buy_ids:
+                if buy_type_key == "product":
+                    payload["buy"]["products"] = buy_ids
+                elif buy_type_key == "category":
+                    payload["buy"]["categories"] = buy_ids
+                elif buy_type_key == "brand":
+                    payload["buy"]["brands"] = buy_ids
         
-        if get_ids:
-            if get_type_key == "product":
-                payload["get"]["products"] = get_ids
-            elif get_type_key == "category":
-                payload["get"]["categories"] = get_ids
-            elif get_type_key == "brand":
-                payload["get"]["brands"] = get_ids
+            if get_ids:
+                if get_type_key == "product":
+                    payload["get"]["products"] = get_ids
+                elif get_type_key == "category":
+                    payload["get"]["categories"] = get_ids
+                elif get_type_key == "brand":
+                    payload["get"]["brands"] = get_ids
         
-        if discount_amount > 0:
-            payload["get"]["discount_amount"] = discount_amount
+            if discount_amount > 0:
+                payload["get"]["discount_amount"] = discount_amount
         
-        # إرسال الطلب
-        with st.spinner("جاري إنشاء العرض..."):
-            res = safe_api_request("POST", SALLA_API_URL, headers, json=payload)
-            if res:
-                st.success("✅ تم إنشاء العرض بنجاح!")
-                st.rerun()
-            else:
-                st.error("❌ فشل إنشاء العرض")
+            # إرسال الطلب
+            with st.spinner("جاري إنشاء العرض..."):
+                res = safe_api_request("POST", SALLA_API_URL, headers, json=payload)
+                if res:
+                    st.success("✅ تم إنشاء العرض بنجاح!")
+                    st.rerun()
+                else:
+                    st.error("❌ فشل إنشاء العرض")
                     
 def render_offers_page():
     st.markdown("""
