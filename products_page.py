@@ -1,6 +1,7 @@
 import streamlit as st
 import pandas as pd
 import requests
+import time
 import io
 import pickle
 from datetime import datetime
@@ -41,13 +42,12 @@ def initialize_session():
         st.session_state["product_offers_map"] = {}
 
 def ensure_product_offers_mapping(headers: Dict[str, str]):
-    """تحقق ذكي: إذا كانت خريطة العروض فارغة، قم بإنشائها فوراً"""
+    """تحقق ذكي: إذا كانت خريطة العروض فارغة، قم بإنشائها فوراً مع الحماية"""
     if not st.session_state.get("product_offers_map") and st.session_state.get("all_offers"):
         with st.spinner("🔄 جاري بناء روابط المنتجات بالعروض الخاصة..."):
             po_map = {}
             for o in st.session_state["all_offers"]:
-                if o.get("status") != "active": 
-                    continue
+                if o.get("status") != "active": continue
                 oid = o.get("id")
                 full_o = safe_api_request("GET", f"https://api.salla.dev/admin/v2/specialoffers/{oid}", headers)
                 if full_o and full_o.get("data"):
@@ -61,8 +61,10 @@ def ensure_product_offers_mapping(headers: Dict[str, str]):
                     for pid in pids:
                         if pid not in po_map: po_map[pid] = []
                         po_map[pid].append({"id": oid, "name": o.get("name")})
+                time.sleep(0.2) # ⏳ منع حظر 429 من سيرفرات API
+                
             st.session_state["product_offers_map"] = po_map
-            st.rerun()
+            st.rerun() # تحديث الصفحة لرسم شارات العروض بشكل سليم
 
 def fetch_pages_with_progress(url_base: str, headers: Dict, loading_text: str) -> List[Dict]:
     all_data = []
