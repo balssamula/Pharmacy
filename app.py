@@ -23,7 +23,7 @@ from offers_page import render_offers_page
 from products_page import render_products_page
 from customers_page import render_customers_page
 
-def fetch_products(headers):
+def fetch_products_with_progress(headers):
     """جلب المنتجات مع شريط تقدم وعداد"""
     products = []
     page = 1
@@ -47,96 +47,192 @@ def fetch_products(headers):
     status_text.empty()
     return products
 
-def fetch_offers(headers):
-    """جلب العروض"""
+def fetch_offers_with_progress(headers):
+    """جلب العروض مع شريط تقدم"""
+    offers = []
+    page = 1
+    total_pages = 1
+    progress_bar = st.progress(0)
+    status_text = st.empty()
+    
+    while True:
+        status_text.info(f"🎁 جاري سحب العروض: صفحة {page} من {total_pages if page > 1 else '...'} | تم تحميل {len(offers)} عرض")
+        res = safe_api_request("GET", f"https://api.salla.dev/admin/v2/specialoffers?per_page=60&page={page}", headers)
+        if not res or not res.get("data"):
+            break
+        if page == 1:
+            total_pages = res.get("pagination", {}).get("totalPages", 1)
+        offers.extend(res["data"])
+        progress_bar.progress(min(page / total_pages, 1.0))
+        if page >= total_pages:
+            break
+        page += 1
+        
+    progress_bar.empty()
+    status_text.empty()
+    return offers
+
+def fetch_branches_with_progress(headers):
+    """جلب الفروع مع شريط تقدم"""
+    status_text = st.empty()
+    status_text.info("🏢 جاري سحب الفروع...")
+    branches = get_branches_list()
+    status_text.empty()
+    return branches
+
+def load_all_data_with_progress():
+    """تحميل جميع البيانات مع شريط تقدم"""
+    headers = get_headers()
+    if not headers:
+        return None
+    
+    st.markdown("### ⏳ جاري تحميل بيانات المتجر...")
+    
+    # ✅ عرض شريط تقدم عام
+    progress_bar = st.progress(0)
+    status_text = st.empty()
+    
+    # 1. جلب المنتجات
+    status_text.info("📦 جاري سحب المنتجات...")
+    products = fetch_products_with_progress(headers)
+    progress_bar.progress(0.3)
+    
+    # 2. جلب العروض
+    status_text.info("🎁 جاري سحب العروض...")
+    offers = fetch_offers_with_progress(headers)
+    progress_bar.progress(0.6)
+    
+    # 3. جلب الفروع
+    status_text.info("🏢 جاري سحب الفروع...")
+    branches = fetch_branches_with_progress(headers)
+    progress_bar.progress(0.9)
+    
+    # 4. بناء روابط العروض
+    status_text.info("🔗 جاري بناء روابط المنتجات بالعروض...")
+    po_map = {}
+    for o in offers:
+        if o.get("status") != "active": continue
+        oid = o.get("id")
+        full_o = safe_api_request("GET", f"https://api.salla.dev/admin/v2/specialoffers/{oid}", headers)
+        if full_o and full_o.get("data"):
+            pids = set()
+            for px in full_o["data"].get("buy", {}).get("products", []):
+                pid = str(px.get("id", px) if isinstance(px, dict) else px)
+                if pid.isdigit(): pids.add(pid)
+            for px in full_o["data"].get("get", {}).get("products", []):
+                pid = str(px.get("id", px) if isinstance(px, dict) else px)
+                if pid.isdigit(): pids.add(pid)
+            for pid in pids:
+                if pid not in po_map: po_map[pid] = []
+                po_map[pid].append({"id": oid, "name": o.get("name")})
+    
+    progress_bar.progress(1.0)
+    status_text.empty()
+    progress_bar.empty()
+    
+    # ✅ إخفاء رسالة النجاح بعد 3 ثواني
+    success_msg = st.success(f"✅ تم تحميل {len(products)} منتج و {len(offers)} عرض و {len(branches)} فرع بنجاح!")
+    import time
+    time.sleep(2)
+    success_msg.empty()
+    
+    return {
+        "products": products,
+        "offers": offers,
+        "branches": branches,
+        "product_offers_map": po_map,
+        "fetched_at": datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    }
+
+# ✅ دالة التخزين المؤقت بدون شريط تقدم (للاستخدام الداخلي فقط)
+@st.cache_data(ttl=3600, show_spinner=False)
+def get_cached_data_without_spinner():
+    """جلب البيانات مع التخزين المؤقت (بدون عرض شريط تقدم)"""
+    # هذه الدالة تستخدم فقط للتحقق من وجود بيانات في الكاش
+    # ولا تعرض أي مؤشرات تحميل
+    headers = get_headers()
+    if not headers:
+        return None
+    
+    # جلب سريع للبيانات (بدون شريط تقدم)
+    products = []
+    page = 1
+    while True:
+        res = safe_api_request("GET", f"https://api.salla.dev/admin/v2/products?per_page=100&page={page}", headers)
+        if not res or not res.get("data"):
+            break
+        products.extend(res["data"])
+        if page >= res.get("pagination", {}).get("totalPages", 1):
+            break
+        page += 1
+    
     offers = []
     page = 1
     while True:
-        res = safe_api_request("GET", f"https://api.salla.dev/admin/v2/specialoffers?per_page=60&page={page}", headers)
+        res = safe_api_request("GET", f"https://api.salla.dev/admin/v2/specialoffers?per_page=100&page={page}", headers)
         if not res or not res.get("data"):
             break
         offers.extend(res["data"])
         if page >= res.get("pagination", {}).get("totalPages", 1):
             break
         page += 1
-    return offers
-
-def load_all_data():
-    """تحميل جميع البيانات"""
-    headers = get_headers()
-    if not headers:
-        return None
     
-    products = fetch_products(headers)
-    offers = fetch_offers(headers)
     branches = get_branches_list()
+    
+    # بناء روابط العروض
+    po_map = {}
+    for o in offers:
+        if o.get("status") != "active": continue
+        oid = o.get("id")
+        full_o = safe_api_request("GET", f"https://api.salla.dev/admin/v2/specialoffers/{oid}", headers)
+        if full_o and full_o.get("data"):
+            pids = set()
+            for px in full_o["data"].get("buy", {}).get("products", []):
+                pid = str(px.get("id", px) if isinstance(px, dict) else px)
+                if pid.isdigit(): pids.add(pid)
+            for px in full_o["data"].get("get", {}).get("products", []):
+                pid = str(px.get("id", px) if isinstance(px, dict) else px)
+                if pid.isdigit(): pids.add(pid)
+            for pid in pids:
+                if pid not in po_map: po_map[pid] = []
+                po_map[pid].append({"id": oid, "name": o.get("name")})
     
     return {
         "products": products,
         "offers": offers,
         "branches": branches,
+        "product_offers_map": po_map,
         "fetched_at": datetime.now().strftime("%Y-%m-%d %H:%M:%S")
     }
 
-@st.cache_resource(ttl=3600)
-def get_cached_data():
-    """جلب البيانات مع التخزين المؤقت"""
-    return load_all_data()
-
 def preload_data():
-    """تحميل البيانات مسبقاً مع تجنب ظهور رسائل الكاش"""
+    """تحميل البيانات مسبقاً مع شريط تقدم في حالة عدم وجود كاش"""
     if st.session_state.get("all_products_fetched", False):
         return True
     
-    # ✅ استخدام st.cache_data بدلاً من st.cache_resource لتجنب ظهور الرسائل
-    @st.cache_data(ttl=3600, show_spinner=False)  # show_spinner=False يخفي رسالة الكاش
-    def fetch_cached_data():
-        headers = get_headers()
-        if not headers:
-            return None
-        
-        # جلب المنتجات
-        products = []
-        page = 1
-        while True:
-            res = safe_api_request("GET", f"https://api.salla.dev/admin/v2/products?per_page=100&page={page}", headers)
-            if not res or not res.get("data"):
-                break
-            products.extend(res["data"])
-            if page >= res.get("pagination", {}).get("totalPages", 1):
-                break
-            page += 1
-        
-        # جلب العروض
-        offers = []
-        page = 1
-        while True:
-            res = safe_api_request("GET", f"https://api.salla.dev/admin/v2/specialoffers?per_page=100&page={page}", headers)
-            if not res or not res.get("data"):
-                break
-            offers.extend(res["data"])
-            if page >= res.get("pagination", {}).get("totalPages", 1):
-                break
-            page += 1
-        
-        # جلب الفروع
-        branches = get_branches_list()
-        
-        return {
-            "products": products,
-            "offers": offers,
-            "branches": branches,
-            "fetched_at": datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-        }
+    # ✅ أولاً: التحقق من وجود بيانات في الكاش (بدون عرض شريط تقدم)
+    cached_data = get_cached_data_without_spinner()
     
-    data = fetch_cached_data()
-    if data:
-        st.session_state["all_products"] = data["products"]
-        st.session_state["all_offers"] = data["offers"]
-        st.session_state["branches"] = data["branches"]
+    if cached_data:
+        # ✅ البيانات موجودة في الكاش، استخدمها مباشرة
+        st.session_state["all_products"] = cached_data["products"]
+        st.session_state["all_offers"] = cached_data["offers"]
+        st.session_state["branches"] = cached_data["branches"]
+        st.session_state["product_offers_map"] = cached_data["product_offers_map"]
         st.session_state["all_products_fetched"] = True
-        st.session_state["last_sync_time"] = data["fetched_at"]
+        st.session_state["last_sync_time"] = cached_data["fetched_at"]
         return True
+    else:
+        # ✅ لا يوجد كاش، قم بتحميل البيانات مع شريط تقدم
+        data = load_all_data_with_progress()
+        if data:
+            st.session_state["all_products"] = data["products"]
+            st.session_state["all_offers"] = data["offers"]
+            st.session_state["branches"] = data["branches"]
+            st.session_state["product_offers_map"] = data["product_offers_map"]
+            st.session_state["all_products_fetched"] = True
+            st.session_state["last_sync_time"] = data["fetched_at"]
+            return True
     return False
     
 def initialize_global_products():
@@ -159,7 +255,7 @@ def perform_global_sync():
         return
     
     if st.session_state.get("all_products_fetched", False):
-        return  # تم التحميل مسبقاً
+        return
     
     with st.spinner("⏳ جاري التحميل الأولي للمنتجات والعروض..."):
         # جلب المنتجات
@@ -227,20 +323,19 @@ def fetch_all_pages(url_base, headers):
     return all_data
     
 # ==============================================================================================
-# CSS الاحترافي الحاسم لعزل خط كايرو عن عناصر الرموز والـ Ligatures (expand_more و arrow_down)
-# وتصميم القائمة الجانبية المائلة الديناميكية
+# CSS الاحترافي الحاسم لعزل خط كايرو عن عناصر الرموز والـ Ligatures
 # ==============================================================================================
 st.markdown("""
     <style>
     @import url('https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700&display=swap');
     
-    /* تطبيق خط كايرو بشكل انتقائي دقيق وحماية الأزرار والـ Collapse الافتراضية من التشوه البصري */
+    /* تطبيق خط كايرو بشكل انتقائي دقيق */
     html, body, .stApp, h1, h2, h3, h4, h5, h6, p, label, input, select, textarea,
     div[data-testid="stMarkdownContainer"] p, div.stSelectbox div {
         font-family: 'Cairo', sans-serif !important;
     }
     
-    /* منع وإلغاء تطبيق خط كايرو على أيقونات نظام Streamlit لمنع تداخل نصوصها ورموزها البرمجية */
+    /* منع تطبيق خط كايرو على أيقونات نظام Streamlit */
     .stIcon, [data-testid="stIcon"], [class^="st-"] svg, svg, i,
     span[data-testid="stIconVisibility"], summary svg, button svg,
     [data-base-ui="icon"], [class*="Icon"], summary::after,
@@ -248,7 +343,7 @@ st.markdown("""
         font-family: inherit !important;
     }
     
-    /* تخصيص وصباغة أزرار التعديل والإنشاء وإعدادات التوكن باللون الأخضر الغامق الفاخر والنص الأبيض */
+    /* تخصيص أزرار التعديل */
     div.stButton > button[data-testid="baseButton-primary"] {
         background-color: #0f5132 !important;
         color: #ffffff !important;
@@ -279,22 +374,14 @@ st.markdown("""
     [data-testid="stSidebar"] * { color: #ffffff !important; }
     .stButton button { border-radius: 8px !important; font-weight: 600 !important; }
     
-    /* ========================================================= */
-    /* 🎨 التنسيقات الجديدة للقائمة الجانبية (الأزرار المائلة) */
-    /* ========================================================= */
-    
-    /* إخفاء الدائرة الخاصة بزر الراديو */
+    /* القائمة الجانبية المائلة */
     [data-testid="stSidebar"] div[role="radiogroup"] label > div:first-child {
         display: none !important;
     }
-
-    /* تمديد عرض حاوية النص لتأخذ المساحة كاملة */
     [data-testid="stSidebar"] div[role="radiogroup"] label > div:nth-child(2) {
         width: 100% !important;
         margin: 0 !important;
     }
-
-    /* المستطيل المائل للقائمة الجانبية */
     [data-testid="stSidebar"] div[role="radiogroup"] label {
         background: linear-gradient(135deg, #1E293B 0%, #0F1C2E 100%);
         padding: 14px 15px !important;
@@ -313,8 +400,6 @@ st.markdown("""
         margin-left: auto !important;
         margin-right: auto !important;
     }
-
-    /* تعديل النص داخل الزر لإلغاء الميلان ليكون مقروءاً بشكل مستقيم */
     [data-testid="stSidebar"] div[role="radiogroup"] label div[data-testid="stMarkdownContainer"] {
         transform: skewX(12deg);
         text-align: center;
@@ -329,8 +414,6 @@ st.markdown("""
         margin: 0 !important;
         transition: all 0.3s ease;
     }
-
-    /* الخطوط المائلة الجمالية (في اليسار) */
     [data-testid="stSidebar"] div[role="radiogroup"] label::after {
         content: '';
         position: absolute;
@@ -350,8 +433,6 @@ st.markdown("""
         z-index: 1;
         transition: all 0.3s ease;
     }
-
-    /* تأثير التمرير (Hover) */
     [data-testid="stSidebar"] div[role="radiogroup"] label:hover {
         background: linear-gradient(135deg, #2D3748 0%, #1E293B 100%);
         border-color: #00EBCF;
@@ -360,20 +441,16 @@ st.markdown("""
     [data-testid="stSidebar"] div[role="radiogroup"] label:hover div[data-testid="stMarkdownContainer"] p {
         color: #00EBCF !important;
     }
-
-    /* 🟢 تمييز الزر النشط (المختار) */
     [data-testid="stSidebar"] div[role="radiogroup"] label:has(input:checked) {
         background: linear-gradient(135deg, #00EBCF 0%, #0284C7 100%) !important;
         border-color: #00EBCF !important;
         box-shadow: 0 0 20px rgba(0, 235, 207, 0.4) !important;
         transform: skewX(-12deg) scale(1.06) !important;
     }
-    
     [data-testid="stSidebar"] div[role="radiogroup"] label:has(input:checked) div[data-testid="stMarkdownContainer"] p {
         color: #FFFFFF !important;
         text-shadow: 1px 1px 3px rgba(0,0,0,0.4) !important;
     }
-
     [data-testid="stSidebar"] div[role="radiogroup"] label:has(input:checked)::after {
         background: repeating-linear-gradient(
             45deg,
@@ -384,8 +461,6 @@ st.markdown("""
         );
         border-right: 2px solid rgba(255,255,255,0.4);
     }
-
-    /* أنيميشن الوميض الأخضر لحالة الاتصال */
     .blinking-dot {
         height: 12px;
         width: 12px;
@@ -431,7 +506,7 @@ if not st.session_state["logged_in"]:
                     st.session_state["logged_in"] = True
                     st.session_state["access_token"] = token.strip()
                     
-                    # ✅ تحميل البيانات بعد تسجيل الدخول
+                    # ✅ تحميل البيانات بعد تسجيل الدخول مع شريط تقدم
                     with st.spinner("⏳ جاري تحميل بيانات المتجر..."):
                         preload_data()
                     
@@ -504,7 +579,7 @@ col_refresh1, col_refresh2 = st.sidebar.columns(2)
 with col_refresh1:
     if st.sidebar.button("🔄 تحديث جميع البيانات", type="primary", use_container_width=True):
         # ✅ مسح الكاش وإعادة التحميل
-        st.cache_resource.clear()
+        st.cache_data.clear()
         st.session_state["all_products_fetched"] = False
         with st.spinner("⏳ جاري تحديث البيانات..."):
             preload_data()
@@ -539,11 +614,9 @@ def perform_unified_sync():
     if not headers:
         return
     
-    # ✅ التحقق من عدم وجود مزامنة قيد التنفيذ
     if st.session_state.get("sync_in_progress", False):
         return
     
-    # ✅ التحقق من أن البيانات تم تحميلها مسبقاً
     if st.session_state.get("all_products_fetched", False):
         return
     
@@ -551,7 +624,6 @@ def perform_unified_sync():
     
     with st.spinner("⏳ جاري المزامنة الشاملة للمنتجات والعروض..."):
         try:
-            # 1. جلب المنتجات
             all_p = []
             page = 1
             progress_bar = st.progress(0)
@@ -573,20 +645,13 @@ def perform_unified_sync():
             progress_bar.empty()
             status_text.empty()
             
-            # 2. جلب الفروع
             st.session_state["branches"] = get_branches_list()
-            
-            # 3. جلب التصنيفات
             st.session_state["all_categories"] = fetch_all_pages("https://api.salla.dev/admin/v2/categories", headers)
-            
-            # 4. جلب الماركات
             st.session_state["all_brands"] = fetch_all_pages("https://api.salla.dev/admin/v2/brands", headers)
             
-            # 5. جلب العروض
             all_o = fetch_all_pages(SALLA_API_URL, headers)
             st.session_state["all_offers"] = all_o
             
-            # 6. بناء خريطة العروض مع المنتجات
             po_map = {}
             for o in all_o:
                 if o.get("status") != "active":
@@ -626,20 +691,16 @@ def perform_unified_sync():
 
 def initialize_app():
     """تهيئة البيانات مرة واحدة لجميع الصفحات"""
-    # ✅ التحقق من وجود البيانات
     if st.session_state.get("all_products_fetched", False):
         return
     
-    # ✅ استخدام st.cache_data لتخزين البيانات
-    @st.cache_data(ttl=3600)  # تخزين لمدة ساعة
+    @st.cache_data(ttl=3600, show_spinner=False)
     def fetch_all_store_data():
         headers = get_headers()
         if not headers:
             return None
         
-        # جلب جميع البيانات دفعة واحدة
         with st.spinner("⏳ جاري تحميل جميع بيانات المتجر..."):
-            # جلب المنتجات
             products = []
             page = 1
             while True:
@@ -651,7 +712,6 @@ def initialize_app():
                     break
                 page += 1
             
-            # جلب العروض
             offers = []
             page = 1
             while True:
@@ -663,10 +723,8 @@ def initialize_app():
                     break
                 page += 1
             
-            # جلب الفروع
             branches = get_branches_list()
             
-            # جلب التصنيفات
             categories = []
             page = 1
             while True:
@@ -678,7 +736,6 @@ def initialize_app():
                     break
                 page += 1
             
-            # جلب الماركات
             brands = []
             page = 1
             while True:
@@ -698,7 +755,6 @@ def initialize_app():
                 "brands": brands
             }
     
-    # ✅ جلب البيانات
     data = fetch_all_store_data()
     if data:
         st.session_state["all_products"] = data["products"]
@@ -708,8 +764,6 @@ def initialize_app():
         st.session_state["all_brands"] = data["brands"]
         st.session_state["all_products_fetched"] = True
         st.session_state["last_sync_time"] = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-
-# استدعاء التهيئة في بداية كل صفحة
 
 def get_alert_sound_base64():
     """قراءة ملف الصوت وتحويله إلى base64"""
@@ -721,6 +775,6 @@ def get_alert_sound_base64():
 
 # ✅ بعد نجاح تسجيل الدخول
 if st.session_state.get("logged_in", False):
-    # ✅ تحميل البيانات في الخلفية
+    # ✅ تحميل البيانات في الخلفية مع شريط تقدم
     with st.spinner("⏳ جاري تحميل بيانات المتجر..."):
         preload_data()
