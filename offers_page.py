@@ -171,6 +171,103 @@ def stop_alert_sound():
     return sound_html
 
 # ==========================================
+# 📊 دالة جلب العروض مع تخزين مؤقت (تجنب إعادة التحميل)
+# ==========================================
+@st.cache_data(ttl=300, show_spinner=False)  # تخزين لمدة 5 دقائق
+def fetch_offers_cached(headers, _force_refresh=False):
+    """جلب العروض مع تخزين مؤقت لتجنب إعادة التحميل المتكررة"""
+    return fetch_all_pages(SALLA_API_URL, "جاري سحب العروض من متجرك", headers)
+
+def fetch_all_pages(url_base, loading_text, headers):
+    """جلب جميع الصفحات من API مع شريط تقدم"""
+    all_data = []
+    page = 1
+    total_pages = 1
+    status_text = st.empty()
+    progress_bar = st.progress(0)
+    
+    while True:
+        status_text.info(f"📥 {loading_text} (صفحة {page} من {total_pages if page > 1 else '...'}) | تم تحميل {len(all_data)} عنصر")
+        
+        if "?" not in url_base:
+            url = f"{url_base}?per_page=60&page={page}"
+        else:
+            url = f"{url_base}&per_page=60&page={page}"
+        
+        res = safe_api_request("GET", url, headers)
+        if not res or not res.get("data"):
+            break
+        
+        if page == 1:
+            total_pages = res.get("pagination", {}).get("totalPages", 1)
+        
+        all_data.extend(res["data"])
+        progress_bar.progress(min(page / total_pages, 1.0))
+        
+        if page >= total_pages:
+            break
+        page += 1
+    
+    progress_bar.empty()
+    status_text.empty()
+    return all_data
+
+# ==========================================
+# 🔗 بناء روابط المنتجات بالعروض مع شريط تقدم
+# ==========================================
+def build_product_offers_mapping_with_progress(offers, headers):
+    """بناء خريطة المنتجات بالعروض مع شريط تقدم"""
+    po_map = {}
+    total_offers = len([o for o in offers if o.get("status") == "active"])
+    
+    if total_offers == 0:
+        return po_map
+    
+    progress_bar = st.progress(0)
+    status_text = st.empty()
+    processed = 0
+    
+    for o in offers:
+        if o.get("status") != "active":
+            continue
+        
+        oid = o.get("id")
+        processed += 1
+        progress_bar.progress(processed / total_offers)
+        status_text.info(f"🔄 جاري بناء روابط المنتجات بالعروض: {processed} من {total_offers}")
+        
+        full_o = safe_api_request("GET", f"https://api.salla.dev/admin/v2/specialoffers/{oid}", headers)
+        if full_o and full_o.get("data"):
+            pids = set()
+            for px in full_o["data"].get("buy", {}).get("products", []):
+                pid = str(px.get("id", px) if isinstance(px, dict) else px)
+                if pid.isdigit():
+                    pids.add(pid)
+            for px in full_o["data"].get("get", {}).get("products", []):
+                pid = str(px.get("id", px) if isinstance(px, dict) else px)
+                if pid.isdigit():
+                    pids.add(pid)
+            for pid in pids:
+                if pid not in po_map:
+                    po_map[pid] = []
+                po_map[pid].append({"id": oid, "name": o.get("name")})
+    
+    progress_bar.empty()
+    status_text.empty()
+    return po_map
+
+def ensure_product_offers_mapping(headers):
+    """تحقق ذكي: إذا كانت خريطة العروض فارغة، قم بإنشائها مع شريط تقدم"""
+    if not st.session_state.get("product_offers_map") and st.session_state.get("all_offers"):
+        with st.spinner("🔄 جاري بناء روابط المنتجات بالعروض الخاصة..."):
+            po_map = build_product_offers_mapping_with_progress(
+                st.session_state["all_offers"], 
+                headers
+            )
+            st.session_state["product_offers_map"] = po_map
+            st.rerun()
+            
+# ==========================================
 # ➕ إنشاء عرض جديد
 # ==========================================
 
@@ -459,7 +556,7 @@ def render_offers_page():
     if not headers: return
 
     # ==========================================
-    # 🌟 CSS الأزرار الجانبية
+    # 🌟 CSS الأزرار الجانبية (مع ترتيب صحيح)
     # ==========================================
     st.markdown("""
     <style>
@@ -484,11 +581,14 @@ def render_offers_page():
         div[data-testid="stElementContainer"]:has(span[id^="qa-marker-"]) + div[data-testid="stElementContainer"]:hover {
             right: 0px !important;
         }
+        /* ✅ ترتيب الأزرار من الأعلى إلى الأسفل */
         div[data-testid="stElementContainer"]:has(span[id="qa-marker-1"]) + div[data-testid="stElementContainer"] { top: 120px; }
         div[data-testid="stElementContainer"]:has(span[id="qa-marker-2"]) + div[data-testid="stElementContainer"] { top: 185px; }
         div[data-testid="stElementContainer"]:has(span[id="qa-marker-3"]) + div[data-testid="stElementContainer"] { top: 250px; }
         div[data-testid="stElementContainer"]:has(span[id="qa-marker-4"]) + div[data-testid="stElementContainer"] { top: 315px; }
         div[data-testid="stElementContainer"]:has(span[id="qa-marker-5"]) + div[data-testid="stElementContainer"] { top: 380px; }
+        div[data-testid="stElementContainer"]:has(span[id="qa-marker-6"]) + div[data-testid="stElementContainer"] { top: 445px; }
+        
         div[data-testid="stElementContainer"]:has(span[id^="qa-marker-"]) + div[data-testid="stElementContainer"] button {
             width: 100% !important;
             text-align: right !important;
@@ -606,7 +706,7 @@ def render_offers_page():
     # ==========================================
     # 🌟 دالة السحب الذكية مع شريط التقدم
     # ==========================================
-    def fetch_all_pages(url_base, loading_text="جاري التحميل..."):
+    def fetch_all_pages_local(url_base, loading_text="جاري التحميل..."):
         all_data = []
         page = 1
         total_pages = 1
@@ -639,7 +739,7 @@ def render_offers_page():
         status_text.empty()
         return all_data
     
-    # ✅ تعريف render_dynamic_selection قبل استخدامها
+    # ✅ تعريف render_dynamic_selection
     def render_dynamic_selection(label, selection_type, existing_ids, key_prefix):
         options = {}
         if selection_type == "product":
@@ -676,29 +776,32 @@ def render_offers_page():
     if not st.session_state["all_products"] or not st.session_state["all_categories"] or not st.session_state["all_brands"]:
         with st.spinner("🔄 جاري تهيئة البيانات المساعدة للعروض..."):
             if not st.session_state["all_categories"]: 
-                st.session_state["all_categories"] = fetch_all_pages(
+                st.session_state["all_categories"] = fetch_all_pages_local(
                     "https://api.salla.dev/admin/v2/categories", 
                     "جاري سحب التصنيفات"
                 )
             if not st.session_state["all_brands"]: 
-                st.session_state["all_brands"] = fetch_all_pages(
+                st.session_state["all_brands"] = fetch_all_pages_local(
                     "https://api.salla.dev/admin/v2/brands", 
                     "جاري سحب الماركات التجارية"
                 )
             if not st.session_state["all_products"]: 
-                st.session_state["all_products"] = fetch_all_pages(
+                st.session_state["all_products"] = fetch_all_pages_local(
                     "https://api.salla.dev/admin/v2/products", 
                     "جاري سحب قائمة المنتجات"
                 )
 
-    # ✅ جلب العروض
-    with st.spinner("🔄 جاري جلب كافة العروض الحالية من المتجر..."):
-        raw_offers = fetch_all_pages(SALLA_API_URL, "جاري سحب العروض من متجرك")
-        
+    # ✅ جلب العروض مع تخزين مؤقت (يتم تحميلها مرة واحدة فقط)
+    if "raw_offers" not in st.session_state:
+        with st.spinner("🔄 جاري جلب كافة العروض الحالية من المتجر..."):
+            st.session_state["raw_offers"] = fetch_offers_cached(headers)
+    
+    raw_offers = st.session_state["raw_offers"]
+    
     # ✅ عرض تنبيهات انتهاء العروض (في أعلى الصفحة)
     render_expiry_alerts(raw_offers, headers)
     
-    # ✅ ✅ ✅ إضافة قسم إنشاء عرض جديد (مرة واحدة فقط) ✅ ✅ ✅
+    # ✅ ✅ ✅ إضافة قسم إنشاء عرض جديد
     render_create_offer_section(headers, section_key="main")
     
     # ==========================================
@@ -707,36 +810,24 @@ def render_offers_page():
     if "qa_action" not in st.session_state: 
         st.session_state.qa_action = None
 
-    # ==========================================
-    # ⚡ نظام الإجراءات السريعة الجانبية (متوافق مع الجوال)
-    # ==========================================
-
-    # ✅ CSS محسّن للجوال مع زر ظهور دائم
+    # ✅ CSS محسّن للجوال
     st.markdown("""
     <style>
-        /* ✅ للأجهزة التي تعمل باللمس (جوال/تابلت) */
         @media (pointer: coarse) {
-            /* إظهار الأزرار دائماً على الجوال */
             div[data-testid="stElementContainer"]:has(span[id^="qa-marker-"]) + div[data-testid="stElementContainer"] {
                 right: 0px !important;
                 width: 200px !important;
                 opacity: 0.85 !important;
             }
-        
-            /* تصغير حجم الأزرار على الجوال */
             div[data-testid="stElementContainer"]:has(span[id^="qa-marker-"]) + div[data-testid="stElementContainer"] button {
                 font-size: 12px !important;
                 padding-right: 10px !important;
                 padding: 4px 8px !important;
             }
-        
-            /* إخفاء المؤشر الجانبي */
             div[data-testid="stElementContainer"]:has(span[id^="qa-marker-"]) + div[data-testid="stElementContainer"]::before {
                 display: none !important;
             }
         }
-    
-        /* ✅ للأجهزة التي تعمل بالماوس */
         @media (pointer: fine) {
             div[data-testid="stElementContainer"]:has(span[id^="qa-marker-"]) + div[data-testid="stElementContainer"] {
                 right: -240px !important;
@@ -746,8 +837,6 @@ def render_offers_page():
                 right: 0px !important;
             }
         }
-    
-        /* ✅ إضافة زر توسيع للأزرار على الجوال */
         .mobile-toggle-btn {
             position: fixed;
             right: 0px;
@@ -766,7 +855,6 @@ def render_offers_page():
             box-shadow: -2px 2px 10px rgba(0,0,0,0.3);
             display: none;
         }
-    
         @media (pointer: coarse) {
             .mobile-toggle-btn {
                 display: block !important;
@@ -774,7 +862,6 @@ def render_offers_page():
         }
     </style>
 
-    <!-- ✅ زر جانبي للجوال لفتح الأزرار -->
     <button class="mobile-toggle-btn" onclick="
         var btns = document.querySelectorAll('div[data-testid=\\'stElementContainer\\']:has(span[id^=\\'qa-marker-\\']) + div[data-testid=\\'stElementContainer\\']');
         btns.forEach(function(el) {
@@ -834,13 +921,15 @@ def render_offers_page():
         st.session_state.qa_action = "draft"
         st.rerun()
 
-    # 6. إضافة زر جانبي سادس لإنشاء عرض جديد
+    # 6. عرض جديد (تم نقله إلى الأسفل)
     st.markdown('<span id="qa-marker-6"></span>', unsafe_allow_html=True)
     if st.button("➕ عرض جديد", key="btn_qa_6"):
         st.session_state.qa_action = "create_offer"
         st.rerun()
 
-    # في اللوحات العلوية
+    # ==========================================
+    # ⚡ اللوحات العلوية
+    # ==========================================
     if st.session_state.qa_action == "create_offer":
         with st.container(border=True):
             col_t, col_c = st.columns([5, 1])
@@ -850,12 +939,8 @@ def render_offers_page():
                     st.rerun()
             with col_t:
                 st.markdown("### ➕ إنشاء عرض جديد")
-                # ✅ استخدام section_key مختلف لتجنب تكرار المعرفات
                 render_create_offer_section(headers, section_key="popup")
                 
-    # ==========================================
-    # ⚡ اللوحات العلوية المريحة (تظهر عند النقر على الأزرار السريعة)
-    # ==========================================
     if st.session_state.qa_action in ["end_dates", "start_dates", "draft"]:
         with st.container(border=True):
             col_t, col_c = st.columns([5, 1])
@@ -1034,7 +1119,6 @@ def render_offers_page():
                         try:
                             df_draft = pd.read_excel(uploaded_draft) if uploaded_draft.name.endswith('.xlsx') else pd.read_csv(uploaded_draft)
                             
-                            # ✅ التحقق من وجود الأعمدة المطلوبة
                             required_columns = ['رقم المنتج sku', 'اسم المنتج', 'نوع الخصم']
                             missing_cols = [col for col in required_columns if col not in df_draft.columns]
                             if missing_cols:
@@ -1047,26 +1131,21 @@ def render_offers_page():
                             
                             output_rows = []
                             
-                            # ✅ تحديد عمود التجميع (مرن)
                             if 'هل عرض مجمع؟' in df_draft.columns:
                                 group_col = 'هل عرض مجمع؟'
                             elif 'عرض مجمع' in df_draft.columns:
                                 group_col = 'عرض مجمع'
                             else:
-                                # إذا لم يكن هناك عمود تجميع، اعتبر كل صف عرضاً مستقلاً
                                 group_col = None
                                 st.info("ℹ️ لم يتم العثور على عمود 'هل عرض مجمع؟'، سيتم معاملة كل صف كعرض منفصل.")
                             
-                            # ✅ تحديد عمود اسم العرض
                             if 'اسم العرض' in df_draft.columns:
                                 offer_name_col = 'اسم العرض'
                             else:
                                 offer_name_col = None
                             
                             if group_col and group_col in df_draft.columns:
-                                # ✅ تعبئة القيم الفارغة في عمود التجميع - استخدام Series بدلاً من Index
                                 df_draft[group_col] = df_draft[group_col].fillna('')
-                                # للصفوف الفارغة، استخدم رقم الصف كمعرف فريد
                                 empty_mask = df_draft[group_col] == ''
                                 df_draft.loc[empty_mask, group_col] = df_draft.loc[empty_mask].index.astype(str) + "_single_offer"
                                 
@@ -1078,7 +1157,6 @@ def render_offers_page():
                                     sku_str = "-".join(skus) if skus else "UnknownSKU"
                                     id_str = ",".join(ids)
                                     
-                                    # ✅ استخدام اسم العرض من العمود المخصص أو إنشاؤه تلقائياً
                                     if offer_name_col and offer_name_col in group_df.columns:
                                         offer_msg = str(first_row.get(offer_name_col, ''))
                                     else:
@@ -1152,7 +1230,6 @@ def render_offers_page():
                                     }
                                     output_rows.append(row)
                             else:
-                                # ✅ معالجة كل صف كعرض منفصل
                                 for idx, row in df_draft.iterrows():
                                     sku = str(row.get('رقم المنتج sku', '')).strip()
                                     if not sku:
@@ -1287,26 +1364,23 @@ def render_offers_page():
     st.divider()
 
     # ==========================================
-    # 🔍 الفلاتر الخاصة بالعروض (المصححة)
+    # 🔍 الفلاتر الخاصة بالعروض
     # ==========================================
     with st.container(border=True):
         st.markdown("<div style='background: #0F1C2E; color: white; padding: 10px; border-radius: 8px; text-align: center; font-weight: bold;'>🔍 أدوات التصفية والبحث المتقدمة</div>", unsafe_allow_html=True)
     
-        # ✅ صف البحث والحالة
         col_search, col_status = st.columns([2, 1])
         with col_search:
             search_offer = st.text_input("🔎 ابحث باسم العرض أو بالمعرف:", key="filter_search_input")
         with col_status:
             status_filter = st.selectbox("📌 حالة العرض:", ["الكل", "نشط", "غير نشط"], key="filter_status_select")
     
-        # ✅ صف التاريخ والتداخل
         col_date1, col_date2 = st.columns(2)
         with col_date1:
             filter_date = st.date_input("📅 تاريخ الانتهاء:", value=None, key="filter_date_input")
         with col_date2:
             filter_overlap = st.checkbox("🔄 فحص التداخل (منتجات مكررة)", key="f_overlap")
     
-        # ✅ صف الفلاتر الإضافية (نوع العرض، قناة النشر، تطبيق على)
         col_f1, col_f2, col_f3 = st.columns(3)
         with col_f1:
             type_filter = st.selectbox("📊 نوع العرض:", ["الكل"] + list(OFFER_TYPES_MAP.values()), key="type_filter")
@@ -1315,7 +1389,7 @@ def render_offers_page():
         with col_f3:
             applied_filter = st.selectbox("🎯 تطبيق على:", ["الكل"] + list(APPLIED_TO_MAP.values()), key="applied_filter")
 
-    # ✅ تحليل التداخل (إذا تم تفعيله)
+    # ✅ تحليل التداخل
     now_ksa = datetime.now() + timedelta(hours=3)
     overlapping_offer_ids = set()
 
@@ -1345,7 +1419,7 @@ def render_offers_page():
             else: 
                 st.warning(f"⚠️ تم العثور على {len(overlapping_offer_ids)} عرض متداخل.")
 
-    # ✅ تطبيق جميع الفلاتر في مكان واحد (بدون تكرار)
+    # ✅ تطبيق جميع الفلاتر
     filtered_offers = []
     for offer in raw_offers:
         offer_id = offer.get('id', 'N/A')
@@ -1354,38 +1428,31 @@ def render_offers_page():
         start_date = safe_parse_date(offer.get('start_date'))
         exp_date = safe_parse_date(offer.get('expiry_date'))
     
-        # ✅ فلتر البحث بالاسم
         if search_offer:
             if search_offer.lower() not in offer_name.lower() and search_offer not in str(offer_id): 
                 continue
     
-        # ✅ فلتر الحالة
         if status_filter == "نشط" and status != "active": 
             continue
         if status_filter == "غير نشط" and status == "active": 
             continue
     
-        # ✅ فلتر التاريخ
         if filter_date and (not exp_date or exp_date.date() != filter_date): 
             continue
     
-        # ✅ فلتر التداخل
         if filter_overlap and offer_id not in overlapping_offer_ids: 
             continue
     
-        # ✅ فلتر نوع العرض
         if type_filter != "الكل":
             offer_type_ar = OFFER_TYPES_MAP.get(offer.get('offer_type', ''), '')
             if offer_type_ar != type_filter:
                 continue
     
-        # ✅ فلتر قناة النشر
         if channel_filter != "الكل":
             channel_ar = CHANNELS_MAP.get(offer.get('applied_channel', ''), '')
             if channel_ar != channel_filter:
                 continue
     
-        # ✅ فلتر "تطبيق على"
         if applied_filter != "الكل":
             applied_ar = APPLIED_TO_MAP.get(offer.get('applied_to', ''), '')
             if applied_ar != applied_filter:
@@ -1393,13 +1460,12 @@ def render_offers_page():
     
         filtered_offers.append(offer)
 
-    # ✅ تخزين النتائج في session_state
     st.session_state["filtered_offers"] = filtered_offers
 
     # ✅ عرض عدد النتائج
     st.markdown(f"<div style='background: #f0f4f8; padding: 8px 16px; border-radius: 8px; margin-bottom: 14px; border-right: 4px solid #00b4d8;'><strong>📊 عدد العروض المطابقة للبحث: {len(filtered_offers)} عرض</strong></div>", unsafe_allow_html=True)
 
-    # ✅ زر تحميل الملفات المفلترة (إذا كانت أقل من الكل)
+    # ✅ زر تحميل الملفات المفلترة
     if filtered_offers and len(filtered_offers) < len(raw_offers):
         st.download_button(
             "📥 تحميل العروض المفلترة", 
@@ -1415,7 +1481,6 @@ def render_offers_page():
     # 📄 عرض بطاقات العروض مع ترقيم الصفحات
     # ==========================================
     
-    # ✅ ترقيم الصفحات
     items_per_page = 10
     total_pages = max(1, (len(filtered_offers) + items_per_page - 1) // items_per_page)
     
@@ -1429,9 +1494,7 @@ def render_offers_page():
     end_idx = start_idx + items_per_page
     displayed_offers = filtered_offers[start_idx:end_idx]
     
-    # ✅ أزرار التنقل (في الأعلى والأسفل) - مع مفاتيح فريدة
     def render_pagination_top():
-        """عرض أزرار التنقل بين الصفحات في الأعلى"""
         col_prev, col_page, col_next = st.columns([1, 2, 1])
         with col_prev:
             if st.button("⬅️ السابق", disabled=st.session_state["offers_page"] == 1, use_container_width=True, key="offers_prev_top"):
@@ -1445,7 +1508,6 @@ def render_offers_page():
                 st.rerun()
 
     def render_pagination_bottom():
-        """عرض أزرار التنقل بين الصفحات في الأسفل"""
         col_prev, col_page, col_next = st.columns([1, 2, 1])
         with col_prev:
             if st.button("⬅️ السابق", disabled=st.session_state["offers_page"] == 1, use_container_width=True, key="offers_prev_bottom"):
@@ -1498,7 +1560,6 @@ def render_offers_page():
         elif exp_date and exp_date < now_ksa: exp_badge = "⚠️ منتهي الصلاحية"
         else: exp_badge = "⏳ ساري الصلاحية"
         
-        # ✅ Fixed: Properly escaped quotes in the HTML string
         st.markdown(f"""
         <div style="background: linear-gradient(135deg, #0f1c2e 0%, #1a365d 100%); padding: 14px 20px; border-radius: 12px 12px 0px 0px; margin-top: 25px; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 10px; border-bottom: 3px solid #00b4d8;">
             <span style="color: #ffffff; font-weight: bold; font-size: 16px;">🎯 {offer_name} (ID: {offer_id})</span>
@@ -1597,17 +1658,21 @@ def render_offers_page():
             lbl = "🛑 إيقاف العرض" if status == "active" else "▶️ إعادة تفعيل العرض"
             if st.button(lbl, key=f"t_st_{offer_id}_{idx}", use_container_width=True):
                 safe_api_request("PUT", f"{SALLA_API_URL}/{offer_id}/status", headers, json={"status": t_status})
+                # ✅ مسح الكاش بعد التحديث
+                st.cache_data.clear()
                 st.rerun()
         with b2:
             if st.button("🔖 عكس تطبيق العرض مع الكوبون ⏯", key=f"t_cp_{offer_id}_{idx}", use_container_width=True):
                 safe_api_request("PUT", f"{SALLA_API_URL}/{offer_id}", headers, json={"applied_with_coupon": not offer_data.get('applied_with_coupon', False)})
+                st.cache_data.clear()
                 st.rerun()
         with b3:
             if st.button("🗑️ حذف العرض بالكامل", key=f"t_dl_{offer_id}_{idx}", use_container_width=True, type="primary"):
                 safe_api_request("DELETE", f"{SALLA_API_URL}/{offer_id}", headers)
+                st.cache_data.clear()
                 st.rerun()
 
-        # --- حاوية التعديل المتقدمة (ديناميكية) ---
+        # --- حاوية التعديل المتقدمة ---
         with st.expander("✏️ تعديل ومراجعة العرض الترويجي", expanded=False):
             ed_name = st.text_input("إسم العرض:", value=offer_name, key=f"ed_n_{offer_id}_{idx}")
             ed_msg = st.text_input("رسالة العرض:", value=offer_data.get('message', ''), key=f"ed_m_{offer_id}_{idx}")
@@ -1694,11 +1759,11 @@ def render_offers_page():
                     if ed_disc_amt > 0: update_payload["get"]["discount_amount"] = float(ed_disc_amt)
                     if safe_api_request("PUT", f"{SALLA_API_URL}/{offer_id}", headers, json=update_payload):
                         st.success("تم التحديث!")
+                        st.cache_data.clear()
                         st.rerun()
                 except Exception as e: st.error(f"خطأ: {str(e)}")
         st.markdown("</div>", unsafe_allow_html=True)
     
-    # ✅ ترقيق الصفحات في الأسفل
     st.markdown("---")
     render_pagination_bottom()
     st.markdown("---")
@@ -1725,11 +1790,9 @@ def rebuild_offer_payload(existing_data, overrides=None):
         "get": existing_data.get('get', {"type": "product", "quantity": 1, "discount_type": "percentage"})
     }
     
-    # إضافة customer_groups إذا وجدت
     if existing_data.get('customer_groups'):
         payload["customer_groups"] = existing_data.get('customer_groups')
     
-    # تحديث الحقول المطلوبة
     for key, value in overrides.items():
         if key == "expiry_date":
             payload["expiry_date"] = value
