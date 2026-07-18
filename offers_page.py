@@ -216,42 +216,38 @@ def fetch_all_pages(url_base, loading_text, headers):
 # ==========================================
 # 🔗 بناء روابط المنتجات بالعروض مع شريط تقدم
 # ==========================================
-def build_product_offers_mapping_with_progress(offers, headers):
-    """بناء خريطة المنتجات بالعروض مع شريط تقدم"""
+def build_product_offers_map_with_progress(offers, headers):
+    """بناء خريطة المنتجات بالعروض مع شريط تقدم وآلية حماية من الحظر"""
     po_map = {}
-    total_offers = len([o for o in offers if o.get("status") == "active"])
+    active_offers = [o for o in offers if o.get("status") == "active"]
     
-    if total_offers == 0:
+    if not active_offers:
         return po_map
     
     progress_bar = st.progress(0)
     status_text = st.empty()
-    processed = 0
+    total = len(active_offers)
     
-    for o in offers:
-        if o.get("status") != "active":
-            continue
-        
+    for idx, o in enumerate(active_offers):
+        status_text.info(f"🔗 جاري بناء روابط المنتجات بالعروض: {idx + 1} من {total}")
         oid = o.get("id")
-        processed += 1
-        progress_bar.progress(processed / total_offers)
-        status_text.info(f"🔄 جاري بناء روابط المنتجات بالعروض: {processed} من {total_offers}")
-        
         full_o = safe_api_request("GET", f"https://api.salla.dev/admin/v2/specialoffers/{oid}", headers)
+        
         if full_o and full_o.get("data"):
             pids = set()
             for px in full_o["data"].get("buy", {}).get("products", []):
                 pid = str(px.get("id", px) if isinstance(px, dict) else px)
-                if pid.isdigit():
-                    pids.add(pid)
+                if pid.isdigit(): pids.add(pid)
             for px in full_o["data"].get("get", {}).get("products", []):
                 pid = str(px.get("id", px) if isinstance(px, dict) else px)
-                if pid.isdigit():
-                    pids.add(pid)
+                if pid.isdigit(): pids.add(pid)
             for pid in pids:
                 if pid not in po_map:
                     po_map[pid] = []
                 po_map[pid].append({"id": oid, "name": o.get("name")})
+                
+        time.sleep(0.2) # ⏳ حماية من حظر سيرفرات سلة (Rate Limit)
+        progress_bar.progress((idx + 1) / total)
     
     progress_bar.empty()
     status_text.empty()
