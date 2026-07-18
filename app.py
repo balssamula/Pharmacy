@@ -84,11 +84,52 @@ def get_cached_data():
     return load_all_data()
 
 def preload_data():
-    """تحميل البيانات مسبقاً"""
+    """تحميل البيانات مسبقاً مع تجنب ظهور رسائل الكاش"""
     if st.session_state.get("all_products_fetched", False):
         return True
     
-    data = get_cached_data()
+    # ✅ استخدام st.cache_data بدلاً من st.cache_resource لتجنب ظهور الرسائل
+    @st.cache_data(ttl=3600, show_spinner=False)  # show_spinner=False يخفي رسالة الكاش
+    def fetch_cached_data():
+        headers = get_headers()
+        if not headers:
+            return None
+        
+        # جلب المنتجات
+        products = []
+        page = 1
+        while True:
+            res = safe_api_request("GET", f"https://api.salla.dev/admin/v2/products?per_page=100&page={page}", headers)
+            if not res or not res.get("data"):
+                break
+            products.extend(res["data"])
+            if page >= res.get("pagination", {}).get("totalPages", 1):
+                break
+            page += 1
+        
+        # جلب العروض
+        offers = []
+        page = 1
+        while True:
+            res = safe_api_request("GET", f"https://api.salla.dev/admin/v2/specialoffers?per_page=100&page={page}", headers)
+            if not res or not res.get("data"):
+                break
+            offers.extend(res["data"])
+            if page >= res.get("pagination", {}).get("totalPages", 1):
+                break
+            page += 1
+        
+        # جلب الفروع
+        branches = get_branches_list()
+        
+        return {
+            "products": products,
+            "offers": offers,
+            "branches": branches,
+            "fetched_at": datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        }
+    
+    data = fetch_cached_data()
     if data:
         st.session_state["all_products"] = data["products"]
         st.session_state["all_offers"] = data["offers"]
