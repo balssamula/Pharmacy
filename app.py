@@ -2,6 +2,7 @@ import streamlit as st
 import os
 import base64
 import requests
+import time
 from datetime import datetime, timedelta
 # ✅ استيراد الدوال من utils
 from utils import (
@@ -153,58 +154,51 @@ def load_all_data_with_progress():
 # ==========================================
 
 @st.cache_data(ttl=3600, show_spinner=False)
-def get_cached_data_without_spinner():
-    """جلب البيانات مع التخزين المؤقت (بدون عرض شريط تقدم)"""
-    headers = get_headers()
-    if not headers:
-        return None
+def get_cached_data_without_spinner(token):
+    """جلب البيانات مع التخزين المؤقت بناءً على التوكن الخاص بالمتجر"""
+    headers = {"Authorization": f"Bearer {token}", "Content-Type": "application/json"}
     
-    # جلب سريع للبيانات
+    # جلب المنتجات
     products = []
     page = 1
     while True:
         res = safe_api_request("GET", f"https://api.salla.dev/admin/v2/products?per_page=100&page={page}", headers)
-        if not res or not res.get("data"):
-            break
+        if not res or not res.get("data"): break
         products.extend(res["data"])
-        if page >= res.get("pagination", {}).get("totalPages", 1):
-            break
+        if page >= res.get("pagination", {}).get("totalPages", 1): break
         page += 1
     
+    # جلب العروض
     offers = []
     page = 1
     while True:
         res = safe_api_request("GET", f"https://api.salla.dev/admin/v2/specialoffers?per_page=100&page={page}", headers)
-        if not res or not res.get("data"):
-            break
+        if not res or not res.get("data"): break
         offers.extend(res["data"])
-        if page >= res.get("pagination", {}).get("totalPages", 1):
-            break
+        if page >= res.get("pagination", {}).get("totalPages", 1): break
         page += 1
     
     branches = get_branches_list()
     
-    # ✅ بناء خريطة العروض
+    # بناء خريطة العروض مع تأخير زمني لمنع حظر API (Rate Limit 429)
     po_map = {}
     for o in offers:
-        if o.get("status") != "active":
-            continue
+        if o.get("status") != "active": continue
         oid = o.get("id")
         full_o = safe_api_request("GET", f"https://api.salla.dev/admin/v2/specialoffers/{oid}", headers)
         if full_o and full_o.get("data"):
             pids = set()
             for px in full_o["data"].get("buy", {}).get("products", []):
                 pid = str(px.get("id", px) if isinstance(px, dict) else px)
-                if pid.isdigit():
-                    pids.add(pid)
+                if pid.isdigit(): pids.add(pid)
             for px in full_o["data"].get("get", {}).get("products", []):
                 pid = str(px.get("id", px) if isinstance(px, dict) else px)
-                if pid.isdigit():
-                    pids.add(pid)
+                if pid.isdigit(): pids.add(pid)
             for pid in pids:
-                if pid not in po_map:
-                    po_map[pid] = []
+                if pid not in po_map: po_map[pid] = []
                 po_map[pid].append({"id": oid, "name": o.get("name")})
+        
+        time.sleep(0.2) # ⏳ تأخير زمني ضروري لمنع الحظر
     
     return {
         "products": products,
@@ -223,11 +217,11 @@ def preload_data():
     if st.session_state.get("all_products_fetched", False):
         return True
     
-    # ✅ أولاً: التحقق من وجود بيانات في الكاش
-    cached_data = get_cached_data_without_spinner()
+    token = st.session_state.get("access_token", "")
+    # تمرير التوكن للدالة لضمان فصل الكاش لكل متجر
+    cached_data = get_cached_data_without_spinner(token)
     
     if cached_data:
-        # ✅ البيانات موجودة في الكاش، استخدمها مباشرة
         st.session_state["all_products"] = cached_data["products"]
         st.session_state["all_offers"] = cached_data["offers"]
         st.session_state["branches"] = cached_data["branches"]
@@ -236,7 +230,6 @@ def preload_data():
         st.session_state["last_sync_time"] = cached_data["fetched_at"]
         return True
     else:
-        # ✅ لا يوجد كاش، قم بتحميل البيانات مع شريط تقدم
         data = load_all_data_with_progress()
         if data:
             st.session_state["all_products"] = data["products"]
@@ -499,9 +492,9 @@ if not st.session_state["logged_in"]:
                     st.session_state["logged_in"] = True
                     st.session_state["access_token"] = token.strip()
                     
-                    # ✅ تحميل البيانات بعد تسجيل الدخول
+                    # تحميل البيانات بعد تسجيل الدخول
                     preload_data()
-                    
+                    time.sleep(1.5) # ⏳ إعطاء فرصة للعميل لرؤية نجاح العملية
                     st.rerun()
             else:
                 st.error("❌ عذراً، تأكد من صحة البيانات والتوكن المرفق!")
