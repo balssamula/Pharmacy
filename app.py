@@ -35,19 +35,25 @@ def fetch_products_with_progress(headers):
     if not res: return []
     total_pages = res.get("pagination", {}).get("totalPages", 1)
     
-    progress_bar = st.progress(0)
-    status_text = st.empty()
+    # ✅ استخدام columns لتقسيم العرض
+    col1, col2 = st.columns([3, 1])
+    with col1:
+        progress_bar = st.progress(0)
+    with col2:
+        counter_text = st.empty()
     
     while page <= total_pages:
-        status_text.info(f"📦 جاري سحب المنتجات: صفحة {page} من {total_pages} | تم تحميل {len(products)} عنصر")
+        counter_text.info(f"{len(products)}")
+        with col1:
+            progress_bar.progress(page / total_pages)
+        page += 1
         res = safe_api_request("GET", f"https://api.salla.dev/admin/v2/products?per_page=60&page={page}", headers)
         if res and res.get("data"):
             products.extend(res["data"])
-        progress_bar.progress(page / total_pages)
-        page += 1
+        counter_text.info(f"📦 {len(products)} منتج")
         
     progress_bar.empty()
-    status_text.empty()
+    counter_text.empty()
     return products
 
 def fetch_offers_with_progress(headers):
@@ -75,7 +81,7 @@ def fetch_offers_with_progress(headers):
     status_text.empty()
     return offers
 
-def build_product_offers_map_with_progress(offers, headers):
+def build_product_offers_map_with_progress(offers, headers, status_text=None):
     """بناء خريطة المنتجات بالعروض مع شريط تقدم"""
     po_map = {}
     active_offers = [o for o in offers if o.get("status") == "active"]
@@ -84,11 +90,11 @@ def build_product_offers_map_with_progress(offers, headers):
         return po_map
     
     progress_bar = st.progress(0)
-    status_text = st.empty()
     total = len(active_offers)
     
     for idx, o in enumerate(active_offers):
-        status_text.info(f"🔗 جاري بناء روابط المنتجات بالعروض: {idx + 1} من {total}")
+        if status_text:
+            status_text.info(f"🔗 بناء روابط المنتجات بالعروض: {idx + 1} من {total}")
         oid = o.get("id")
         full_o = safe_api_request("GET", f"https://api.salla.dev/admin/v2/specialoffers/{oid}", headers)
         if full_o and full_o.get("data"):
@@ -108,31 +114,71 @@ def build_product_offers_map_with_progress(offers, headers):
         progress_bar.progress((idx + 1) / total)
     
     progress_bar.empty()
-    status_text.empty()
     return po_map
 
 def load_all_data_with_progress():
-    """تحميل جميع البيانات مع شريط تقدم"""
+    """تحميل جميع البيانات مع شريط تقدم - يتم عرضها فوراً"""
     headers = get_headers()
     if not headers:
         return None
     
+    # ✅ عرض عنوان التحميل
     st.markdown("### ⏳ جاري تحميل بيانات المتجر...")
     
-    # 1. جلب المنتجات
-    products = fetch_products_with_progress(headers)
-    
-    # 2. جلب العروض
-    offers = fetch_offers_with_progress(headers)
-    
-    # 3. جلب الفروع
+    # ✅ عرض شريط تقدم رئيسي
+    main_progress = st.progress(0)
     status_text = st.empty()
+    
+    # 1. جلب المنتجات (0% - 30%)
+    status_text.info("📦 جاري سحب المنتجات...")
+    products = []
+    page = 1
+    res = safe_api_request("GET", "https://api.salla.dev/admin/v2/products?per_page=60&page=1", headers)
+    if res:
+        total_pages = res.get("pagination", {}).get("totalPages", 1)
+        while page <= total_pages:
+            status_text.info(f"📦 جاري سحب المنتجات: صفحة {page} من {total_pages} | تم تحميل {len(products)} عنصر")
+            res = safe_api_request("GET", f"https://api.salla.dev/admin/v2/products?per_page=60&page={page}", headers)
+            if res and res.get("data"):
+                products.extend(res["data"])
+            main_progress.progress(0.3 * (page / total_pages))
+            page += 1
+    
+    main_progress.progress(0.30)
+    
+    # 2. جلب العروض (30% - 60%)
+    status_text.info("🎁 جاري سحب العروض...")
+    offers = []
+    page = 1
+    total_pages = 1
+    while True:
+        status_text.info(f"🎁 جاري سحب العروض: صفحة {page} من {total_pages if page > 1 else '...'} | تم تحميل {len(offers)} عرض")
+        res = safe_api_request("GET", f"https://api.salla.dev/admin/v2/specialoffers?per_page=60&page={page}", headers)
+        if not res or not res.get("data"):
+            break
+        if page == 1:
+            total_pages = res.get("pagination", {}).get("totalPages", 1)
+        offers.extend(res["data"])
+        main_progress.progress(0.30 + 0.30 * (page / total_pages))
+        if page >= total_pages:
+            break
+        page += 1
+    
+    main_progress.progress(0.60)
+    
+    # 3. جلب الفروع (60% - 70%)
     status_text.info("🏢 جاري سحب الفروع...")
     branches = get_branches_list()
-    status_text.empty()
+    main_progress.progress(0.70)
     
-    # 4. بناء روابط المنتجات بالعروض
-    po_map = build_product_offers_map_with_progress(offers, headers)
+    # 4. بناء روابط المنتجات بالعروض (70% - 100%)
+    status_text.info("🔗 جاري بناء روابط المنتجات بالعروض الخاصة...")
+    po_map = build_product_offers_map_with_progress(offers, headers, status_text)
+    main_progress.progress(1.0)
+    
+    # ✅ إخفاء مؤشرات التقدم
+    status_text.empty()
+    main_progress.empty()
     
     # ✅ عرض رسالة نجاح مؤقتة
     success_msg = st.success(f"✅ تم تحميل {len(products)} منتج و {len(offers)} عرض و {len(branches)} فرع بنجاح!")
@@ -215,15 +261,18 @@ def get_cached_data_without_spinner():
     }
 
 # ==========================================
-# 🚀 دوال التحميل والتهيئة
+# 🚀 دوال التحميل والتهيئة - المُصححة
 # ==========================================
 
 def preload_data():
-    """تحميل البيانات مسبقاً مع شريط تقدم في حالة عدم وجود كاش"""
+    """
+    تحميل البيانات - تعرض شريط تقدم فوراً في حالة عدم وجود كاش
+    """
+    # ✅ التحقق من وجود البيانات مسبقاً
     if st.session_state.get("all_products_fetched", False):
         return True
     
-    # ✅ أولاً: التحقق من وجود بيانات في الكاش
+    # ✅ التحقق من وجود كاش
     cached_data = get_cached_data_without_spinner()
     
     if cached_data:
@@ -235,17 +284,18 @@ def preload_data():
         st.session_state["all_products_fetched"] = True
         st.session_state["last_sync_time"] = cached_data["fetched_at"]
         return True
-    else:
-        # ✅ لا يوجد كاش، قم بتحميل البيانات مع شريط تقدم
-        data = load_all_data_with_progress()
-        if data:
-            st.session_state["all_products"] = data["products"]
-            st.session_state["all_offers"] = data["offers"]
-            st.session_state["branches"] = data["branches"]
-            st.session_state["product_offers_map"] = data["product_offers_map"]
-            st.session_state["all_products_fetched"] = True
-            st.session_state["last_sync_time"] = data["fetched_at"]
-            return True
+    
+    # ✅ لا يوجد كاش - قم بتحميل البيانات مع شريط تقدم
+    data = load_all_data_with_progress()
+    if data:
+        st.session_state["all_products"] = data["products"]
+        st.session_state["all_offers"] = data["offers"]
+        st.session_state["branches"] = data["branches"]
+        st.session_state["product_offers_map"] = data["product_offers_map"]
+        st.session_state["all_products_fetched"] = True
+        st.session_state["last_sync_time"] = data["fetched_at"]
+        return True
+    
     return False
 
 def initialize_global_products():
@@ -293,14 +343,15 @@ def rebuild_product_offers_mapping():
         st.warning("⚠️ لا توجد عروض محملة. قم بتحديث البيانات أولاً.")
         return
     
-    with st.spinner("🔄 جاري بناء روابط المنتجات بالعروض الخاصة..."):
-        po_map = build_product_offers_map_with_progress(
-            st.session_state.get("all_offers", []), 
-            headers
-        )
-        st.session_state["product_offers_map"] = po_map
-        st.success(f"✅ تم بناء روابط {len(po_map)} منتج بالعروض الخاصة!")
-        st.rerun()
+    status_text = st.empty()
+    po_map = build_product_offers_map_with_progress(
+        st.session_state.get("all_offers", []), 
+        headers,
+        status_text
+    )
+    st.session_state["product_offers_map"] = po_map
+    status_text.success(f"✅ تم بناء روابط {len(po_map)} منتج بالعروض الخاصة!")
+    st.rerun()
 
 # ==========================================
 # 🎨 CSS
@@ -499,17 +550,19 @@ if not st.session_state["logged_in"]:
                     st.session_state["logged_in"] = True
                     st.session_state["access_token"] = token.strip()
                     
-                    # ✅ تحميل البيانات بعد تسجيل الدخول
-                    preload_data()
-                    
-                    st.rerun()
+                    # ✅ ✅ ✅ تحميل البيانات بعد تسجيل الدخول - سيظهر شريط التقدم فوراً
+                    st.rerun()  # إعادة تشغيل الصفحة لعرض شريط التقدم
             else:
                 st.error("❌ عذراً، تأكد من صحة البيانات والتوكن المرفق!")
     st.stop()
 
 # ==========================================
-# 🏠 الواجهة الرئيسية
+# 🏠 الواجهة الرئيسية - يتم عرضها بعد تسجيل الدخول
 # ==========================================
+
+# ✅ بعد تسجيل الدخول، قم بتحميل البيانات مع شريط تقدم
+if st.session_state.get("logged_in", False) and not st.session_state.get("all_products_fetched", False):
+    preload_data()
 
 st.markdown("""
 <div style="background: linear-gradient(135deg, #1E293B 0%, #3B82F6 100%); padding: 25px; border-radius: 12px; color: white; text-align: center; margin-bottom: 20px; box-shadow: 0 4px 6px rgba(0,0,0,0.1);">
@@ -585,8 +638,6 @@ with col_refresh1:
     if st.sidebar.button("🔄 تحديث الكل", type="primary", use_container_width=True):
         st.cache_data.clear()
         st.session_state["all_products_fetched"] = False
-        with st.spinner("⏳ جاري تحديث البيانات..."):
-            preload_data()
         st.rerun()
 
 with col_refresh2:
@@ -688,8 +739,3 @@ def get_alert_sound_base64():
         with open(sound_path, "rb") as f:
             return base64.b64encode(f.read()).decode()
     return None
-
-# ✅ بعد نجاح تسجيل الدخول
-if st.session_state.get("logged_in", False):
-    # ✅ تحميل البيانات في الخلفية
-    preload_data()
