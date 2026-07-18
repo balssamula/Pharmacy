@@ -18,7 +18,67 @@ from utils import (
     update_group_product_quantity
 )
 
-TAX_EXEMPTION_CAUSES = ["الخدمات المالية", "عقد تأمين على الحياة", "التوريدات العقارية المعفاة", "صادرات السلع من المملكة", "صادرات الخدمات من المملكة", "النقل الدولي للسلع", "النقل الدولي للركاب", "توريد وسائل النقل", "الأدوية والمعدات الطبية"]
+TAX_EXEMPTION_CAUSES = [
+    "الخدمات المالية", "عقد تأمين على الحياة", "التوريدات العقارية المعفاة", 
+    "صادرات السلع من المملكة", "صادرات الخدمات من المملكة", "النقل الدولي للسلع", 
+    "النقل الدولي للركاب", "توريد وسائل النقل", "الأدوية والمعدات الطبية"
+]
+
+# ==========================================
+# 🌐 دوال المزامنة والتهيئة
+# ==========================================
+
+def initialize_session():
+    """✅ تهيئة متغيرات الجلسة المشتركة (الحل الجذري لـ KeyError)"""
+    defaults = {
+        "all_products": [], "all_categories": [], "all_brands": [],
+        "all_products_fetched": False, "prod_page": 1, "branches": [],
+        "last_sync_time": None, "qa_action_prod": None
+    }
+    for key, val in defaults.items():
+        if key not in st.session_state:
+            st.session_state[key] = val
+            
+    if "product_offers_map" not in st.session_state:
+        st.session_state["product_offers_map"] = {}
+
+def ensure_product_offers_mapping(headers: Dict[str, str]):
+    """تحقق ذكي: بناء روابط المنتجات بالعروض الخاصة لظهور الشارات فوراً"""
+    if not st.session_state.get("product_offers_map") and st.session_state.get("all_offers"):
+        with st.spinner("🔄 جاري بناء روابط المنتجات بالعروض الخاصة لظهور الشارات..."):
+            po_map = {"ALL_PRODUCTS": []}
+            for o in st.session_state["all_offers"]:
+                if o.get("status") != "active": 
+                    continue
+                oid = str(o.get("id"))
+                full_o = safe_api_request("GET", f"https://api.salla.dev/admin/v2/specialoffers/{oid}", headers)
+                if full_o and full_o.get("data"):
+                    data = full_o["data"]
+                    offer_summary = {"id": oid, "name": data.get("name")}
+                    
+                    if data.get("applied_to") == "all":
+                        po_map["ALL_PRODUCTS"].append(offer_summary)
+                    else:
+                        pids = set()
+                        for px in data.get("buy", {}).get("products", []):
+                            pid = str(px.get("id", px) if isinstance(px, dict) else px)
+                            if pid.isdigit(): pids.add(pid)
+                        for px in data.get("get", {}).get("products", []):
+                            pid = str(px.get("id", px) if isinstance(px, dict) else px)
+                            if pid.isdigit(): pids.add(pid)
+                        for px in data.get("products", []):
+                            pid = str(px.get("id", px) if isinstance(px, dict) else px)
+                            if pid.isdigit(): pids.add(pid)
+                            
+                        for pid in pids:
+                            if pid not in po_map: po_map[pid] = []
+                            po_map[pid].append(offer_summary)
+            st.session_state["product_offers_map"] = po_map
+            st.rerun()
+
+# ==========================================
+# 🎨 رسم بطاقات المنتجات
+# ==========================================
 
 def render_product_card(idx: int, p: Dict, headers: Dict[str, str]):
     try:
@@ -52,11 +112,12 @@ def render_product_card(idx: int, p: Dict, headers: Dict[str, str]):
         type_badge = "<span style='background: linear-gradient(135deg, #6C2BD9 0%, #9B59B6 100%); color: white; padding: 4px 12px; border-radius: 20px; font-size: 11px; font-weight:600;'>📦 مجموعة منتجات</span>" if product_type == 'group_products' else ""
         border_color = "#9B59B6" if product_type == 'group_products' else "#e67e22"
 
-        # ✅ الشارة المحدثة تقرأ من ALL_PRODUCTS
+        # ✅ شارات التمييز (مشمول في العروض)
         po_map = st.session_state.get("product_offers_map", {})
         p_offers_raw = po_map.get(p_id, []) + po_map.get("ALL_PRODUCTS", [])
         unique_offers = {off['id']: off for off in p_offers_raw}.values()
         p_offers = list(unique_offers)
+        
         offer_badge = f"<span style='background: linear-gradient(135deg, #F7971E 0%, #FFD200 100%); color: #1a1a2e; padding: 4px 12px; border-radius: 20px; font-size: 11px; font-weight: 700; border: 1px solid #FFD700; box-shadow: 0 2px 8px rgba(255, 215, 0, 0.4);'>🎁 مشمول في ({len(p_offers)}) عروض</span>" if p_offers else ""
 
         st.markdown(f"""
@@ -78,9 +139,10 @@ def render_product_card(idx: int, p: Dict, headers: Dict[str, str]):
             with c_img:
                 if p_image: st.image(p_image, use_container_width=True)
                 else: st.markdown("<div style='text-align:center; padding:30px; background:#eee; border-radius:8px;'>🚫 بدون صورة</div>", unsafe_allow_html=True)
+                
                 with st.popover("🖼️ تحديث الصورة"):
                     img_url_input = st.text_input("أدخل الرابط المباشر:", key=f"img_url_{p_id}_{idx}")
-                    if img_url_input and st.button("🚀 ربط الصورة عبر الرابط", key=f"btn_link_{p_id}_{idx}", type="primary"):
+                    if img_url_input and st.button("🚀 ربط الصورة", key=f"btn_link_{p_id}_{idx}", type="primary"):
                         if attach_product_image_api(p_id, image_url=img_url_input): st.rerun()
             with c_info:
                 st.markdown(f"🆔 **المعرف:** `{p_id}` | 🔢 **SKU:** `{p_sku}`")
@@ -97,7 +159,7 @@ def render_product_card(idx: int, p: Dict, headers: Dict[str, str]):
                 
                 with st.expander("💰 تحديث الأسعار"):
                     np = st.number_input("أصلي (SAR):", min_value=0.0, value=float(base_price), key=f"np_{p_id}_{idx}")
-                    nsp = st.number_input("مخفض [0 للإلغاء]:", min_value=0.0, value=float(display_sale_price) if has_disc else 0.0, key=f"nsp_{p_id}_{idx}")
+                    nsp = st.number_input("مخفض (SAR) [0 للإلغاء]:", min_value=0.0, value=float(display_sale_price) if has_disc else 0.0, key=f"nsp_{p_id}_{idx}")
                     c_btn1, c_btn2 = st.columns(2)
                     with c_btn1:
                         if st.button("💾 حفظ السعر", key=f"sv_p_{p_id}_{idx}", use_container_width=True, type="primary"):
@@ -114,11 +176,11 @@ def render_product_card(idx: int, p: Dict, headers: Dict[str, str]):
                     if update_product_status(p_id, t_st): st.rerun()
 
                 with st.popover("✏️ تحديث العناوين", use_container_width=True):
-                    n_pr = st.text_input("ترويجي:", value="" if p_promotion=="-" else p_promotion, key=f"npr_{p_id}_{idx}")
-                    n_su = st.text_input("فرعي:", value="" if p_sub_title=="-" else p_sub_title, key=f"nsu_{p_id}_{idx}")
+                    n_pr = st.text_input("ترويجي:", value=p_promotion if p_promotion != "-" else "", key=f"npr_{p_id}_{idx}")
+                    n_su = st.text_input("فرعي:", value=p_sub_title if p_sub_title != "-" else "", key=f"nsu_{p_id}_{idx}")
                     if st.button("💾 حفظ العناوين", key=f"svt_{p_id}_{idx}", type="primary", use_container_width=True):
                         if update_product_promotions_secure(int(p_id), n_pr, n_su, headers): st.rerun()
-
+                        
             st.markdown("</div>", unsafe_allow_html=True)
             
             if product_type == 'group_products':
@@ -138,27 +200,32 @@ def render_product_card(idx: int, p: Dict, headers: Dict[str, str]):
                     if g_prods:
                         for gp_idx, gp in enumerate(g_prods):
                             st.markdown(f"<div style='background: #f8f9fa; border-radius: 10px; padding: 15px; margin-bottom: 12px; border-left: 4px solid #6C2BD9;'><div style='display: flex; gap: 15px;'><div style='flex: 1;'><b>{gp.get('name')}</b><br><span style='font-size: 12px; color: #666;'>🆔 {gp.get('id')} | 🔢 {gp.get('sku')}</span></div></div></div>", unsafe_allow_html=True)
+                            
                             c_q, c_act2 = st.columns(2)
                             with c_q:
-                                new_q = st.number_input("الحبات", min_value=1, value=int(gp.get('bundle_quantity', 1)), key=f"gq_{gp.get('id')}_{idx}_{gp_idx}", label_visibility="collapsed")
+                                new_q = st.number_input("تعديل الحبات بالرقم", min_value=1, value=int(gp.get('bundle_quantity', 1)), key=f"gq_{gp.get('id')}_{idx}_{gp_idx}", label_visibility="collapsed")
                                 if st.button("💾 حفظ الحبات", key=f"gqs_{gp.get('id')}_{idx}_{gp_idx}"):
                                     if update_group_product_quantity(int(p_id), int(gp.get('id')), new_q): st.rerun()
                             with c_act2:
-                                if st.button("🗑️ إزالة", key=f"gqr_{gp.get('id')}_{idx}_{gp_idx}"):
+                                if st.button("🗑️ إزالة من المجموعة", key=f"gqr_{gp.get('id')}_{idx}_{gp_idx}"):
                                     if remove_product_from_group(int(p_id), int(gp.get('id'))): st.rerun()
                             st.markdown("<hr style='margin:10px 0; border:0; border-bottom:1px dashed #ddd;'>", unsafe_allow_html=True)
+                    else:
+                        st.warning("⚠️ المجموعة فارغة. لا توجد منتجات فرعية.")
 
     except Exception as e:
         st.error(f"❌ خطأ أثناء عرض بطاقة المنتج (ID: {p.get('id')}): {str(e)}")
 
 # ==========================================
-# 🚀 4. الدالة الرئيسية (الفلاتر والقائمة المنزلقة)
+# 🚀 الدالة الرئيسية (تشمل الفلاتر واللوحة الجانبية)
 # ==========================================
-
 def render_products_page():
-    if "qa_action_prod" not in st.session_state: st.session_state.qa_action_prod = None
+    initialize_session() # تهيئة الجلسة
     headers = get_headers()
     if not headers: return
+    
+    # بناء الروابط لشارات العروض
+    ensure_product_offers_mapping(headers)
     
     st.markdown("""
     <div style="background: linear-gradient(135deg, #0F1C2E 0%, #00EBCF 100%); padding: 15px 25px; border-radius: 12px; color: white; margin-bottom: 20px; box-shadow: 0 4px 6px rgba(0,0,0,0.1);">
@@ -166,9 +233,7 @@ def render_products_page():
     </div>
     """, unsafe_allow_html=True)
 
-    # ==========================================
-    # 🌟 CSS القائمة الجانبية المنزلقة لصفحة المنتجات
-    # ==========================================
+    # 🌟 CSS اللوحة الجانبية העائمة
     st.markdown("""
     <style>
         div[data-testid="stElementContainer"]:has(span[id^="qa-marker-"]) { display: none !important; margin: 0 !important; padding: 0 !important; }
@@ -191,7 +256,9 @@ def render_products_page():
     </style>
     """, unsafe_allow_html=True)
 
-    # الأزرار الجانبية المخفية
+    # ------------------------------------------
+    # أزرار الإجراءات الجانبية العائمة
+    # ------------------------------------------
     st.markdown('<span id="qa-marker-1"></span>', unsafe_allow_html=True)
     if st.button("🏢 التحكم بالمنتجات والفروع", key="btn_qa_1"):
         st.session_state.qa_action_prod = "products_control"
@@ -218,7 +285,6 @@ def render_products_page():
             
             if st.session_state.qa_action_prod == "products_control":
                 with col_t: st.markdown("### 🏢 التحكم بالمنتجات وكميات الفروع (Excel)")
-                # ... (نفس أكواد الرفع والتنزيل الخاصة بالمنتجات)
                 c_dl1, c_dl2 = st.columns(2)
                 with c_dl1: st.download_button("📥 تنزيل قالب التعديل", data=fill_salla_template(st.session_state["all_products"]), file_name="Update.xlsx", use_container_width=True)
                 with c_dl2: st.download_button("📥 تنزيل القالب الفارغ", data=generate_salla_new_products_file([]), file_name="New.xlsx", use_container_width=True)
@@ -231,7 +297,7 @@ def render_products_page():
                 st.file_uploader("📂 رفع ملف المطابقة", type=["xlsx"])
     
     # ==========================================
-    # 🔍 الفلاتر الأنيقة
+    # 🔍 الفلاتر الأنيقة (تم إخراج st.radio من st.markdown)
     # ==========================================
     st.markdown("### 🔍 أدوات التصفية والبحث في المنتجات")
     with st.container(border=True):
@@ -240,23 +306,23 @@ def render_products_page():
     with st.container(border=True):
         col_f1, col_f2, col_f3, col_f4, col_f5, col_f6 = st.columns(6)
         with col_f1:
-            st.markdown("<div style='text-align:center; color:#00EBCF; font-weight:bold; border-bottom:1px solid #2d3a4a; padding-bottom:5px; margin-bottom:5px;'>📌 الحالة</div>", unsafe_allow_html=True)
-            f_status = st.radio("الحالة", ["الكل", "مخفي", "معروض"], horizontal=True, label_visibility="collapsed")
+            st.markdown("<div style='text-align:center; color:#00EBCF; font-weight:bold;'>📌 الحالة</div>", unsafe_allow_html=True)
+            f_status = st.radio("الحالة", ["الكل", "مخفي", "معروض"], horizontal=True, label_visibility="collapsed", key="f_status_radio")
         with col_f2:
-            st.markdown("<div style='text-align:center; color:#00EBCF; font-weight:bold; border-bottom:1px solid #2d3a4a; padding-bottom:5px; margin-bottom:5px;'>🖼️ الصورة</div>", unsafe_allow_html=True)
-            f_img = st.radio("الصورة", ["الكل", "بصورة", "بدون"], horizontal=True, label_visibility="collapsed")
+            st.markdown("<div style='text-align:center; color:#00EBCF; font-weight:bold;'>🖼️ الصورة</div>", unsafe_allow_html=True)
+            f_img = st.radio("الصورة", ["الكل", "بصورة", "بدون"], horizontal=True, label_visibility="collapsed", key="f_img_radio")
         with col_f3:
-            st.markdown("<div style='text-align:center; color:#00EBCF; font-weight:bold; border-bottom:1px solid #2d3a4a; padding-bottom:5px; margin-bottom:5px;'>📢 العناوين</div>", unsafe_allow_html=True)
-            f_promo = st.radio("العناوين", ["الكل", "لها عنوان", "بدون"], horizontal=True, label_visibility="collapsed")
+            st.markdown("<div style='text-align:center; color:#00EBCF; font-weight:bold;'>📢 العناوين</div>", unsafe_allow_html=True)
+            f_promo = st.radio("العناوين", ["الكل", "لها عنوان", "بدون"], horizontal=True, label_visibility="collapsed", key="f_promo_radio")
         with col_f4:
-            st.markdown("<div style='text-align:center; color:#00EBCF; font-weight:bold; border-bottom:1px solid #2d3a4a; padding-bottom:5px; margin-bottom:5px;'>💰 السعر</div>", unsafe_allow_html=True)
-            f_disc = st.radio("السعر", ["الكل", "مخفض", "ثابت"], horizontal=True, label_visibility="collapsed")
+            st.markdown("<div style='text-align:center; color:#00EBCF; font-weight:bold;'>💰 السعر</div>", unsafe_allow_html=True)
+            f_disc = st.radio("السعر", ["الكل", "مخفض", "ثابت"], horizontal=True, label_visibility="collapsed", key="f_disc_radio")
         with col_f5:
-            st.markdown("<div style='text-align:center; color:#00EBCF; font-weight:bold; border-bottom:1px solid #2d3a4a; padding-bottom:5px; margin-bottom:5px;'>📦 النوع</div>", unsafe_allow_html=True)
-            f_type = st.radio("النوع", ["الكل", "عادية", "مجموعات"], horizontal=True, label_visibility="collapsed")
+            st.markdown("<div style='text-align:center; color:#00EBCF; font-weight:bold;'>📦 النوع</div>", unsafe_allow_html=True)
+            f_type = st.radio("النوع", ["الكل", "عادية", "مجموعات"], horizontal=True, label_visibility="collapsed", key="f_type_radio")
         with col_f6:
-            st.markdown("<div style='text-align:center; color:#00EBCF; font-weight:bold; border-bottom:1px solid #2d3a4a; padding-bottom:5px; margin-bottom:5px;'>🎁 العروض</div>", unsafe_allow_html=True)
-            f_offer = st.radio("العروض", ["الكل", "مشمول", "غير مشمول"], horizontal=True, label_visibility="collapsed")
+            st.markdown("<div style='text-align:center; color:#00EBCF; font-weight:bold;'>🎁 العروض</div>", unsafe_allow_html=True)
+            f_offer = st.radio("العروض", ["الكل", "مشمول", "غير مشمول"], horizontal=True, label_visibility="collapsed", key="f_offer_radio")
 
     filtered = []
     po_map = st.session_state.get("product_offers_map", {})
@@ -297,8 +363,24 @@ def render_products_page():
     # Pagination
     limit = 20
     pages = max(1, (len(filtered) + limit - 1) // limit)
-    if st.session_state["prod_page"] > pages: st.session_state["prod_page"] = pages
+    
+    # ✅ تحديث الجلسة بمتغير الصفحة
+    if "prod_page" not in st.session_state:
+        st.session_state["prod_page"] = 1
+        
+    if st.session_state["prod_page"] > pages: 
+        st.session_state["prod_page"] = pages
+        
     start = (st.session_state["prod_page"] - 1) * limit
+    
+    cp, cc, cn = st.columns([1,2,1])
+    with cp:
+        if st.button("⬅️ السابقة", disabled=st.session_state["prod_page"]==1, use_container_width=True, key="pg_up_prev"): 
+            st.session_state["prod_page"] -= 1; st.rerun()
+    with cc: st.markdown(f"<h4 style='text-align:center;'>📄 صفحة {st.session_state['prod_page']} من {pages}</h4>", unsafe_allow_html=True)
+    with cn:
+        if st.button("التالية ➡️", disabled=st.session_state["prod_page"]==pages, use_container_width=True, key="pg_up_next"): 
+            st.session_state["prod_page"] += 1; st.rerun()
 
     for idx, p in enumerate(filtered[start:start+limit]):
         render_product_card(start + idx, p, headers)
