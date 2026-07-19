@@ -84,7 +84,7 @@ def render_expiry_alerts(raw_offers, headers=None):
             audio_url = "https://assets.mixkit.co/active_storage/sfx/2869/2869-preview.mp3"
             st.markdown(f"""
             <div style="background: rgba(0,0,0,0.3); padding: 10px; border-radius: 8px; text-align: center; margin-bottom: 15px;">
-                <span style='font-size:13px; color:#aaa; margin-bottom:5px;'>💡 سياسة المتصفحات تمنع أحياناً تشغيل الصوت تلقائياً. اضغط (Play) لتفعيل جرس الإنذار:</span><br>
+                <span style='font-size:13px; color:#98ff54; margin-bottom:5px;'>💡 سياسة المتصفحات تمنع أحياناً تشغيل الصوت تلقائياً. اضغط (Play) لتفعيل جرس الإنذار:</span><br>
                 <audio id="alert-sound" controls autoplay loop style="height: 35px; outline: none; margin-top: 8px; border-radius: 20px;">
                     <source src="{audio_url}" type="audio/mp3">
                 </audio>
