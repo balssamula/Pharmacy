@@ -216,7 +216,7 @@ if st.sidebar.button("🔄 إعادة مزامنة البيانات", type="prim
     perform_initial_sync_with_ui({"Authorization": f"Bearer {st.session_state['access_token']}"})
     st.rerun()
 
-if st.sidebar.button("🚪 تسجيل الخروج", use_container_width=True):
+if st.sidebar.button("🚪 تسجيل الخروج", use_container_width=True, type="primary"):
     st.session_state["logged_in"] = False
     st.rerun()
 
