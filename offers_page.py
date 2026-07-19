@@ -78,21 +78,24 @@ def render_expiry_alerts(raw_offers, headers=None):
             }
         </style>
         """, unsafe_allow_html=True)
-        
-        count = len(expiring_soon)
-        st.markdown(f"""
-        <div class="expiry-alert">
-            <h3 style="margin-top:0;">🚨 تنبيه عاجل! هناك <span style='background: white; color: red; padding: 2px 10px; border-radius: 20px;'>{count}</span> عرض انتهى أو سينتهي قريباً!</h3>
-        """, unsafe_allow_html=True)
-        
+
+        # ✅ المشغل الصوتي المرئي لحل مشكلة الحظر الأمني للمتصفحات
         if st.session_state["sound_playing"]:
             audio_url = "https://assets.mixkit.co/active_storage/sfx/2869/2869-preview.mp3"
             st.markdown(f"""
-            <p style='font-size:13px; color:#aaa; margin-bottom:5px;'>سياسة المتصفحات تمنع الصوت التلقائي، اضغط (Play) لتفعيل الإنذار:</p>
-            <audio controls loop style="height: 35px; outline: none; border-radius: 20px; margin-bottom: 15px;">
-                <source src="{audio_url}" type="audio/mp3">
-            </audio>
+            <div style="background: rgba(0,0,0,0.3); padding: 10px; border-radius: 8px; text-align: center; margin-bottom: 15px;">
+                <span style='font-size:13px; color:#aaa; margin-bottom:5px;'>💡 سياسة المتصفحات تمنع أحياناً تشغيل الصوت تلقائياً. اضغط (Play) لتفعيل جرس الإنذار:</span><br>
+                <audio id="alert-sound" controls autoplay loop style="height: 35px; outline: none; margin-top: 8px; border-radius: 20px;">
+                    <source src="{audio_url}" type="audio/mp3">
+                </audio>
+            </div>
             """, unsafe_allow_html=True)
+            
+        count = len(expiring_soon)
+        st.markdown(f"""
+        <div class="expiry-alert">
+            <h3 style="margin-top:0;">🚨 تنبيه عاجل! هناك <span style='background: white; color: red; padding: 2px 10px; border-radius: 20px;'>{count}</span> عرض انتهى بالفعل أو سينتهي قريباً!</h3>
+        """, unsafe_allow_html=True)
             
         st.markdown('<div style="font-size: 14px; display: flex; gap: 10px; flex-wrap: wrap; justify-content: center;">', unsafe_allow_html=True)
         
