@@ -499,7 +499,7 @@ def generate_quantities_template() -> bytes:
     wb = Workbook()
     ws = wb.active
     ws.title = "تحديث الكميات"
-    ws.append(["💡 إرشادات: ادخل رقم الـ SKU، ومعرف الفرع، والكمية، ثم اختر نوع العملية."])
+    ws.append(["💡 إرشادات: ادخل رقم الـمنتج، ومعرف الفرع، والكمية، ثم اختر نوع العملية."])
     ws.merge_cells('A1:D1')
     ws.row_dimensions[1].height = 24
     ws.append(["Product_SKU", "Branch_ID", "Quantity", "Mode"])
@@ -829,7 +829,7 @@ def generate_promotions_template() -> bytes:
     ws.title = "تحديث العناوين"
 
     # إضافة صف الإرشادات
-    ws.append(["💡 إرشادات: ادخل رقم الـ SKU، العناوين الجديدة (إن وجدت)، واختر الإجراء المطلوب من القائمة المنسدلة."])
+    ws.append(["💡 إرشادات: ادخل رقم الـمنتج، العناوين الجديدة (إن وجدت)، واختر الإجراء المطلوب من القائمة المنسدلة."])
     ws.merge_cells('A1:D1')
     ws.row_dimensions[1].height = 24
 
