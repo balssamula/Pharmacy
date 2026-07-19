@@ -24,10 +24,9 @@ from products_page import render_products_page
 from customers_page import render_customers_page
 
 # ==========================================
-# 🔄 المزامنة الحية المدمجة في صفحة الدخول
+# 🔄 المزامنة الحية فائقة السرعة (بدون حظر API)
 # ==========================================
 def perform_initial_sync_with_ui(headers):
-    """المزامنة الحية التي تظهر شريط التقدم والعدادات أثناء الدخول"""
     placeholder = st.empty()
     with placeholder.container():
         st.markdown("""
@@ -50,7 +49,7 @@ def perform_initial_sync_with_ui(headers):
                 status_text.info(f"📦 جاري سحب المنتجات: صفحة {page} من {tp} | (تم تحميل {len(products)} منتج)")
                 p_res = safe_api_request("GET", f"https://api.salla.dev/admin/v2/products?per_page=100&page={page}", headers)
                 if p_res and p_res.get("data"): products.extend(p_res["data"])
-                progress_bar.progress(0.3 * (page / tp))
+                progress_bar.progress(0.4 * (page / tp))
         st.session_state["all_products"] = products
         
         # 2. سحب العروض
@@ -64,40 +63,44 @@ def perform_initial_sync_with_ui(headers):
                 status_text.info(f"🎁 جاري سحب العروض: صفحة {page} من {tp}")
                 op_res = safe_api_request("GET", f"https://api.salla.dev/admin/v2/specialoffers?per_page=100&page={page}", headers)
                 if op_res and op_res.get("data"): offers.extend(op_res["data"])
-                progress_bar.progress(0.3 + (0.3 * (page / tp)))
+                progress_bar.progress(0.4 + (0.4 * (page / tp)))
         st.session_state["all_offers"] = offers
         
-        # 3. بناء خريطة العروض وتوحيد المعرفات كنصوص (Strings) لحل مشكلة عدم ظهور الشارة
-        status_text.info("🔗 جاري تحليل العروض وربطها بالمنتجات (لظهور الشارات)...")
+        # 3. بناء خريطة العروض (من الذاكرة بسرعة البرق لتجنب حظر سلة)
+        status_text.info("🔗 جاري معالجة روابط العروض بالمنتجات...")
         po_map = {"ALL_PRODUCTS": []}
         active_offers = [o for o in offers if o.get('status') == 'active']
         
-        for idx, o in enumerate(active_offers):
-            status_text.info(f"🔗 جاري تحليل العرض: {idx + 1} من {len(active_offers)}")
+        for o in active_offers:
             oid = str(o.get("id"))
-            full_o = safe_api_request("GET", f"https://api.salla.dev/admin/v2/specialoffers/{oid}", headers)
-            if full_o and full_o.get("data"):
-                data = full_o["data"]
-                summary = {"id": oid, "name": data.get("name")}
-                if data.get("applied_to") == "all":
-                    po_map["ALL_PRODUCTS"].append(summary)
-                else:
-                    pids = set()
-                    for p in data.get("buy", {}).get("products", []):
-                        pid = str(p.get("id", p) if isinstance(p, dict) else p)
-                        if pid.isdigit(): pids.add(pid)
-                    for p in data.get("get", {}).get("products", []):
-                        pid = str(p.get("id", p) if isinstance(p, dict) else p)
-                        if pid.isdigit(): pids.add(pid)
-                    for p in data.get("products", []): # للعروض المباشرة
-                        pid = str(p.get("id", p) if isinstance(p, dict) else p)
-                        if pid.isdigit(): pids.add(pid)
-                    for pid in pids:
-                        if pid not in po_map: po_map[pid] = []
-                        po_map[pid].append(summary)
-            progress_bar.progress(0.6 + (0.3 * ((idx+1) / len(active_offers))))
+            summary = {"id": oid, "name": o.get("name")}
+            applied_to = o.get("applied_to")
+            offer_type = o.get("offer_type")
             
+            if applied_to in ["order", "all"] or offer_type in ["cart_offer", "tiered_offer"]:
+                po_map["ALL_PRODUCTS"].append(summary)
+            else:
+                pids = set()
+                buy_data = o.get("buy") or {}
+                for px in buy_data.get("products", []):
+                    pid = str(px.get("id", px) if isinstance(px, dict) else px)
+                    if pid.isdigit(): pids.add(pid)
+                    
+                get_data = o.get("get") or {}
+                for px in get_data.get("products", []):
+                    pid = str(px.get("id", px) if isinstance(px, dict) else px)
+                    if pid.isdigit(): pids.add(pid)
+                    
+                for px in o.get("products", []):
+                    pid = str(px.get("id", px) if isinstance(px, dict) else px)
+                    if pid.isdigit(): pids.add(pid)
+                    
+                for pid in pids:
+                    if pid not in po_map: po_map[pid] = []
+                    po_map[pid].append(summary)
+                    
         st.session_state["product_offers_map"] = po_map
+        progress_bar.progress(0.9)
         
         # 4. الفروع
         status_text.info("🏢 جاري جلب الفروع والمستودعات...")
