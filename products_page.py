@@ -360,6 +360,22 @@ def render_products_page():
         
     st.info(f"📊 النتائج: {len(filtered)} منتج مطابِق للبحث")
 
+    # ✅ زر التنزيل للمنتجات المفلترة
+    if filtered:
+        col_download1, col_download2 = st.columns([2, 1])
+        with col_download1:
+            st.download_button(
+                label="📥 تحميل المنتجات المفلترة (Excel)",
+                data=export_products_to_excel(filtered),
+                file_name=f"Filtered_Products_{datetime.now().strftime('%Y%m%d_%H%M%S')}.xlsx",
+                mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                type="primary",
+                key="download_filtered_products",
+                use_container_width=True
+            )
+        with col_download2:
+            st.info(f"📄 يحتوي الملف على {len(filtered)} منتج")
+            
     # Pagination
     limit = 20
     pages = max(1, (len(filtered) + limit - 1) // limit)
