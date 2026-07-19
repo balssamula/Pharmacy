@@ -41,13 +41,13 @@ def perform_initial_sync_with_ui(headers):
         # 1. سحب المنتجات
         status_text.info("📦 جاري الاتصال وسحب المنتجات...")
         products = []
-        res = safe_api_request("GET", "https://api.salla.dev/admin/v2/products?per_page=100&page=1", headers)
+        res = safe_api_request("GET", "https://api.salla.dev/admin/v2/products?per_page=60&page=1", headers)
         if res:
             tp = res.get("pagination", {}).get("totalPages", 1)
             products.extend(res.get("data", []))
             for page in range(2, tp + 1):
                 status_text.info(f"📦 جاري سحب المنتجات: صفحة {page} من {tp} | (تم تحميل {len(products)} منتج)")
-                p_res = safe_api_request("GET", f"https://api.salla.dev/admin/v2/products?per_page=100&page={page}", headers)
+                p_res = safe_api_request("GET", f"https://api.salla.dev/admin/v2/products?per_page=60&page={page}", headers)
                 if p_res and p_res.get("data"): products.extend(p_res["data"])
                 progress_bar.progress(0.4 * (page / tp))
         st.session_state["all_products"] = products
@@ -55,13 +55,13 @@ def perform_initial_sync_with_ui(headers):
         # 2. سحب العروض
         status_text.info("🎁 جاري سحب العروض الخاصة النشطة...")
         offers = []
-        o_res = safe_api_request("GET", "https://api.salla.dev/admin/v2/specialoffers?per_page=100&page=1", headers)
+        o_res = safe_api_request("GET", "https://api.salla.dev/admin/v2/specialoffers?per_page=60&page=1", headers)
         if o_res:
             tp = o_res.get("pagination", {}).get("totalPages", 1)
             offers.extend(o_res.get("data", []))
             for page in range(2, tp + 1):
                 status_text.info(f"🎁 جاري سحب العروض: صفحة {page} من {tp}")
-                op_res = safe_api_request("GET", f"https://api.salla.dev/admin/v2/specialoffers?per_page=100&page={page}", headers)
+                op_res = safe_api_request("GET", f"https://api.salla.dev/admin/v2/specialoffers?per_page=60&page={page}", headers)
                 if op_res and op_res.get("data"): offers.extend(op_res["data"])
                 progress_bar.progress(0.4 + (0.4 * (page / tp)))
         st.session_state["all_offers"] = offers
