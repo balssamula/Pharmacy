@@ -813,3 +813,98 @@ def generate_salla_new_products_file(products: List[Dict]) -> bytes:
         wb.save(output)
         return output.getvalue()
     except: return b""
+
+# ==========================================
+# 🏷️ دوال التحكم الجماعي في العناوين (ترويجي / فرعي)
+# ==========================================
+
+def generate_promotions_template() -> bytes:
+    from openpyxl import Workbook
+    from openpyxl.worksheet.datavalidation import DataValidation
+    from openpyxl.styles import PatternFill, Font, Alignment, Border, Side
+    from openpyxl.utils import get_column_letter
+
+    wb = Workbook()
+    ws = wb.active
+    ws.title = "تحديث العناوين"
+
+    # إضافة صف الإرشادات
+    ws.append(["💡 إرشادات: ادخل رقم الـ SKU، العناوين الجديدة (إن وجدت)، واختر الإجراء المطلوب من القائمة المنسدلة."])
+    ws.merge_cells('A1:D1')
+    ws.row_dimensions[1].height = 24
+
+    headers = ["SKU (رقم المنتج)", "العنوان الترويجي", "العنوان الفرعي", "الإجراء المطلوب"]
+    ws.append(headers)
+
+    # التنسيق الاحترافي
+    header_fill = PatternFill(start_color="1E3A8A", end_color="1E3A8A", fill_type="solid") # أزرق داكن فخم
+    header_font = Font(color="FFFFFF", bold=True, name="Cairo", size=12)
+    center_align = Alignment(horizontal="center", vertical="center", wrap_text=True)
+    thin_border = Border(left=Side(style='thin', color='DDDDDD'), right=Side(style='thin', color='DDDDDD'), 
+                         top=Side(style='thin', color='DDDDDD'), bottom=Side(style='thin', color='DDDDDD'))
+
+    # تطبيق التنسيق على صف العناوين (الصف الثاني)
+    for col in range(1, len(headers) + 1):
+        cell = ws.cell(row=2, column=col)
+        cell.fill = header_fill
+        cell.font = header_font
+        cell.alignment = center_align
+        cell.border = thin_border
+        ws.column_dimensions[get_column_letter(col)].width = 25
+
+    # إضافة قائمة منسدلة (Data Validation) لعمود الإجراء المطلوب
+    dv = DataValidation(type="list", formula1='"تحديث,مسح الترويجي,مسح الفرعي,مسح الكل"', allow_blank=False)
+    ws.add_data_validation(dv)
+    dv.add("D3:D1000")
+
+    output = io.BytesIO()
+    wb.save(output)
+    return output.getvalue()
+
+def process_promotions_bulk(df: pd.DataFrame, products_list: List[Dict], headers: Dict[str, str]) -> Dict:
+    results = {"success": [], "errors": []}
+    # بناء قاموس لتحويل SKU إلى Product ID بسرعة
+    sku_to_id = {str(p.get('sku', '')).strip(): p.get('id') for p in products_list if p.get('sku')}
+    
+    for idx, row in df.iterrows():
+        # تجاوز صف الإرشادات
+        if row.isna().all() or str(row.iloc[0]).strip().startswith("💡"): continue
+        
+        sku = str(row.get('SKU (رقم المنتج)', '')).strip()
+        if not sku or sku == 'nan': continue
+        
+        p_id = sku_to_id.get(sku)
+        if not p_id:
+            results["errors"].append(f"السطر {idx+2}: لم يتم العثور على منتج بـ SKU ({sku})")
+            continue
+        
+        action = str(row.get('الإجراء المطلوب', 'تحديث')).strip()
+        promo_val = str(row.get('العنوان الترويجي', '')).strip()
+        sub_val = str(row.get('العنوان الفرعي', '')).strip()
+        
+        if promo_val == 'nan': promo_val = ""
+        if sub_val == 'nan': sub_val = ""
+        
+        new_promo = None
+        new_sub = None
+        
+        if action == 'تحديث':
+            if promo_val: new_promo = promo_val
+            if sub_val: new_sub = sub_val
+        elif action == 'مسح الترويجي':
+            new_promo = ""
+            if sub_val: new_sub = sub_val # نحدث الفرعي إذا تم كتابته، وإلا نتركه كما هو
+        elif action == 'مسح الفرعي':
+            new_sub = ""
+            if promo_val: new_promo = promo_val # نحدث الترويجي إذا تم كتابته، وإلا نتركه كما هو
+        elif action == 'مسح الكل':
+            new_promo = ""
+            new_sub = ""
+        
+        # استدعاء الدالة الآمنة (إذا تم إرسال None، فلن يتم تعديل الحقل)
+        if update_product_promotions_secure(p_id, new_promo, new_sub, headers):
+            results["success"].append(f"تم تنفيذ ({action}) للمنتج {sku} بنجاح.")
+        else:
+            results["errors"].append(f"فشل تنفيذ ({action}) للمنتج {sku}.")
+            
+    return results
