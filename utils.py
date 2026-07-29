@@ -863,7 +863,7 @@ def generate_promotions_template() -> bytes:
 def process_promotions_bulk(df: pd.DataFrame, products_list: List[Dict], headers: Dict[str, str]) -> Dict:
     results = {"success": [], "errors": []}
     
-    # بناء قاموس لتحويل SKU إلى بيانات المنتج (لتجنب طلب API لجلب الاسم والسعر الأساسي)
+    # بناء قاموس لتحويل SKU إلى بيانات المنتج
     sku_to_product = {}
     for p in products_list:
         if p.get('sku'):
@@ -894,7 +894,7 @@ def process_promotions_bulk(df: pd.DataFrame, products_list: List[Dict], headers
         if sub_val == 'nan': sub_val = ""
         if sale_price_val == 'nan': sale_price_val = ""
         
-        # استرجاع القيم الحالية من הذاكرة
+        # استرجاع القيم الحالية من الذاكرة
         current_promo = p.get('promotion_title', '') or (p.get('promotion', {}).get('title', '') if isinstance(p.get('promotion'), dict) else '')
         current_sub = p.get('promotion_subtitle', '') or (p.get('promotion', {}).get('sub_title', '') if isinstance(p.get('promotion'), dict) else '')
         current_sale = get_flat_price(p.get('sale_price', 0))
@@ -903,38 +903,48 @@ def process_promotions_bulk(df: pd.DataFrame, products_list: List[Dict], headers
         new_sub = current_sub
         new_sale = current_sale
         
+        # ✅ تطبيق المنطق الجديد: "تحديث" يعكس محتوى الإكسيل تماماً (فارغ = مسح)
         if action == 'تحديث':
-            if promo_val: new_promo = promo_val
-            if sub_val: new_sub = sub_val
-            if sale_price_val:
+            new_promo = promo_val  # إذا كانت فارغة، ستصبح "" ويتم مسحها
+            new_sub = sub_val      # إذا كانت فارغة، ستصبح "" ويتم مسحها
+            if sale_price_val == "":
+                new_sale = 0.0     # إذا كان فارغاً، سيتم إلغاء السعر المخفض
+            else:
                 try: new_sale = float(sale_price_val)
-                except: pass
+                except: new_sale = current_sale
+                
         elif action == 'تحديث السعر المخفض':
-            if sale_price_val:
+            # يُحدث السعر المخفض فقط (وإذا كان فارغاً يمسحه)، ويحتفظ بالعناوين كما هي
+            if sale_price_val == "":
+                new_sale = 0.0
+            else:
                 try: new_sale = float(sale_price_val)
-                except: pass
+                except: new_sale = current_sale
+                
         elif action == 'مسح الترويجي':
             new_promo = ""
             if sub_val: new_sub = sub_val
-            if sale_price_val:
+            if sale_price_val == "": new_sale = 0.0
+            elif sale_price_val:
                 try: new_sale = float(sale_price_val)
                 except: pass
+                
         elif action == 'مسح الفرعي':
             new_sub = ""
             if promo_val: new_promo = promo_val
-            if sale_price_val:
+            if sale_price_val == "": new_sale = 0.0
+            elif sale_price_val:
                 try: new_sale = float(sale_price_val)
                 except: pass
+                
         elif action == 'مسح الكل':
-            # يمسح العناوين، وإذا تم وضع سعر مخفض يطبقه
             new_promo = ""
             new_sub = ""
-            if sale_price_val:
-                try: new_sale = float(sale_price_val)
-                except: pass
+            new_sale = 0.0
         
         base_price = get_flat_price(p.get('regular_price', 0)) or get_flat_price(p.get('price', 0))
         
+        # بناء البيانات المُرسلة لسلة
         payload = {
             "name": p.get('name'), 
             "price": base_price, 
@@ -947,7 +957,7 @@ def process_promotions_bulk(df: pd.DataFrame, products_list: List[Dict], headers
         if new_sale > 0:
             payload['sale_price'] = new_sale
         else:
-            payload['sale_price'] = None
+            payload['sale_price'] = None # سلة تستخدم None لإلغاء وإزالة السعر المخفض
             
         res = safe_api_request("PUT", f"https://api.salla.dev/admin/v2/products/{p_id}", headers, json=payload)
         if res:
