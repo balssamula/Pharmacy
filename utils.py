@@ -815,7 +815,7 @@ def generate_salla_new_products_file(products: List[Dict]) -> bytes:
     except: return b""
 
 # ==========================================
-# 🏷️ دوال التحكم الجماعي في العناوين (ترويجي / فرعي)
+# 🏷️ دوال التحكم الجماعي في العناوين والأسعار المخفضة (بدون ID)
 # ==========================================
 
 def generate_promotions_template() -> bytes:
@@ -826,24 +826,23 @@ def generate_promotions_template() -> bytes:
 
     wb = Workbook()
     ws = wb.active
-    ws.title = "تحديث العناوين"
+    ws.title = "تحديث العناوين والأسعار"
 
     # إضافة صف الإرشادات
-    ws.append(["💡 إرشادات: ادخل رقم الـمنتج، العناوين الجديدة (إن وجدت)، واختر الإجراء المطلوب من القائمة المنسدلة."])
-    ws.merge_cells('A1:D1')
+    ws.append(["💡 إرشادات: ادخل رقم الـ SKU، العناوين الجديدة، والسعر المخفض (إن وجد)، ثم اختر الإجراء المطلوب."])
+    ws.merge_cells('A1:E1')
     ws.row_dimensions[1].height = 24
 
-    headers = ["SKU (رقم المنتج)", "العنوان الترويجي", "العنوان الفرعي", "الإجراء المطلوب"]
+    headers = ["SKU (رقم المنتج)", "العنوان الترويجي", "العنوان الفرعي", "السعر المخفض", "الإجراء المطلوب"]
     ws.append(headers)
 
     # التنسيق الاحترافي
-    header_fill = PatternFill(start_color="1E3A8A", end_color="1E3A8A", fill_type="solid") # أزرق داكن فخم
+    header_fill = PatternFill(start_color="1E3A8A", end_color="1E3A8A", fill_type="solid")
     header_font = Font(color="FFFFFF", bold=True, name="Cairo", size=12)
     center_align = Alignment(horizontal="center", vertical="center", wrap_text=True)
     thin_border = Border(left=Side(style='thin', color='DDDDDD'), right=Side(style='thin', color='DDDDDD'), 
                          top=Side(style='thin', color='DDDDDD'), bottom=Side(style='thin', color='DDDDDD'))
 
-    # تطبيق التنسيق على صف العناوين (الصف الثاني)
     for col in range(1, len(headers) + 1):
         cell = ws.cell(row=2, column=col)
         cell.fill = header_fill
@@ -852,10 +851,10 @@ def generate_promotions_template() -> bytes:
         cell.border = thin_border
         ws.column_dimensions[get_column_letter(col)].width = 25
 
-    # إضافة قائمة منسدلة (Data Validation) لعمود الإجراء المطلوب
-    dv = DataValidation(type="list", formula1='"تحديث,مسح الترويجي,مسح الفرعي,مسح الكل"', allow_blank=False)
+    # قائمة منسدلة
+    dv = DataValidation(type="list", formula1='"تحديث,تحديث السعر المخفض,مسح الترويجي,مسح الفرعي,مسح الكل"', allow_blank=False)
     ws.add_data_validation(dv)
-    dv.add("D3:D1000")
+    dv.add("E3:E1000")
 
     output = io.BytesIO()
     wb.save(output)
@@ -863,48 +862,97 @@ def generate_promotions_template() -> bytes:
 
 def process_promotions_bulk(df: pd.DataFrame, products_list: List[Dict], headers: Dict[str, str]) -> Dict:
     results = {"success": [], "errors": []}
-    # بناء قاموس لتحويل SKU إلى Product ID بسرعة
-    sku_to_id = {str(p.get('sku', '')).strip(): p.get('id') for p in products_list if p.get('sku')}
     
+    # بناء قاموس لتحويل SKU إلى بيانات المنتج (لتجنب طلب API لجلب الاسم والسعر الأساسي)
+    sku_to_product = {}
+    for p in products_list:
+        if p.get('sku'):
+            clean_sku = str(p.get('sku')).strip()
+            if clean_sku.endswith('.0'): clean_sku = clean_sku[:-2]
+            sku_to_product[clean_sku] = p
+            
     for idx, row in df.iterrows():
-        # تجاوز صف الإرشادات
         if row.isna().all() or str(row.iloc[0]).strip().startswith("💡"): continue
         
-        sku = str(row.get('SKU (رقم المنتج)', '')).strip()
-        if not sku or sku == 'nan': continue
+        sku_raw = str(row.get('SKU (رقم المنتج)', '')).strip()
+        if sku_raw.endswith('.0'): sku_raw = sku_raw[:-2]
         
-        p_id = sku_to_id.get(sku)
-        if not p_id:
-            results["errors"].append(f"السطر {idx+2}: لم يتم العثور على منتج بـ SKU ({sku})")
+        if not sku_raw or sku_raw == 'nan': continue
+        
+        p = sku_to_product.get(sku_raw)
+        if not p:
+            results["errors"].append(f"السطر {idx+2}: لم يتم العثور على منتج بـ SKU ({sku_raw})")
             continue
-        
+            
+        p_id = p['id']
         action = str(row.get('الإجراء المطلوب', 'تحديث')).strip()
         promo_val = str(row.get('العنوان الترويجي', '')).strip()
         sub_val = str(row.get('العنوان الفرعي', '')).strip()
+        sale_price_val = str(row.get('السعر المخفض', '')).strip()
         
         if promo_val == 'nan': promo_val = ""
         if sub_val == 'nan': sub_val = ""
+        if sale_price_val == 'nan': sale_price_val = ""
         
-        new_promo = None
-        new_sub = None
+        # استرجاع القيم الحالية من הذاكرة
+        current_promo = p.get('promotion_title', '') or (p.get('promotion', {}).get('title', '') if isinstance(p.get('promotion'), dict) else '')
+        current_sub = p.get('promotion_subtitle', '') or (p.get('promotion', {}).get('sub_title', '') if isinstance(p.get('promotion'), dict) else '')
+        current_sale = get_flat_price(p.get('sale_price', 0))
+        
+        new_promo = current_promo
+        new_sub = current_sub
+        new_sale = current_sale
         
         if action == 'تحديث':
             if promo_val: new_promo = promo_val
             if sub_val: new_sub = sub_val
+            if sale_price_val:
+                try: new_sale = float(sale_price_val)
+                except: pass
+        elif action == 'تحديث السعر المخفض':
+            if sale_price_val:
+                try: new_sale = float(sale_price_val)
+                except: pass
         elif action == 'مسح الترويجي':
             new_promo = ""
-            if sub_val: new_sub = sub_val # نحدث الفرعي إذا تم كتابته، وإلا نتركه كما هو
+            if sub_val: new_sub = sub_val
+            if sale_price_val:
+                try: new_sale = float(sale_price_val)
+                except: pass
         elif action == 'مسح الفرعي':
             new_sub = ""
-            if promo_val: new_promo = promo_val # نحدث الترويجي إذا تم كتابته، وإلا نتركه كما هو
+            if promo_val: new_promo = promo_val
+            if sale_price_val:
+                try: new_sale = float(sale_price_val)
+                except: pass
         elif action == 'مسح الكل':
+            # يمسح العناوين، وإذا تم وضع سعر مخفض يطبقه
             new_promo = ""
             new_sub = ""
+            if sale_price_val:
+                try: new_sale = float(sale_price_val)
+                except: pass
         
-        # استدعاء الدالة الآمنة (إذا تم إرسال None، فلن يتم تعديل الحقل)
-        if update_product_promotions_secure(p_id, new_promo, new_sub, headers):
-            results["success"].append(f"تم تنفيذ ({action}) للمنتج {sku} بنجاح.")
+        base_price = get_flat_price(p.get('regular_price', 0)) or get_flat_price(p.get('price', 0))
+        
+        payload = {
+            "name": p.get('name'), 
+            "price": base_price, 
+            "status": p.get('status', 'sale'),
+            "promotion_title": new_promo,
+            "promotion_subtitle": new_sub,
+            "subtitle": new_sub
+        }
+        
+        if new_sale > 0:
+            payload['sale_price'] = new_sale
         else:
-            results["errors"].append(f"فشل تنفيذ ({action}) للمنتج {sku}.")
+            payload['sale_price'] = None
+            
+        res = safe_api_request("PUT", f"https://api.salla.dev/admin/v2/products/{p_id}", headers, json=payload)
+        if res:
+            results["success"].append(f"تم تنفيذ ({action}) للمنتج {sku_raw} بنجاح.")
+        else:
+            results["errors"].append(f"فشل تنفيذ ({action}) للمنتج {sku_raw}.")
             
     return results
