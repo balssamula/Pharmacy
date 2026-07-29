@@ -369,24 +369,25 @@ def render_products_page():
 
             # ✅ لوحة العناوين الجديدة
             elif st.session_state.qa_action_prod == "promotions_control":
-                with col_t: st.markdown("### 🏷️ التحكم الشامل في العناوين الترويجية والفرعية")
-                st.info("قم بتحميل القالب، ضع أرقام المنتجات، وحدد الإجراء (تحديث، مسح الترويجي، مسح الفرعي، مسح الكل).")
+                with col_t: st.markdown("### 🏷️ التحكم الشامل في العناوين والأسعار المخفضة")
+                st.info("قم بتنزيل القالب، ضع معرفات المنتجات (SKU)، وحدد الإجراء (تحديث، تحديث السعر المخفض، مسح الترويجي، مسح الفرعي، مسح الكل).")
                 
                 st.download_button(
-                    "📥 تحميل قالب العناوين الاحترافي", 
+                    "📥 تنزيل القالب الاحترافي للتحديث", 
                     data=generate_promotions_template(), 
-                    file_name="Promotions_Update_Template.xlsx", 
+                    file_name="Promotions_Prices_Template.xlsx", 
                     use_container_width=True
                 )
                 
-                uploaded_promo = st.file_uploader("📂 رفع ملف العناوين المعبأ:", type=['xlsx'], key="up_promo")
-                if uploaded_promo and st.button("🚀 تنفيذ تحديث العناوين", type="primary", use_container_width=True):
+                uploaded_promo = st.file_uploader("📂 رفع ملف البيانات المعبأ:", type=['xlsx'], key="up_promo")
+                if uploaded_promo and st.button("🚀 تنفيذ التحديثات دفعة واحدة", type="primary", use_container_width=True):
                     with st.spinner("⏳ جاري المعالجة والاتصال بمتجرك..."):
                         try:
                             df_promo = pd.read_excel(uploaded_promo)
                             res = process_promotions_bulk(df_promo, st.session_state.get("all_products", []), headers)
                             for m in res["success"]: st.success(m)
                             for m in res["errors"]: st.error(m)
+                            st.session_state["all_products_fetched"] = False 
                         except Exception as e:
                             st.error(f"❌ خطأ في قراءة الملف: {str(e)}")
 
