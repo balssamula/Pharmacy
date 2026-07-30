@@ -488,10 +488,10 @@ def render_products_page():
     st.info(f"📊 النتائج: {len(filtered)} منتج مطابِق للبحث")
 
     # ==========================================
-    # ✅ أزرار الإجراءات الإضافية (تنزيل / إخفاء / حذف) للمنتجات المفلترة
+    # ✅ زر التنزيل المدمج مع إجراءات المنتجات المفلترة
     # ==========================================
     if filtered:
-        col_act1, col_act2, col_act3 = st.columns(3)
+        col_act1, col_act2 = st.columns([1, 1])
         
         with col_act1:
             st.download_button(
@@ -505,29 +505,46 @@ def render_products_page():
             )
             
         with col_act2:
-            with st.popover("👁️ إخفاء المنتجات المفلترة", use_container_width=True):
-                st.warning(f"⚠️ سيتم تحويل حالة {len(filtered)} منتج إلى 'مخفي'. هل أنت متأكد؟")
-                if st.button("تأكيد الإخفاء", key="confirm_hide_filtered", use_container_width=True):
-                    with st.spinner("جاري إخفاء المنتجات..."):
+            with st.popover("⚙️ إجراءات المنتجات المفلترة", use_container_width=True):
+                st.markdown(f"<div style='text-align:center; margin-bottom:10px;'><b>تطبيق إجراء جماعي على ({len(filtered)}) منتج</b></div>", unsafe_allow_html=True)
+                
+                bulk_action = st.radio(
+                    "اختر الإجراء المطلوب تنفيذه دفعة واحدة:", 
+                    [
+                        "👁️ إخفاء المنتجات (نقل للمسودة)", 
+                        "🛒 إظهار المنتجات (نقل للبيع)", 
+                        "🧹 مسح العناوين (الترويجية والفرعية)", 
+                        "🛑 إيقاف العرض الخاص (إلغاء السعر المخفض)", 
+                        "🗑️ حذف المنتجات نهائياً"
+                    ],
+                    key="bulk_action_radio"
+                )
+                
+                if "حذف" in bulk_action:
+                    st.error("🚨 تحذير: سيتم حذف المنتجات نهائياً من المتجر ولن يمكن استرجاعها!")
+                    confirm_msg = "☑️ أوافق على الحذف النهائي"
+                else:
+                    confirm_msg = "☑️ تأكيد تنفيذ الإجراء المختار"
+                    
+                confirm_bulk = st.checkbox(confirm_msg, key="confirm_bulk_action")
+                
+                if st.button("🚀 تنفيذ الإجراء", type="primary", disabled=not confirm_bulk, use_container_width=True, key="execute_bulk_action"):
+                    with st.spinner("⏳ جاري تنفيذ الإجراء على المنتجات..."):
                         success_count = 0
                         for p in filtered:
-                            if update_product_status(p.get('id'), "hidden"):
-                                success_count += 1
-                        st.success(f"✅ تم إخفاء {success_count} منتج بنجاح!")
-                        st.session_state["all_products_fetched"] = False # مسح الذاكرة لتحديث الواجهة
-                        st.rerun()
-
-        with col_act3:
-            with st.popover("🗑️ حذف المنتجات المفلترة", use_container_width=True):
-                st.error(f"🚨 تحذير خطير: سيتم حذف {len(filtered)} منتج نهائياً من سلة ولا يمكن التراجع!")
-                confirm_bulk_delete = st.checkbox("☑️ أوافق على الحذف النهائي لكل هذه المنتجات")
-                if st.button("تأكيد الحذف النهائي", type="primary", disabled=not confirm_bulk_delete, use_container_width=True, key="confirm_delete_filtered"):
-                    with st.spinner("جاري حذف المنتجات..."):
-                        success_count = 0
-                        for p in filtered:
-                            if delete_product(p.get('id')):
-                                success_count += 1
-                        st.success(f"✅ تم حذف {success_count} منتج بنجاح!")
+                            p_id = p.get('id')
+                            if "إخفاء" in bulk_action:
+                                if update_product_status(p_id, "hidden"): success_count += 1
+                            elif "إظهار" in bulk_action:
+                                if update_product_status(p_id, "sale"): success_count += 1
+                            elif "مسح العناوين" in bulk_action:
+                                if update_product_promotions_secure(p_id, "", "", headers): success_count += 1
+                            elif "إيقاف العرض" in bulk_action:
+                                if update_product_sale_price(p_id, 0.0): success_count += 1
+                            elif "حذف" in bulk_action:
+                                if delete_product(p_id): success_count += 1
+                                
+                        st.success(f"✅ تم تنفيذ الإجراء بنجاح على {success_count} منتج!")
                         st.session_state["all_products_fetched"] = False # مسح الذاكرة لتحديث الواجهة
                         st.rerun()
 
