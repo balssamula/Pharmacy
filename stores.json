@@ -5,5 +5,12 @@
         "access_token": "ory_at_xSOPSS-DKnq5bYfG1xh1LwqE8krSUOPe1otsvzUDHNI.pa344SZhyhIQwXsXJ6OzhQQ2PNOp7UhhXalzTTJcDGI",
         "refresh_token": "ory_rt_bdIF-MXNHi50XKCK-6Q0_tqDNxiTx9ruboLln-GB02M.-Zmo72AwjZlBylokwUZ8w8afTOqP6x9jE0_i_C3hWPs",
         "installed_at": "2026-07-29 09:12:56"
+    },
+    {
+        "merchant_id": "1450057019",
+        "store_name": "صيدليات بلسم العلا",
+        "access_token": "ory_at_ujsCkZcDP1zCRfxLGeuYdkH43Xuqld1-F-x8rdq6Rcg.AUfACPQQeDje56rj9O2RhtzZObd-zIA8vY8_LNz9nXU",
+        "refresh_token": "ory_rt_k53rtldrYSHypNWDqU7ZtQyMTgA0jflLnxa-VIDAUQk.k4qSY7_O1VbkH1_Me0O1ytqktSdEKSgti-Ab4LANgHs"
+        "installed_at": "2026-07-30 13:28:21"
     }
 ]
