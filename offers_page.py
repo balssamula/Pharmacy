@@ -82,14 +82,6 @@ def render_expiry_alerts(raw_offers, headers=None):
             }
         </style>
         """, unsafe_allow_html=True)
-        
-        st.markdown(f"""
-        <div class="expiry-alert">
-            <div style="text-align: center; margin-bottom: 20px;">
-                <h2 style="margin:0; color: #ff6b6b;">🚨 انتباه! إجراء مطلوب</h2>
-                <p style="color: #cbd5e1; font-size: 15px; margin-top: 5px;">هناك <b style="background: white; color: red; padding: 2px 10px; border-radius: 12px; font-size: 16px;">{total_count}</b> عرض انتهى بالفعل أو سينتهي قريباً!</p>
-            </div>
-        """, unsafe_allow_html=True)
 
         if st.session_state["sound_playing"]:
             audio_url = "https://assets.mixkit.co/active_storage/sfx/2869/2869-preview.mp3"
@@ -101,7 +93,15 @@ def render_expiry_alerts(raw_offers, headers=None):
                 </audio>
             </div>
             """, unsafe_allow_html=True)
-            
+
+        st.markdown(f"""
+        <div class="expiry-alert">
+            <div style="text-align: center; margin-bottom: 20px;">
+                <h2 style="margin:0; color: #ff6b6b;">🚨 انتباه! إجراء مطلوب</h2>
+                <p style="color: #cbd5e1; font-size: 15px; margin-top: 5px;">هناك <b style="background: white; color: red; padding: 2px 10px; border-radius: 12px; font-size: 16px;">{total_count}</b> عرض انتهى بالفعل أو سينتهي قريباً!</p>
+            </div>
+        """, unsafe_allow_html=True)
+        
         # ✅ عرض العروض مجمعة بجمالية
         for date_str, offers in sorted(expiring_soon_grouped.items()):
             days_left = (safe_parse_date(date_str + " 23:59:59") - now).days
