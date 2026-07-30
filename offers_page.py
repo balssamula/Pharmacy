@@ -25,13 +25,12 @@ def get_audio_base64(file_path):
         return None
 
 # ==========================================
-# 🚨 نظام التنبيه لقرب انتهاء العروض (محسن)
+# 🚨 نظام التنبيه لقرب انتهاء العروض (مُحسن ומُجمّع)
 # ==========================================
 def render_expiry_alerts(raw_offers, headers=None):
     now = datetime.now()
-    # قاموس لتجميع العروض بناءً على تاريخ الانتهاء
     expiring_soon_grouped = {}
-    total_expiring_count = 0
+    total_count = 0
     
     for offer in raw_offers:
         if offer.get('status') != 'active': continue
@@ -46,17 +45,13 @@ def render_expiry_alerts(raw_offers, headers=None):
             if date_str not in expiring_soon_grouped:
                 expiring_soon_grouped[date_str] = []
             
-            expiring_soon_grouped[date_str].append({
-                'id': offer.get('id'),
-                'name': offer.get('name'),
-                'days_left': days_left
-            })
-            total_expiring_count += 1
+            expiring_soon_grouped[date_str].append(offer)
+            total_count += 1
     
     if "sound_playing" not in st.session_state:
         st.session_state["sound_playing"] = True
     
-    if total_expiring_count > 0:
+    if total_count > 0:
         st.markdown("""
         <style>
             @keyframes blink-red {
@@ -65,10 +60,10 @@ def render_expiry_alerts(raw_offers, headers=None):
                 100% { border-color: #ff0000; box-shadow: 0 0 10px rgba(255,0,0,0.2); }
             }
             .expiry-alert {
-                animation: blink-red 1s ease-in-out infinite;
+                animation: blink-red 1.5s ease-in-out infinite;
                 padding: 20px;
                 border-radius: 12px;
-                background: linear-gradient(135deg, #2c0b0e 0%, #1a0608 100%);
+                background: linear-gradient(135deg, #1e0508 0%, #2c0b0e 100%);
                 color: white;
                 border: 2px solid #ff6b6b;
                 margin-bottom: 25px;
@@ -76,16 +71,24 @@ def render_expiry_alerts(raw_offers, headers=None):
             }
             .date-group {
                 background: rgba(255,255,255,0.05);
-                border-radius: 8px;
-                padding: 10px 15px;
-                margin-bottom: 10px;
-                border-right: 4px solid #ffca28;
+                border-radius: 10px;
+                padding: 12px 15px;
+                margin-bottom: 12px;
+                border-right: 5px solid #ffca28;
             }
             .date-group.expired {
-                border-right: 4px solid #ff4d4d;
-                background: rgba(255,0,0,0.05);
+                border-right: 5px solid #ff4d4d;
+                background: rgba(255,0,0,0.08);
             }
         </style>
+        """, unsafe_allow_html=True)
+        
+        st.markdown(f"""
+        <div class="expiry-alert">
+            <div style="text-align: center; margin-bottom: 20px;">
+                <h2 style="margin:0; color: #ff6b6b;">🚨 انتباه! إجراء مطلوب</h2>
+                <p style="color: #cbd5e1; font-size: 15px; margin-top: 5px;">هناك <b style="background: white; color: red; padding: 2px 10px; border-radius: 12px; font-size: 16px;">{total_count}</b> عرض انتهى بالفعل أو سينتهي قريباً!</p>
+            </div>
         """, unsafe_allow_html=True)
 
         if st.session_state["sound_playing"]:
@@ -99,37 +102,29 @@ def render_expiry_alerts(raw_offers, headers=None):
             </div>
             """, unsafe_allow_html=True)
             
-        st.markdown(f"""
-        <div class="expiry-alert">
-            <div style="text-align: center; margin-bottom: 15px;">
-                <h3 style="margin-top:0; color: #ff6b6b;">🚨 انتباه! هناك <span style='background: white; color: red; padding: 2px 10px; border-radius: 20px;'>{total_expiring_count}</span> عرض يتطلب تدخلك!</h3>
-                <p style="color: #aaa; font-size: 14px;">العروض التالية انتهت بالفعل أو ستنتهي خلال يومين.</p>
-            </div>
-        """, unsafe_allow_html=True)
-            
-        # ✅ عرض العروض مجمعة حسب التاريخ
+        # ✅ عرض العروض مجمعة بجمالية
         for date_str, offers in sorted(expiring_soon_grouped.items()):
-            # تحديد حالة التجميع (منتهي أم قريب)
-            is_expired = any(o['days_left'] < 0 for o in offers)
+            days_left = (safe_parse_date(date_str + " 23:59:59") - now).days
+            is_expired = days_left < 0
             group_class = "date-group expired" if is_expired else "date-group"
-            status_text = "انتهت بالفعل!" if is_expired else ("تنتهي اليوم" if offers[0]['days_left'] == 0 else "تنتهي قريباً")
             status_icon = "🛑" if is_expired else "⏳"
+            status_text = "انتهت بالفعل!" if is_expired else ("تنتهي اليوم" if days_left == 0 else "تنتهي قريباً")
             
             st.markdown(f"""
             <div class="{group_class}">
-                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; border-bottom: 1px solid rgba(255,255,255,0.1); padding-bottom: 5px;">
-                    <b style="color: #ffd700; font-size: 15px;">{status_icon} عروض تنتهي في: {date_str}</b>
-                    <span style="background: rgba(255,255,255,0.2); font-size: 12px; padding: 2px 8px; border-radius: 12px;">عدد العروض: {len(offers)}</span>
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; border-bottom: 1px solid rgba(255,255,255,0.1); padding-bottom: 8px;">
+                    <span style="font-size: 16px; font-weight: bold; color: #ffd700;">{status_icon} عروض تنتهي في: {date_str} <span style="font-size: 12px; color: {'#ff4d4d' if is_expired else '#cbd5e1'};">({status_text})</span></span>
+                    <span style="background: rgba(255,255,255,0.2); font-size: 13px; font-weight: bold; padding: 4px 12px; border-radius: 20px;">العدد: [{len(offers)} عروض]</span>
                 </div>
-                <div style="display: flex; gap: 8px; flex-wrap: wrap;">
+                <div style="display: flex; gap: 10px; flex-wrap: wrap;">
             """, unsafe_allow_html=True)
             
             for offer in offers:
-                st.markdown(f"<span style='background: rgba(0,0,0,0.3); padding: 4px 10px; border-radius: 6px; font-size: 13px; border: 1px solid rgba(255,255,255,0.1);'>🎯 {offer['name']}</span>", unsafe_allow_html=True)
-                
+                st.markdown(f"<span style='background: rgba(0,0,0,0.4); padding: 5px 12px; border-radius: 8px; font-size: 13px; border: 1px solid rgba(255,255,255,0.15); box-shadow: 0 2px 4px rgba(0,0,0,0.2);'>🎯 {offer['name']}</span>", unsafe_allow_html=True)
+            
             st.markdown("</div></div>", unsafe_allow_html=True)
         
-        st.markdown("<div style='margin-top: 15px; display: flex; gap: 10px; justify-content: center; flex-wrap: wrap;'>", unsafe_allow_html=True)
+        st.markdown("<div style='margin-top: 20px; display: flex; gap: 10px; justify-content: center; flex-wrap: wrap;'>", unsafe_allow_html=True)
         
         col_btn1, col_btn2, col_btn3 = st.columns(3)
         with col_btn1:
