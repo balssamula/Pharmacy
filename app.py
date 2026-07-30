@@ -224,5 +224,40 @@ if st.session_state["is_admin_logged_in"] and not st.session_state["logged_in"]:
 # ==========================================
 # 🏠 الواجهة الرئيسية (بعد اختيار المتجر)
 # ==========================================
-# الكود الأصلي للتطبيق يعمل هنا كما هو طبيعياً
-# (st.sidebar.radio, استدعاء render_products_page وغيرها...)
+st.markdown("""
+<div style="background: linear-gradient(135deg, #1E293B 0%, #3B82F6 100%); padding: 25px; border-radius: 12px; color: white; text-align: center; margin-bottom: 20px; box-shadow: 0 4px 6px rgba(0,0,0,0.1);">
+    <h1 style="color: white; margin: 0; font-size: 2.2rem;">🎁 منظومة إدارة المنتجات والعروض الخاصة</h1>
+</div>
+""", unsafe_allow_html=True)
+
+st.sidebar.markdown(f"""
+<div style="background: linear-gradient(135deg, #0F1C2E, #1a365d); padding: 20px 15px; border-radius: 12px; border: 1px solid #334155; margin-bottom: 25px; box-shadow: 0 4px 10px rgba(0,0,0,0.2);">
+    <div style="text-align: center; margin-bottom: 12px;">
+        <div style="font-size: 32px; margin-bottom: 5px;">🏪</div>
+        <h3 style="color: #FFFFFF; margin: 0; font-size: 18px;">{st.session_state.get('store_name', 'متجرك')}</h3>
+    </div>
+    <div style="background: rgba(0,0,0,0.2); border-radius: 8px; padding: 10px;">
+        <div style="display: flex; align-items: center; justify-content: center; font-size: 14px; margin-bottom: 8px; gap: 8px;">
+            <span class="blinking-dot"></span><span style="color: #10B981; font-weight: bold;">متصل ومزامن لحظياً</span>
+        </div>
+        <div style="text-align: center; font-size: 12px; color: #94A3B8; border-top: 1px dashed #334155; padding-top: 8px; margin-top: 5px;">
+            آخر دخول: <b style="color: #CBD5E1; direction: ltr; display: inline-block;">{st.session_state.get('last_sync_time', '')}</b>
+        </div>
+    </div>
+</div>
+""", unsafe_allow_html=True)
+
+page = st.sidebar.radio("القائمة الرئيسية", ["مركز إدارة المنتجات", "لوحة إدارة العروض الخاصة الحالية", "مركز إدارة العملاء والمجموعات"], label_visibility="collapsed")
+st.sidebar.divider()
+
+if st.sidebar.button("🔄 إعادة مزامنة البيانات", type="primary", use_container_width=True):
+    perform_initial_sync_with_ui({"Authorization": f"Bearer {st.session_state['access_token']}"})
+    st.rerun()
+
+if st.sidebar.button("🚪 تسجيل الخروج", use_container_width=True, type="primary"):
+    st.session_state["logged_in"] = False
+    st.rerun()
+
+if page == "مركز إدارة المنتجات": render_products_page()
+elif page == "لوحة إدارة العروض الخاصة الحالية": render_offers_page()
+elif page == "مركز إدارة العملاء والمجموعات": render_customers_page()
