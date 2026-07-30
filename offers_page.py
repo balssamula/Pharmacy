@@ -25,7 +25,7 @@ def get_audio_base64(file_path):
         return None
 
 # ==========================================
-# 🚨 نظام التنبيه لقرب انتهاء العروض (مُحسن ומُجمّع)
+# 🚨 نظام التنبيه لقرب انتهاء العروض (مع أزرار الإجراءات الفورية)
 # ==========================================
 def render_expiry_alerts(raw_offers, headers=None):
     now = datetime.now()
@@ -92,8 +92,8 @@ def render_expiry_alerts(raw_offers, headers=None):
                     <source src="{audio_url}" type="audio/mp3">
                 </audio>
             </div>
-            """, unsafe_allow_html=True)
-
+            """, unsafe_allow_html=True)    
+        
         st.markdown(f"""
         <div class="expiry-alert">
             <div style="text-align: center; margin-bottom: 20px;">
@@ -102,7 +102,7 @@ def render_expiry_alerts(raw_offers, headers=None):
             </div>
         """, unsafe_allow_html=True)
         
-        # ✅ عرض العروض مجمعة بجمالية
+        # ✅ عرض العروض والأزرار المجاورة
         for date_str, offers in sorted(expiring_soon_grouped.items()):
             days_left = (safe_parse_date(date_str + " 23:59:59") - now).days
             is_expired = days_left < 0
@@ -116,28 +116,60 @@ def render_expiry_alerts(raw_offers, headers=None):
                     <span style="font-size: 16px; font-weight: bold; color: #ffd700;">{status_icon} عروض تنتهي في: {date_str} <span style="font-size: 12px; color: {'#ff4d4d' if is_expired else '#cbd5e1'};">({status_text})</span></span>
                     <span style="background: rgba(255,255,255,0.2); font-size: 13px; font-weight: bold; padding: 4px 12px; border-radius: 20px;">العدد: [{len(offers)} عروض]</span>
                 </div>
-                <div style="display: flex; gap: 10px; flex-wrap: wrap;">
             """, unsafe_allow_html=True)
             
             for offer in offers:
-                st.markdown(f"<span style='background: rgba(0,0,0,0.4); padding: 5px 12px; border-radius: 8px; font-size: 13px; border: 1px solid rgba(255,255,255,0.15); box-shadow: 0 2px 4px rgba(0,0,0,0.2);'>🎯 {offer['name']}</span>", unsafe_allow_html=True)
-            
-            st.markdown("</div></div>", unsafe_allow_html=True)
+                o_id = offer['id']
+                # استخدام الأعمدة لوضع الأزرار بجوار اسم العرض
+                col_txt, col_btn1, col_btn2, col_btn3 = st.columns([6, 1, 1, 1])
+                
+                with col_txt:
+                    st.markdown(f"<div style='background: rgba(0,0,0,0.4); padding: 8px 12px; border-radius: 8px; font-size: 13px; border: 1px solid rgba(255,255,255,0.15); margin-top:2px;'>🎯 {offer['name']}</div>", unsafe_allow_html=True)
+                
+                with col_btn1:
+                    if st.button("⏹️", key=f"al_stop_{o_id}", help="إيقاف العرض وإلغاء تفعيله"):
+                        with st.spinner("⏳"):
+                            safe_api_request("PUT", f"{SALLA_API_URL}/{o_id}/status", headers, json={"status": "inactive"})
+                            st.cache_data.clear(); st.rerun()
+                            
+                with col_btn2:
+                    if st.button("🧹", key=f"al_clr_{o_id}", help="مسح العناوين الترويجية للمنتجات المشمولة"):
+                        with st.spinner("⏳"):
+                            full_res = safe_api_request("GET", f"{SALLA_API_URL}/{o_id}", headers)
+                            if full_res and full_res.get('data'):
+                                pids = set()
+                                for p in full_res['data'].get('buy', {}).get('products', []):
+                                    pid = p.get('id', p) if isinstance(p, dict) else p
+                                    if str(pid).isdigit(): pids.add(str(pid))
+                                for p in full_res['data'].get('get', {}).get('products', []):
+                                    pid = p.get('id', p) if isinstance(p, dict) else p
+                                    if str(pid).isdigit(): pids.add(str(pid))
+                                for pid in pids:
+                                    update_product_promotions_secure(int(pid), "", "", headers)
+                            st.cache_data.clear(); st.rerun()
+                            
+                with col_btn3:
+                    if st.button("🗑️", key=f"al_del_{o_id}", help="حذف العرض نهائياً من المتجر"):
+                        with st.spinner("⏳"):
+                            safe_api_request("DELETE", f"{SALLA_API_URL}/{o_id}", headers)
+                            st.cache_data.clear(); st.rerun()
+
+            st.markdown("</div>", unsafe_allow_html=True)
         
         st.markdown("<div style='margin-top: 20px; display: flex; gap: 10px; justify-content: center; flex-wrap: wrap;'>", unsafe_allow_html=True)
         
-        col_btn1, col_btn2, col_btn3 = st.columns(3)
-        with col_btn1:
-            if st.button("📅 تمديد العروض", use_container_width=True, type="primary"):
+        col_btn_bot1, col_btn_bot2, col_btn_bot3 = st.columns(3)
+        with col_btn_bot1:
+            if st.button("📅 تمديد العروض", use_container_width=True, type="primary", key="ext_btn_bot"):
                 st.session_state["qa_action"] = "end_dates"
                 st.rerun()
-        with col_btn2:
-            if st.button("🧹 إزالة العناوين الترويجية", use_container_width=True):
+        with col_btn_bot2:
+            if st.button("🧹 إزالة العناوين المجمعة", use_container_width=True, key="clr_btn_bot"):
                 st.session_state["qa_action"] = "end_dates"
                 st.rerun()
-        with col_btn3:
+        with col_btn_bot3:
             sound_label = "🔇 إخفاء مشغل الصوت" if st.session_state["sound_playing"] else "🔊 إظهار مشغل الصوت"
-            if st.button(sound_label, use_container_width=True):
+            if st.button(sound_label, use_container_width=True, key="snd_btn_bot"):
                 st.session_state["sound_playing"] = not st.session_state["sound_playing"]
                 st.rerun()
         st.markdown("</div></div>", unsafe_allow_html=True)
