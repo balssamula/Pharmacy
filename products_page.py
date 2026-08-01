@@ -428,6 +428,21 @@ def render_products_page():
                             st.error(f"❌ خطأ في قراءة الملف: {str(e)}")
 
     st.markdown("### 🔍 أدوات التصفية والبحث في المنتجات")
+    # ✅ استخراج تواريخ الانتهاء المتاحة للفلتر الجديد
+    available_dates = set()
+    for p in st.session_state.get("all_products", []):
+        s_end = p.get('sale_end')
+        if s_end:
+            available_dates.add(str(s_end).split(' ')[0])
+    date_options = ["الكل", "بدون تاريخ"] + sorted(list(available_dates))
+
+    with st.container(border=True):
+        col_search, col_date = st.columns([3, 1])
+        with col_search:
+            sq = st.text_input("ابحث باسم أو SKU:", placeholder="أدخل الكود للبحث...").lower()
+        with col_date:
+            f_sale_end = st.selectbox("📅 انتهاء السعر المخفض:", options=date_options)
+            
     with st.container(border=True):
         sq = st.text_input("ابحث باسم أو SKU:", placeholder="أدخل الكود للبحث...").lower()
 
