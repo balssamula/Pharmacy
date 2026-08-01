@@ -6,6 +6,7 @@ import io
 import re
 import base64
 import os
+from typing import Dict, List, Any, Optional
 from utils import (
     get_headers, safe_api_request, SALLA_API_URL, generate_salla_excel_template,
     process_excel_import, export_offers_to_excel, safe_parse_date,
