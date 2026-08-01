@@ -536,8 +536,9 @@ def render_offers_page():
                     with col_date1: target_date = st.date_input("تاريخ الانتهاء الحالي:", value=datetime.now().date(), key="be_t_date")
                     with col_time1: target_time = st.time_input("الوقت:", value=datetime.now().time().replace(minute=59, second=59), key="be_t_time")
                     target_str = datetime.combine(target_date, target_time).strftime('%Y-%m-%d')
-                    matching_offers_end = [o for o in raw_offers if o.get('expiry_date', '') and o.get('expiry_date', '').startswith(target_str)]
-                else: matching_offers_end = raw_offers
+                    matching_offers_end = [o for o in raw_offers if o.get('status') == 'active' and o.get('expiry_date', '') and o.get('expiry_date', '').startswith(target_str)]
+                else: 
+                    matching_offers_end = [o for o in raw_offers if o.get('status') == 'active']
 
                 action_type = st.radio("الإجراء المطلوب تنفيذه:", ["تاريخ جديد للتمديد", "إلغاء التفعيل", "مسح العناوين الترويجية لمنتجاتها"], key="be_action")
                 
@@ -551,7 +552,7 @@ def render_offers_page():
                 else: btn_lbl = "🧹 مسح العناوين الترويجية للمنتجات"
                 
                 if st.button(btn_lbl, use_container_width=True, type="primary"):
-                    if not matching_offers_end: st.warning("لا توجد عروض مطابقة")
+                    if not matching_offers_end: st.warning("لا توجد عروض مطابقة (أو ربما جميعها متوقفة)")
                     else:
                         with st.spinner("جاري المعالجة..."):
                             if action_type == "مسح العناوين الترويجية لمنتجاتها":
@@ -573,6 +574,7 @@ def render_offers_page():
                                 for pid in product_ids:
                                     if update_product_promotions_secure(int(pid), "", "", headers): c_prods += 1
                                 st.success(f"✅ تم مسح وإفراغ العناوين الترويجية لـ {c_prods} منتج بنجاح!")
+                                st.cache_data.clear(); st.rerun()
                             else:
                                 c = 0
                                 for offer in matching_offers_end:
@@ -586,6 +588,7 @@ def render_offers_page():
                                             if safe_api_request("PUT", f"{SALLA_API_URL}/{offer_id}", headers, json=payload): c += 1
                                 action_word = "إيقاف" if action_type == "إلغاء التفعيل" else "تمديد"
                                 st.success(f"✅ تم تنفيذ إجراء الـ {action_word} لـ {c} عرض بنجاح!")
+                                st.cache_data.clear(); st.rerun()
 
             elif st.session_state.qa_action == "start_dates":
                 with col_t: st.markdown("### 📅 إدارة وتعديل تواريخ البداية")
@@ -1161,17 +1164,55 @@ def render_offers_page():
     st.markdown("---")
 
 def rebuild_offer_payload(existing_data, overrides=None):
+    """بناء آمن للطلب (Payload) يستخرج الأرقام فقط (IDs) لتجنب أخطاء 500 من سلة"""
     if overrides is None: overrides = {}
+    
+    def extract_ids(items):
+        if not items: return []
+        return [item.get('id', item) if isinstance(item, dict) else item for item in items]
+        
+    buy_data = existing_data.get('buy', {})
+    get_data = existing_data.get('get', {})
+
     payload = {
-        "name": existing_data.get('name', 'عرض بدون اسم'), "offer_type": existing_data.get('offer_type', 'buy_x_get_y'),
-        "applied_channel": existing_data.get('applied_channel', 'browser_and_application'), "applied_to": existing_data.get('applied_to', 'product'),
-        "start_date": existing_data.get('start_date', ''), "expiry_date": existing_data.get('expiry_date', ''),
-        "status": existing_data.get('status', 'active'), "applied_with_coupon": existing_data.get('applied_with_coupon', False),
-        "max_discount_amount": existing_data.get('max_discount_amount', 0), "min_purchase_amount": existing_data.get('min_purchase_amount', 0),
-        "min_items_count": existing_data.get('min_items_count', 0), "message": existing_data.get('message', ''),
-        "buy": existing_data.get('buy', {"type": "product", "quantity": 1}), "get": existing_data.get('get', {"type": "product", "quantity": 1, "discount_type": "percentage"})
+        "name": existing_data.get('name', 'عرض بدون اسم'),
+        "offer_type": existing_data.get('offer_type', 'buy_x_get_y'),
+        "applied_channel": existing_data.get('applied_channel', 'browser_and_application'),
+        "applied_to": existing_data.get('applied_to', 'product'),
+        "start_date": existing_data.get('start_date', ''),
+        "expiry_date": existing_data.get('expiry_date', ''),
+        "status": existing_data.get('status', 'active'),
+        "applied_with_coupon": existing_data.get('applied_with_coupon', False),
+        "max_discount_amount": float(existing_data.get('max_discount_amount') or 0),
+        "min_purchase_amount": float(existing_data.get('min_purchase_amount') or 0),
+        "min_items_count": int(existing_data.get('min_items_count') or 0),
+        "message": existing_data.get('message', ''),
+        "buy": {
+            "type": buy_data.get("type", "product"),
+            "quantity": int(buy_data.get("quantity", 1))
+        },
+        "get": {
+            "type": get_data.get("type", "product"),
+            "quantity": int(get_data.get("quantity", 1)),
+            "discount_type": get_data.get("discount_type", "percentage")
+        }
     }
-    if existing_data.get('customer_groups'): payload["customer_groups"] = existing_data.get('customer_groups')
+    
+    if existing_data.get('customer_groups'):
+        payload["customer_groups"] = extract_ids(existing_data.get('customer_groups'))
+
+    # استخراج IDs للمشتريات
+    if 'products' in buy_data: payload['buy']['products'] = extract_ids(buy_data['products'])
+    if 'categories' in buy_data: payload['buy']['categories'] = extract_ids(buy_data['categories'])
+    if 'brands' in buy_data: payload['buy']['brands'] = extract_ids(buy_data['brands'])
+
+    # استخراج IDs للهدايا
+    if 'products' in get_data: payload['get']['products'] = extract_ids(get_data['products'])
+    if 'categories' in get_data: payload['get']['categories'] = extract_ids(get_data['categories'])
+    if 'brands' in get_data: payload['get']['brands'] = extract_ids(get_data['brands'])
+    if 'discount_amount' in get_data: payload['get']['discount_amount'] = float(get_data['discount_amount'])
+
     for key, value in overrides.items():
-        if key in ["expiry_date", "start_date", "status", "applied_with_coupon"]: payload[key] = value
+        if key in payload: payload[key] = value
+
     return payload
