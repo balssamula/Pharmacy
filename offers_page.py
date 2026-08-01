@@ -130,8 +130,11 @@ def render_expiry_alerts(raw_offers, headers=None):
                 with col_btn1:
                     if st.button("⏹️", key=f"al_stop_{o_id}", help="إيقاف العرض وإلغاء تفعيله"):
                         with st.spinner("⏳"):
-                            safe_api_request("PUT", f"{SALLA_API_URL}/{o_id}/status", headers, json={"status": "inactive"})
-                            st.cache_data.clear(); st.rerun()
+                            if safe_api_request("PUT", f"{SALLA_API_URL}/{o_id}/status", headers, json={"status": "inactive"}):
+                                # ⚡ تحديث الذاكرة محلياً لاختفاء العرض فوراً
+                                for i, o in enumerate(st.session_state["all_offers"]):
+                                    if str(o.get('id')) == str(o_id): st.session_state["all_offers"][i]['status'] = 'inactive'
+                                st.rerun()
                             
                 with col_btn2:
                     if st.button("🧹", key=f"al_clr_{o_id}", help="مسح العناوين الترويجية للمنتجات المشمولة"):
@@ -147,13 +150,15 @@ def render_expiry_alerts(raw_offers, headers=None):
                                     if str(pid).isdigit(): pids.add(str(pid))
                                 for pid in pids:
                                     update_product_promotions_secure(int(pid), "", "", headers)
-                            st.cache_data.clear(); st.rerun()
+                            st.rerun()
                             
                 with col_btn3:
                     if st.button("🗑️", key=f"al_del_{o_id}", help="حذف العرض نهائياً من المتجر"):
                         with st.spinner("⏳"):
-                            safe_api_request("DELETE", f"{SALLA_API_URL}/{o_id}", headers)
-                            st.cache_data.clear(); st.rerun()
+                            if safe_api_request("DELETE", f"{SALLA_API_URL}/{o_id}", headers):
+                                # ⚡ حذف العرض من الذاكرة لاختفائه فوراً
+                                st.session_state["all_offers"] = [o for o in st.session_state["all_offers"] if str(o.get('id')) != str(o_id)]
+                                st.rerun()
 
             st.markdown("</div>", unsafe_allow_html=True)
         
@@ -454,11 +459,12 @@ def render_offers_page():
             if not st.session_state["all_brands"]: st.session_state["all_brands"] = fetch_all_pages_local("https://api.salla.dev/admin/v2/brands", "جاري سحب الماركات التجارية")
             if not st.session_state["all_products"]: st.session_state["all_products"] = fetch_all_pages_local("https://api.salla.dev/admin/v2/products", "جاري سحب قائمة المنتجات")
 
-    if "raw_offers" not in st.session_state:
-        with st.spinner("🔄 جاري جلب كافة العروض الحالية من المتجر..."):
-            st.session_state["raw_offers"] = fetch_offers_cached(headers)
+    # ⚡ استدعاء البيانات من الذاكرة المركزية مباشرة بدون تكرار التحميل
+    if "all_offers" not in st.session_state:
+        st.warning("⚠️ يرجى مزامنة البيانات من لوحة التحكم الرئيسية أولاً.")
+        return
     
-    raw_offers = st.session_state["raw_offers"]
+    raw_offers = st.session_state["all_offers"]
     
     render_expiry_alerts(raw_offers, headers)
     render_create_offer_section(headers, section_key="main")
