@@ -671,7 +671,7 @@ def render_products_page():
                         "👁️ إخفاء المنتجات (نقل للمسودة)", 
                         "🛒 إظهار المنتجات (نقل للبيع)", 
                         "🧹 مسح العناوين (الترويجية والفرعية)", 
-                        "🛑 إيقاف العرض الخاص (إلغاء السعر المخفض)", 
+                        "🛑 إيقاف العرض الخاص (إلغاء السعر المخفض ومسح التواريخ)", 
                         "🗑️ حذف المنتجات نهائياً"
                     ],
                     key="bulk_action_radio"
@@ -697,7 +697,18 @@ def render_products_page():
                             elif "مسح العناوين" in bulk_action:
                                 if update_product_promotions_secure(p_id, "", "", headers): success_count += 1
                             elif "إيقاف العرض" in bulk_action:
-                                if update_product_sale_price(p_id, 0.0): success_count += 1
+                                # التعديل هنا: إرسال أمر صريح بإلغاء السعر والتواريخ معاً
+                                base_price = get_flat_price(p.get('regular_price', 0)) or get_flat_price(p.get('price', 0))
+                                payload = {
+                                    "name": p.get('name'), 
+                                    "price": base_price, 
+                                    "status": p.get('status', 'sale'),
+                                    "sale_price": None,
+                                    "sale_start": None,
+                                    "sale_end": None
+                                }
+                                if safe_api_request("PUT", f"https://api.salla.dev/admin/v2/products/{p_id}", headers, json=payload):
+                                    success_count += 1
                             elif "حذف" in bulk_action:
                                 if delete_product(p_id): success_count += 1
                                 
