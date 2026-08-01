@@ -3,6 +3,7 @@ import requests
 import json
 import os
 import base64
+import time
 from datetime import datetime, timedelta
 from utils import get_headers, safe_api_request, get_branches_list
 
@@ -18,31 +19,50 @@ from products_page import render_products_page
 from customers_page import render_customers_page
 
 # ==========================================
-# 🔄 المزامنة الحية فائقة السرعة (بدون حظر API)
+# 🔄 المزامنة الحية فائقة السرعة (مع شريط التقدم الذكي)
 # ==========================================
-@st.cache_data(ttl=86400, show_spinner=False)
-def fetch_store_data_fast(token):
-    """دالة ذكية تخزن بيانات المتجر في ذاكرة سيرفر أوراكل لمدة 24 ساعة لتسريع الفتح"""
-    headers = {"Authorization": f"Bearer {token}"}
+@st.cache_resource
+def get_global_store_cache():
+    """مخزن ذاكرة السيرفر المركزي (يعيش حتى عند تحديث الصفحة أو إغلاق المتصفح)"""
+    return {}
+
+def fetch_store_data_fast(token, headers):
+    cache = get_global_store_cache()
+    now = datetime.now()
     
+    # 1️⃣ التحقق من الذاكرة: إذا كانت البيانات موجودة وحديثة (أقل من 24 ساعة)، نرجعها فوراً بصمت
+    if token in cache and (now - cache[token]['time']).total_seconds() < 86400:
+        return cache[token]['products'], cache[token]['offers'], cache[token]['po_map']
+        
+    # 2️⃣ إذا لم تكن في الذاكرة: نظهر شريط التقدم والعدادات ونسحبها من المتجر
+    status_text = st.empty()
+    progress_bar = st.progress(0)
+    
+    status_text.info("📦 جاري تهيئة الاتصال وسحب المنتجات...")
     products = []
     res = safe_api_request("GET", "https://api.salla.dev/admin/v2/products?per_page=100&page=1", headers)
     if res:
         tp = res.get("pagination", {}).get("totalPages", 1)
         products.extend(res.get("data", []))
         for page in range(2, tp + 1):
+            status_text.info(f"📦 جاري سحب المنتجات: صفحة {page} من {tp} | (تم تحميل {len(products)} منتج)")
             p_res = safe_api_request("GET", f"https://api.salla.dev/admin/v2/products?per_page=100&page={page}", headers)
             if p_res and p_res.get("data"): products.extend(p_res["data"])
+            progress_bar.progress(0.4 * (page / tp))
             
+    status_text.info("🎁 جاري سحب العروض الخاصة النشطة...")
     offers = []
     o_res = safe_api_request("GET", "https://api.salla.dev/admin/v2/specialoffers?per_page=100&page=1", headers)
     if o_res:
         tp = o_res.get("pagination", {}).get("totalPages", 1)
         offers.extend(o_res.get("data", []))
         for page in range(2, tp + 1):
+            status_text.info(f"🎁 جاري سحب العروض: صفحة {page} من {tp} | (تم تحميل {len(offers)} عرض)")
             op_res = safe_api_request("GET", f"https://api.salla.dev/admin/v2/specialoffers?per_page=100&page={page}", headers)
             if op_res and op_res.get("data"): offers.extend(op_res["data"])
+            progress_bar.progress(0.4 + (0.4 * (page / tp)))
             
+    status_text.info("🔗 جاري معالجة روابط العروض بالمنتجات...")
     po_map = {"ALL_PRODUCTS": []}
     active_offers = [o for o in offers if o.get('status') == 'active']
     for o in active_offers:
@@ -66,16 +86,31 @@ def fetch_store_data_fast(token):
             for pid in pids:
                 if pid not in po_map: po_map[pid] = []
                 po_map[pid].append(summary)
-                
+    
+    progress_bar.progress(1.0)
+    status_text.success(f"✅ اكتمل تحميل البيانات! ({len(products)} منتج، {len(offers)} عرض)")
+    time.sleep(1.5) # إعطاء فرصة ثانية ونصف للمستخدم لرؤية رسالة النجاح
+    
+    progress_bar.empty()
+    status_text.empty()
+    
+    # 3️⃣ حفظ البيانات في ذاكرة السيرفر المركزية للمرات القادمة
+    cache[token] = {
+        'time': now,
+        'products': products,
+        'offers': offers,
+        'po_map': po_map
+    }
+    
     return products, offers, po_map
 
 def perform_initial_sync_with_ui(headers):
     placeholder = st.empty()
     with placeholder.container():
-        st.markdown("<div style='background: #0F1C2E; padding: 20px; border-radius: 12px; border: 1px solid #00EBCF; text-align: center; margin-bottom: 20px;'><h3 style='color: #00EBCF; margin: 0;'>🚀 جاري تهيئة المنظومة (سيتم الفتح الفوري من الذاكرة إن وجدت)...</h3></div>", unsafe_allow_html=True)
+        st.markdown("<div style='background: #0F1C2E; padding: 20px; border-radius: 12px; border: 1px solid #00EBCF; text-align: center; margin-bottom: 20px;'><h3 style='color: #00EBCF; margin: 0;'>🚀 جاري تهيئة المنظومة...</h3></div>", unsafe_allow_html=True)
         
         token = headers['Authorization'].split(' ')[1]
-        products, offers, po_map = fetch_store_data_fast(token)
+        products, offers, po_map = fetch_store_data_fast(token, headers)
         
         st.session_state["all_products"] = products
         st.session_state["all_offers"] = offers
@@ -84,6 +119,7 @@ def perform_initial_sync_with_ui(headers):
         from utils import get_branches_list
         st.session_state["branches"] = get_branches_list()
         st.session_state["all_products_fetched"] = True
+        st.session_state["last_sync_time"] = datetime.now().strftime("%Y-%m-%d %I:%M %p")
     placeholder.empty()
 
 # ==========================================
@@ -231,8 +267,13 @@ page = st.sidebar.radio("القائمة الرئيسية", ["مركز إدارة
 st.sidebar.divider()
 
 if st.sidebar.button("🔄 إعادة مزامنة البيانات", type="primary", use_container_width=True):
-    fetch_store_data_fast.clear() # ⚡ مسح الذاكرة المخبأة للسيرفر لإجبار سحب البيانات الجديدة
-    perform_initial_sync_with_ui({"Authorization": f"Bearer {st.session_state['access_token']}"})
+    # ⚡ مسح الذاكرة المخبأة لهذا المتجر تحديداً لإجبار النظام على إظهار شريط التقدم وسحب البيانات الجديدة
+    cache = get_global_store_cache()
+    token = st.session_state['access_token']
+    if token in cache:
+        del cache[token]
+        
+    perform_initial_sync_with_ui({"Authorization": f"Bearer {token}"})
     st.rerun()
 
 if st.sidebar.button("🚪 تسجيل الخروج", use_container_width=True, type="primary"):
