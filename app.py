@@ -20,90 +20,70 @@ from customers_page import render_customers_page
 # ==========================================
 # 🔄 المزامنة الحية فائقة السرعة (بدون حظر API)
 # ==========================================
+@st.cache_data(ttl=86400, show_spinner=False)
+def fetch_store_data_fast(token):
+    """دالة ذكية تخزن بيانات المتجر في ذاكرة سيرفر أوراكل لمدة 24 ساعة لتسريع الفتح"""
+    headers = {"Authorization": f"Bearer {token}"}
+    
+    products = []
+    res = safe_api_request("GET", "https://api.salla.dev/admin/v2/products?per_page=100&page=1", headers)
+    if res:
+        tp = res.get("pagination", {}).get("totalPages", 1)
+        products.extend(res.get("data", []))
+        for page in range(2, tp + 1):
+            p_res = safe_api_request("GET", f"https://api.salla.dev/admin/v2/products?per_page=100&page={page}", headers)
+            if p_res and p_res.get("data"): products.extend(p_res["data"])
+            
+    offers = []
+    o_res = safe_api_request("GET", "https://api.salla.dev/admin/v2/specialoffers?per_page=100&page=1", headers)
+    if o_res:
+        tp = o_res.get("pagination", {}).get("totalPages", 1)
+        offers.extend(o_res.get("data", []))
+        for page in range(2, tp + 1):
+            op_res = safe_api_request("GET", f"https://api.salla.dev/admin/v2/specialoffers?per_page=100&page={page}", headers)
+            if op_res and op_res.get("data"): offers.extend(op_res["data"])
+            
+    po_map = {"ALL_PRODUCTS": []}
+    active_offers = [o for o in offers if o.get('status') == 'active']
+    for o in active_offers:
+        oid = str(o.get("id"))
+        summary = {"id": oid, "name": o.get("name")}
+        applied_to = o.get("applied_to")
+        offer_type = o.get("offer_type")
+        if applied_to in ["order", "all"] or offer_type in ["cart_offer", "tiered_offer"]:
+            po_map["ALL_PRODUCTS"].append(summary)
+        else:
+            pids = set()
+            for px in (o.get("buy", {}) or {}).get("products", []):
+                pid = str(px.get("id", px) if isinstance(px, dict) else px)
+                if pid.isdigit(): pids.add(pid)
+            for px in (o.get("get", {}) or {}).get("products", []):
+                pid = str(px.get("id", px) if isinstance(px, dict) else px)
+                if pid.isdigit(): pids.add(pid)
+            for px in o.get("products", []):
+                pid = str(px.get("id", px) if isinstance(px, dict) else px)
+                if pid.isdigit(): pids.add(pid)
+            for pid in pids:
+                if pid not in po_map: po_map[pid] = []
+                po_map[pid].append(summary)
+                
+    return products, offers, po_map
+
 def perform_initial_sync_with_ui(headers):
     placeholder = st.empty()
     with placeholder.container():
-        st.markdown("""
-        <div style='background: #0F1C2E; padding: 20px; border-radius: 12px; border: 1px solid #00EBCF; text-align: center; margin-bottom: 20px;'>
-            <h3 style='color: #00EBCF; margin: 0;'>🔄 جاري تهيئة المنظومة وسحب بيانات متجرك...</h3>
-        </div>
-        """, unsafe_allow_html=True)
+        st.markdown("<div style='background: #0F1C2E; padding: 20px; border-radius: 12px; border: 1px solid #00EBCF; text-align: center; margin-bottom: 20px;'><h3 style='color: #00EBCF; margin: 0;'>🚀 جاري تهيئة المنظومة (سيتم الفتح الفوري من الذاكرة إن وجدت)...</h3></div>", unsafe_allow_html=True)
         
-        progress_bar = st.progress(0)
-        status_text = st.empty()
+        token = headers['Authorization'].split(' ')[1]
+        products, offers, po_map = fetch_store_data_fast(token)
         
-        # 1. سحب المنتجات
-        status_text.info("📦 جاري الاتصال وسحب المنتجات...")
-        products = []
-        res = safe_api_request("GET", "https://api.salla.dev/admin/v2/products?per_page=60&page=1", headers)
-        if res:
-            tp = res.get("pagination", {}).get("totalPages", 1)
-            products.extend(res.get("data", []))
-            for page in range(2, tp + 1):
-                status_text.info(f"📦 جاري سحب المنتجات: صفحة {page} من {tp} | (تم تحميل {len(products)} منتج)")
-                p_res = safe_api_request("GET", f"https://api.salla.dev/admin/v2/products?per_page=60&page={page}", headers)
-                if p_res and p_res.get("data"): products.extend(p_res["data"])
-                progress_bar.progress(0.4 * (page / tp))
         st.session_state["all_products"] = products
-        
-        # 2. سحب العروض
-        status_text.info("🎁 جاري سحب العروض الخاصة النشطة...")
-        offers = []
-        o_res = safe_api_request("GET", "https://api.salla.dev/admin/v2/specialoffers?per_page=60&page=1", headers)
-        if o_res:
-            tp = o_res.get("pagination", {}).get("totalPages", 1)
-            offers.extend(o_res.get("data", []))
-            for page in range(2, tp + 1):
-                status_text.info(f"🎁 جاري سحب العروض: صفحة {page} من {tp}")
-                op_res = safe_api_request("GET", f"https://api.salla.dev/admin/v2/specialoffers?per_page=60&page={page}", headers)
-                if op_res and op_res.get("data"): offers.extend(op_res["data"])
-                progress_bar.progress(0.4 + (0.4 * (page / tp)))
         st.session_state["all_offers"] = offers
-        
-        # 3. بناء خريطة العروض (من الذاكرة بسرعة البرق لتجنب حظر سلة)
-        status_text.info("🔗 جاري معالجة روابط العروض بالمنتجات...")
-        po_map = {"ALL_PRODUCTS": []}
-        active_offers = [o for o in offers if o.get('status') == 'active']
-        
-        for o in active_offers:
-            oid = str(o.get("id"))
-            summary = {"id": oid, "name": o.get("name")}
-            applied_to = o.get("applied_to")
-            offer_type = o.get("offer_type")
-            
-            if applied_to in ["order", "all"] or offer_type in ["cart_offer", "tiered_offer"]:
-                po_map["ALL_PRODUCTS"].append(summary)
-            else:
-                pids = set()
-                buy_data = o.get("buy") or {}
-                for px in buy_data.get("products", []):
-                    pid = str(px.get("id", px) if isinstance(px, dict) else px)
-                    if pid.isdigit(): pids.add(pid)
-                    
-                get_data = o.get("get") or {}
-                for px in get_data.get("products", []):
-                    pid = str(px.get("id", px) if isinstance(px, dict) else px)
-                    if pid.isdigit(): pids.add(pid)
-                    
-                for px in o.get("products", []):
-                    pid = str(px.get("id", px) if isinstance(px, dict) else px)
-                    if pid.isdigit(): pids.add(pid)
-                    
-                for pid in pids:
-                    if pid not in po_map: po_map[pid] = []
-                    po_map[pid].append(summary)
-                    
         st.session_state["product_offers_map"] = po_map
-        progress_bar.progress(0.9)
         
-        # 4. الفروع
-        status_text.info("🏢 جاري جلب الفروع والمستودعات...")
+        from utils import get_branches_list
         st.session_state["branches"] = get_branches_list()
-        progress_bar.progress(1.0)
-        
         st.session_state["all_products_fetched"] = True
-        st.session_state["last_sync_time"] = datetime.now().strftime("%Y-%m-%d %I:%M %p")
-        
     placeholder.empty()
 
 # ==========================================
@@ -251,6 +231,7 @@ page = st.sidebar.radio("القائمة الرئيسية", ["مركز إدارة
 st.sidebar.divider()
 
 if st.sidebar.button("🔄 إعادة مزامنة البيانات", type="primary", use_container_width=True):
+    fetch_store_data_fast.clear() # ⚡ مسح الذاكرة المخبأة للسيرفر لإجبار سحب البيانات الجديدة
     perform_initial_sync_with_ui({"Authorization": f"Bearer {st.session_state['access_token']}"})
     st.rerun()
 
