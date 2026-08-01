@@ -1064,16 +1064,22 @@ def render_offers_page():
             t_status = "inactive" if status == "active" else "active"
             lbl = "🛑 إيقاف العرض" if status == "active" else "▶️ إعادة تفعيل العرض"
             if st.button(lbl, key=f"t_st_{offer_id}_{idx}", use_container_width=True):
-                safe_api_request("PUT", f"{SALLA_API_URL}/{offer_id}/status", headers, json={"status": t_status})
-                st.cache_data.clear(); st.rerun()
+                if safe_api_request("PUT", f"{SALLA_API_URL}/{offer_id}/status", headers, json={"status": t_status}):
+                    for i, o in enumerate(st.session_state["all_offers"]):
+                        if str(o.get('id')) == str(offer_id): st.session_state["all_offers"][i]['status'] = t_status
+                    st.rerun()
         with b2:
             if st.button("🔖 عكس تطبيق العرض مع الكوبون ⏯", key=f"t_cp_{offer_id}_{idx}", use_container_width=True):
-                safe_api_request("PUT", f"{SALLA_API_URL}/{offer_id}", headers, json={"applied_with_coupon": not offer_data.get('applied_with_coupon', False)})
-                st.cache_data.clear(); st.rerun()
+                new_coupon_status = not offer_data.get('applied_with_coupon', False)
+                if safe_api_request("PUT", f"{SALLA_API_URL}/{offer_id}", headers, json={"applied_with_coupon": new_coupon_status}):
+                    for i, o in enumerate(st.session_state["all_offers"]):
+                        if str(o.get('id')) == str(offer_id): st.session_state["all_offers"][i]['applied_with_coupon'] = new_coupon_status
+                    st.rerun()
         with b3:
             if st.button("🗑️ حذف العرض بالكامل", key=f"t_dl_{offer_id}_{idx}", use_container_width=True, type="primary"):
-                safe_api_request("DELETE", f"{SALLA_API_URL}/{offer_id}", headers)
-                st.cache_data.clear(); st.rerun()
+                if safe_api_request("DELETE", f"{SALLA_API_URL}/{offer_id}", headers):
+                    st.session_state["all_offers"] = [o for o in st.session_state["all_offers"] if str(o.get('id')) != str(offer_id)]
+                    st.rerun()
 
         with st.expander("✏️ تعديل ومراجعة العرض الترويجي", expanded=False):
             ed_name = st.text_input("إسم العرض:", value=offer_name, key=f"ed_n_{offer_id}_{idx}")
@@ -1160,8 +1166,13 @@ def render_offers_page():
                         if ed_get_selected_ids: update_payload["get"][get_cat] = ed_get_selected_ids
                     if ed_disc_amt > 0: update_payload["get"]["discount_amount"] = float(ed_disc_amt)
                     if safe_api_request("PUT", f"{SALLA_API_URL}/{offer_id}", headers, json=update_payload):
-                        st.success("تم التحديث!")
-                        st.cache_data.clear(); st.rerun()
+                        st.success("تم التحديث بنجاح!")
+                        # ⚡ جلب التحديث وحقنه في الذاكرة فوراً
+                        fresh_res = safe_api_request("GET", f"{SALLA_API_URL}/{offer_id}", headers)
+                        if fresh_res and fresh_res.get('data'):
+                            for i, o in enumerate(st.session_state["all_offers"]):
+                                if str(o.get('id')) == str(offer_id): st.session_state["all_offers"][i] = fresh_res['data']
+                        st.rerun()
                 except Exception as e: st.error(f"خطأ: {str(e)}")
         st.markdown("</div>", unsafe_allow_html=True)
     
