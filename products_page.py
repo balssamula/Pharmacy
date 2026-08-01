@@ -92,16 +92,16 @@ def render_product_card(idx: int, p: Dict, headers: Dict[str, str]):
                 with st.expander("💰 تحديث الأسعار"):
                     np = st.number_input("أصلي (SAR):", min_value=0.0, value=float(base_price), key=f"np_{p_id}_{idx}")
                     nsp = st.number_input("مخفض (SAR) [0 للإلغاء]:", min_value=0.0, value=float(display_sale_price) if has_disc else 0.0, key=f"nsp_{p_id}_{idx}")
-                    col_d1, col_d2 = st.columns(2)
-                    with col_d1:
+                    col_date1, col_date2 = st.columns(2)
+                    with col_date1:
                         sd_val = datetime.strptime(sale_start_date, "%Y-%m-%d") if sale_start_date != "غير محدد" else None
                         sd = st.date_input("بداية:", value=sd_val, key=f"sd_{p_id}_{idx}")
-                    with col_d2:
+                    with col_date2:
                         ed_val = datetime.strptime(sale_end_date, "%Y-%m-%d") if sale_end_date != "غير محدد" else None
                         ed = st.date_input("نهاية:", value=ed_val, key=f"ed_{p_id}_{idx}")
                     
-                    c_btn1, c_btn2 = st.columns(2)
-                    with c_btn1:
+                    col_btn1, col_btn2 = st.columns(2)
+                    with col_btn1:
                         if st.button("💾 تحديث السعر الأصلي", key=f"sv_p_{p_id}_{idx}", use_container_width=True):
                             with st.spinner("تحديث..."):
                                 if update_product_price(int(p_id), np):
