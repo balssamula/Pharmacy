@@ -233,7 +233,7 @@ def build_product_offers_map_with_progress(offers, headers):
                 if pid not in po_map: po_map[pid] = []
                 po_map[pid].append({"id": oid, "name": o.get("name")})
                 
-        time.sleep(0.2)
+        time.sleep(0.3)
         progress_bar.progress((idx + 1) / total)
     
     progress_bar.empty()
