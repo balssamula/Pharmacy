@@ -73,8 +73,11 @@ def render_product_card(idx: int, p: Dict, headers: Dict[str, str]):
                         st.error("❌ فشل تحديث المنتج")
                         
         # ✅ استخراج العروض المربوطة بالمنتج من الذاكرة مع التحقق من وجود البيانات
-        product_offers_map = st.session_state.get("product_offers_map", {})
-        p_offers = product_offers_map.get(p_id, [])
+        po_map = st.session_state.get("product_offers_map", {})
+        # ⚡ التعديل: نأخذ العروض المباشرة المربوطة بالمنتج فقط، ونتجاهل العروض العامة للسلة
+        p_offers_raw = po_map.get(p_id, []) 
+        unique_offers = {off['id']: off for off in p_offers_raw}.values()
+        p_offers = list(unique_offers)
         
         # ✅ عرض عدد العروض للتأكد (يمكن إزالته بعد التأكد)
         if p_offers:
@@ -630,7 +633,7 @@ def render_products_page():
         if f_type == "مجموعات" and not is_group: continue
         
         p_id_str = str(p.get('id', '')).strip()
-        is_in_offer = bool(po_map.get(p_id_str)) or bool(all_products_offers)
+        is_in_offer = bool(po_map.get(p_id_str))
         if f_offer == "مشمول" and not is_in_offer: continue
         if f_offer == "غير مشمول" and is_in_offer: continue
         
