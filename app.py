@@ -30,14 +30,13 @@ def fetch_store_data_fast(token, headers):
     cache = get_global_store_cache()
     now = datetime.now()
     
-    # 1️⃣ التحقق من الذاكرة: إذا كانت البيانات موجودة وحديثة (أقل من 24 ساعة)، نرجعها فوراً بصمت
     if token in cache and (now - cache[token]['time']).total_seconds() < 86400:
-        return cache[token]['products'], cache[token]['offers'], cache[token]['po_map']
+        return cache[token]['products'], cache[token]['offers'], cache[token]['po_map'], cache[token]['customers']
         
-    # 2️⃣ إذا لم تكن في الذاكرة: نظهر شريط التقدم والعدادات ونسحبها من المتجر
     status_text = st.empty()
     progress_bar = st.progress(0)
     
+    # 1️⃣ سحب المنتجات
     status_text.info("📦 جاري تهيئة الاتصال وسحب المنتجات...")
     products = []
     res = safe_api_request("GET", "https://api.salla.dev/admin/v2/products?per_page=60&page=1", headers)
@@ -48,8 +47,9 @@ def fetch_store_data_fast(token, headers):
             status_text.info(f"📦 جاري سحب المنتجات: صفحة {page} من {tp} | (تم تحميل {len(products)} منتج)")
             p_res = safe_api_request("GET", f"https://api.salla.dev/admin/v2/products?per_page=60&page={page}", headers)
             if p_res and p_res.get("data"): products.extend(p_res["data"])
-            progress_bar.progress(0.4 * (page / tp))
+            progress_bar.progress(0.3 * (page / tp))
             
+    # 2️⃣ سحب العروض
     status_text.info("🎁 جاري سحب العروض الخاصة النشطة...")
     offers = []
     o_res = safe_api_request("GET", "https://api.salla.dev/admin/v2/specialoffers?per_page=60&page=1", headers)
@@ -60,8 +60,22 @@ def fetch_store_data_fast(token, headers):
             status_text.info(f"🎁 جاري سحب العروض: صفحة {page} من {tp} | (تم تحميل {len(offers)} عرض)")
             op_res = safe_api_request("GET", f"https://api.salla.dev/admin/v2/specialoffers?per_page=60&page={page}", headers)
             if op_res and op_res.get("data"): offers.extend(op_res["data"])
-            progress_bar.progress(0.4 + (0.4 * (page / tp)))
+            progress_bar.progress(0.3 + (0.3 * (page / tp)))
+
+    # 3️⃣ سحب العملاء بالكامل (لحل مشكلة عدم ظهورهم)
+    status_text.info("👥 جاري سحب قاعدة بيانات العملاء...")
+    customers = []
+    c_res = safe_api_request("GET", "https://api.salla.dev/admin/v2/customers?per_page=50&page=1", headers)
+    if c_res:
+        tp = c_res.get("pagination", {}).get("totalPages", 1)
+        customers.extend(c_res.get("data", []))
+        for page in range(2, tp + 1):
+            status_text.info(f"👥 جاري سحب العملاء: صفحة {page} من {tp} | (تم تحميل {len(customers)} عميل)")
+            cp_res = safe_api_request("GET", f"https://api.salla.dev/admin/v2/customers?per_page=50&page={page}", headers)
+            if cp_res and cp_res.get("data"): customers.extend(cp_res["data"])
+            progress_bar.progress(0.6 + (0.3 * (page / tp)))
             
+    # 4️⃣ معالجة الروابط
     status_text.info("🔗 جاري معالجة روابط العروض بالمنتجات...")
     po_map = {"ALL_PRODUCTS": []}
     active_offers = [o for o in offers if o.get('status') == 'active']
@@ -88,33 +102,34 @@ def fetch_store_data_fast(token, headers):
                 po_map[pid].append(summary)
     
     progress_bar.progress(1.0)
-    status_text.success(f"✅ اكتمل تحميل البيانات! ({len(products)} منتج، {len(offers)} عرض)")
-    time.sleep(1.5) # إعطاء فرصة ثانية ونصف للمستخدم لرؤية رسالة النجاح
+    status_text.success(f"✅ اكتمل التحميل! ({len(products)} منتج، {len(offers)} عرض، {len(customers)} عميل)")
+    time.sleep(1.5)
     
     progress_bar.empty()
     status_text.empty()
     
-    # 3️⃣ حفظ البيانات في ذاكرة السيرفر المركزية للمرات القادمة
     cache[token] = {
         'time': now,
         'products': products,
         'offers': offers,
-        'po_map': po_map
+        'po_map': po_map,
+        'customers': customers
     }
     
-    return products, offers, po_map
+    return products, offers, po_map, customers
 
 def perform_initial_sync_with_ui(headers):
     placeholder = st.empty()
     with placeholder.container():
-        st.markdown("<div style='background: #0F1C2E; padding: 20px; border-radius: 12px; border: 1px solid #00EBCF; text-align: center; margin-bottom: 20px;'><h3 style='color: #00EBCF; margin: 0;'>🚀 جاري تهيئة المنظومة...</h3></div>", unsafe_allow_html=True)
+        st.markdown("<div style='background: #0F1C2E; padding: 20px; border-radius: 12px; border: 1px solid #00EBCF; text-align: center; margin-bottom: 20px;'><h3 style='color: #00EBCF; margin: 0;'>🚀 جاري تهيئة المنظومة وسحب بيانات المتجر الشاملة...</h3></div>", unsafe_allow_html=True)
         
         token = headers['Authorization'].split(' ')[1]
-        products, offers, po_map = fetch_store_data_fast(token, headers)
+        products, offers, po_map, customers = fetch_store_data_fast(token, headers)
         
         st.session_state["all_products"] = products
         st.session_state["all_offers"] = offers
         st.session_state["product_offers_map"] = po_map
+        st.session_state["customers_data"] = {"data": customers}
         
         from utils import get_branches_list
         st.session_state["branches"] = get_branches_list()
