@@ -7,6 +7,9 @@ from utils import (
 )
 
 def render_customers_page():
+    # ⚡ تهيئة متغير الصفحة الحالية للعملاء
+    if "cust_page" not in st.session_state: st.session_state["cust_page"] = 1
+
     st.markdown("""
     <div style="background: linear-gradient(135deg, #0F1C2E 0%, #00EBCF 100%); padding: 15px 25px; border-radius: 12px; color: white; margin-bottom: 20px; box-shadow: 0 4px 6px rgba(0,0,0,0.1);">
         <h2 style="color: white; margin: 0;">👥 مركز إدارة العملاء والمجموعات</h2>
@@ -49,88 +52,146 @@ def render_customers_page():
 
         st.divider()
         
-        # شريط البحث والجلب
+        # شريط البحث
         search_kw = st.text_input("🔍 ابحث عن عميل برقم الجوال، البريد الإلكتروني أو الاسم:")
-        with st.spinner("جاري جلب بيانات العملاء..."):
-            res_cust = get_customers_list(keyword=search_kw)
-            
-        if res_cust and res_cust.get("data"):
-            customers = res_cust["data"]
-            
-            # زر تصدير العملاء المنسق باحترافية
-            st.download_button(
-                label="📥 تصدير قائمة العملاء الحالية إلى Excel",
-                data=export_customers_to_excel(customers),
-                file_name="Balsem_Customers_Report.xlsx",
-                mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-                key="export_customers_btn_excel"
-            )
-            st.markdown("<br>", unsafe_allow_html=True)
+        
+        # ⚡ قراءة العملاء من الذاكرة المحلية (تم سحبهم في app.py) بدلاً من الـ API البطيء
+        all_customers = st.session_state.get("customers_data", {}).get("data", [])
 
-            for idx, cust in enumerate(customers):
-                cust_id = cust.get('id', 'N/A')
-                full_name = f"{cust.get('first_name', '')} {cust.get('last_name', '')}"
+        if not all_customers:
+            st.warning("⚠️ لا توجد بيانات عملاء في الذاكرة. يرجى العودة للقائمة الجانبية والضغط على 'إعادة مزامنة البيانات'.")
+        else:
+            # ⚡ فلترة محلية سريعة جداً
+            filtered_customers = []
+            for cust in all_customers:
+                if search_kw:
+                    kw = search_kw.lower()
+                    full_name = f"{cust.get('first_name', '')} {cust.get('last_name', '')}".lower()
+                    email = str(cust.get('email', '')).lower()
+                    mobile = str(cust.get('mobile', '')).lower()
+                    if kw not in full_name and kw not in email and kw not in mobile:
+                        continue
+                filtered_customers.append(cust)
+
+            # ✅ إظهار الإحصائيات (عدد العملاء الشامل)
+            st.markdown(f"<div style='background: #f0f4f8; padding: 10px 16px; border-radius: 8px; margin-bottom: 15px; border-right: 4px solid #00b4d8; color: #0f1c2e;'>📊 إجمالي العملاء في المتجر: <b>{len(all_customers)}</b> | المطابق للبحث: <b>{len(filtered_customers)}</b> عميل</div>", unsafe_allow_html=True)
+
+            if filtered_customers:
+                # زر التصدير للعملاء المفلترين
+                st.download_button(
+                    label=f"📥 تصدير قائمة العملاء الحالية ({len(filtered_customers)}) إلى Excel",
+                    data=export_customers_to_excel(filtered_customers),
+                    file_name="Balsem_Customers_Report.xlsx",
+                    mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                    key="export_customers_btn_excel"
+                )
                 
-                stats = cust.get('stats', {})
-                orders_count = stats.get('orders_count', 0) if isinstance(stats, dict) else 0
-                orders_amount = safe_float(stats.get('orders_amount', 0.0)) if isinstance(stats, dict) else 0.0
+                # ==========================================
+                # 📄 نظام عرض الصفحات (Pagination)
+                # ==========================================
+                limit = 20
+                total_pages = max(1, (len(filtered_customers) + limit - 1) // limit)
                 
-                # ترويسة الحاوية الفاخرة للعميل
-                st.markdown(f"""
-                    <div style="background: linear-gradient(135deg, #0f1c2e 0%, #1a365d 100%); 
-                                padding: 12px 20px; border-radius: 12px 12px 0px 0px; 
-                                margin-top: 20px; display: flex; justify-content: space-between; align-items: center; border-bottom: 3px solid #00b4d8;">
-                        <span style="color: #ffffff; font-weight: bold; font-size: 15px;">👤 {full_name} (ID: {cust_id})</span>
-                        <span style="background: rgba(255,255,255,0.2); color: #fff; padding: 3px 10px; border-radius: 15px; font-size: 11px;">📊 إجمالي المشتريات: {orders_amount:,.2f} SAR</span>
-                    </div>
-                """, unsafe_allow_html=True)
-                
-                with st.container():
-                    st.markdown("""
-                        <div style="background-color: #ffffff; padding: 20px; border-radius: 0px 0px 12px 12px; 
-                                    border: 1px solid #e8edf2; border-top: none; box-shadow: 0 4px 12px rgba(0,0,0,0.05); margin-bottom: 20px;">
+                # حماية في حال كان رقم الصفحة أكبر من المتاح بعد الفلترة
+                if st.session_state["cust_page"] > total_pages: 
+                    st.session_state["cust_page"] = total_pages
+
+                start_idx = (st.session_state["cust_page"] - 1) * limit
+                end_idx = start_idx + limit
+                displayed_customers = filtered_customers[start_idx:end_idx]
+
+                def render_cust_pagination(prefix):
+                    c1, c2, c3 = st.columns([1, 2, 1])
+                    with c1:
+                        if st.button("⬅️ الصفحة السابقة", disabled=st.session_state["cust_page"] == 1, use_container_width=True, key=f"cp_prev_{prefix}"):
+                            st.session_state["cust_page"] -= 1; st.rerun()
+                    with c2:
+                        st.markdown(f"<h4 style='text-align:center; color:#0f1c2e;'>📄 صفحة {st.session_state['cust_page']} من {total_pages}</h4>", unsafe_allow_html=True)
+                    with c3:
+                        if st.button("الصفحة التالية ➡️", disabled=st.session_state["cust_page"] == total_pages, use_container_width=True, key=f"cp_next_{prefix}"):
+                            st.session_state["cust_page"] += 1; st.rerun()
+
+                st.markdown("---")
+                render_cust_pagination("top")
+                st.markdown("---")
+
+                # عرض بطاقات العملاء للصفحة الحالية
+                for idx, cust in enumerate(displayed_customers):
+                    cust_id = cust.get('id', 'N/A')
+                    full_name = f"{cust.get('first_name', '')} {cust.get('last_name', '')}"
+                    
+                    stats = cust.get('stats', {})
+                    orders_count = stats.get('orders_count', 0) if isinstance(stats, dict) else 0
+                    orders_amount = safe_float(stats.get('orders_amount', 0.0)) if isinstance(stats, dict) else 0.0
+                    
+                    # ترويسة الحاوية الفاخرة للعميل
+                    st.markdown(f"""
+                        <div style="background: linear-gradient(135deg, #0f1c2e 0%, #1a365d 100%); 
+                                    padding: 12px 20px; border-radius: 12px 12px 0px 0px; 
+                                    margin-top: 20px; display: flex; justify-content: space-between; align-items: center; border-bottom: 3px solid #00b4d8;">
+                            <span style="color: #ffffff; font-weight: bold; font-size: 15px;">👤 {full_name} (ID: {cust_id})</span>
+                            <span style="background: rgba(255,255,255,0.2); color: #fff; padding: 3px 10px; border-radius: 15px; font-size: 11px;">📊 إجمالي المشتريات: {orders_amount:,.2f} SAR</span>
+                        </div>
                     """, unsafe_allow_html=True)
                     
-                    cx1, cx2, cx3 = st.columns([3, 3, 2])
-                    with cx1:
-                        st.markdown(f"📱 **رقم اتصال الجوال:** `+{cust.get('mobile_code', '')}{cust.get('mobile', '')}`")
-                        st.markdown(f"✉️ **البريد الإلكتروني:** `{cust.get('email', 'لا يوجد')}`")
-                        st.markdown(f"🚻 **الجنس:** `{'ذكر' if cust.get('gender') == 'male' else 'أنثى'}`")
-                    with cx2:
-                        st.markdown(f"📍 **الدولة والمدينة:** `{cust.get('country', 'السعودية')} - {cust.get('city', 'غير محددة')}`")
-                        st.markdown(f"🗺️ **المنطقة وتفاصيل العنوان المحدد:** `{cust.get('location', 'لا يوجد عنوان مسجل')}`")
-                        st.markdown(f"📦 **عدد الطلبات المنجزة:** `{orders_count} طلب`")
-                    with cx3:
-                        st.markdown("<br>", unsafe_allow_html=True)
-                        if st.button("🗑️ حذف الحساب", key=f"del_c_{cust_id}_{idx}", use_container_width=True):
-                            if delete_customer_api(cust_id):
-                                st.success(" تم حذف العميل بنجاح!")
-                                st.rerun()
-                                
-                    # ✅ تصحيح الـ NameError بالاعتماد الكامل على كائن cust بدلاً من p المتداخل سابقاً
-                    with st.expander("✏️ مراجعة وتحديث ملف هذا العميل", expanded=False):
-                        ec1, ec2 = st.columns(2)
-                        with ec1:
-                            ed_f_name = st.text_input("الاسم الأول:", value=cust.get('first_name', ''), key=f"ed_fn_{cust_id}_{idx}")
-                            ed_l_name = st.text_input("الاسم الأخير:", value=cust.get('last_name', ''), key=f"ed_ln_{cust_id}_{idx}")
-                        with ec2:
-                            ed_mail = st.text_input("تحديث الإيميل:", value=cust.get('email', ''), key=f"ed_em_{cust_id}_{idx}")
-                            ed_loc = st.text_input("تحديث المنطقة / العنوان الحركي:", value=str(cust.get('location', '')), key=f"ed_lc_{cust_id}_{idx}")
+                    with st.container():
+                        st.markdown("""
+                            <div style="background-color: #ffffff; padding: 20px; border-radius: 0px 0px 12px 12px; 
+                                        border: 1px solid #e8edf2; border-top: none; box-shadow: 0 4px 12px rgba(0,0,0,0.05); margin-bottom: 20px;">
+                        """, unsafe_allow_html=True)
                         
-                        if st.button("💾 حفظ تحديثات ملف العميل", key=f"btn_sv_c_{cust_id}_{idx}", type="primary", use_container_width=True):
-                            payload_update = {
-                                "first_name": ed_f_name, 
-                                "last_name": ed_l_name, 
-                                "email": ed_mail, 
-                                "location": ed_loc
-                            }
-                            if update_customer_api(cust_id, payload_update):
-                                st.success("✅ تم تحديث بيانات العميل بنجاح!")
-                                st.rerun()
+                        cx1, cx2, cx3 = st.columns([3, 3, 2])
+                        with cx1:
+                            st.markdown(f"📱 **رقم اتصال الجوال:** `+{cust.get('mobile_code', '')}{cust.get('mobile', '')}`")
+                            st.markdown(f"✉️ **البريد الإلكتروني:** `{cust.get('email', 'لا يوجد')}`")
+                            st.markdown(f"🚻 **الجنس:** `{'ذكر' if cust.get('gender') == 'male' else 'أنثى'}`")
+                        with cx2:
+                            st.markdown(f"📍 **الدولة والمدينة:** `{cust.get('country', 'السعودية')} - {cust.get('city', 'غير محددة')}`")
+                            st.markdown(f"🗺️ **المنطقة وتفاصيل العنوان المحدد:** `{cust.get('location', 'لا يوجد عنوان مسجل')}`")
+                            st.markdown(f"📦 **عدد الطلبات المنجزة:** `{orders_count} طلب`")
+                        with cx3:
+                            st.markdown("<br>", unsafe_allow_html=True)
+                            if st.button("🗑️ حذف الحساب", key=f"del_c_{cust_id}_{idx}", use_container_width=True):
+                                if delete_customer_api(cust_id):
+                                    st.success(" تم حذف العميل بنجاح!")
+                                    # ⚡ تحديث الذاكرة المحلية لاختفاء العميل فوراً
+                                    st.session_state["customers_data"]["data"] = [c for c in all_customers if str(c.get('id')) != str(cust_id)]
+                                    st.rerun()
+                                    
+                        with st.expander("✏️ مراجعة وتحديث ملف هذا العميل", expanded=False):
+                            ec1, ec2 = st.columns(2)
+                            with ec1:
+                                ed_f_name = st.text_input("الاسم الأول:", value=cust.get('first_name', ''), key=f"ed_fn_{cust_id}_{idx}")
+                                ed_l_name = st.text_input("الاسم الأخير:", value=cust.get('last_name', ''), key=f"ed_ln_{cust_id}_{idx}")
+                            with ec2:
+                                ed_mail = st.text_input("تحديث الإيميل:", value=cust.get('email', ''), key=f"ed_em_{cust_id}_{idx}")
+                                ed_loc = st.text_input("تحديث المنطقة / العنوان الحركي:", value=str(cust.get('location', '')), key=f"ed_lc_{cust_id}_{idx}")
+                            
+                            if st.button("💾 حفظ تحديثات ملف العميل", key=f"btn_sv_c_{cust_id}_{idx}", type="primary", use_container_width=True):
+                                payload_update = {
+                                    "first_name": ed_f_name, 
+                                    "last_name": ed_l_name, 
+                                    "email": ed_mail, 
+                                    "location": ed_loc
+                                }
+                                if update_customer_api(cust_id, payload_update):
+                                    st.success("✅ تم تحديث بيانات العميل بنجاح!")
+                                    # ⚡ تحديث بيانات العميل في الذاكرة المحلية للظهور الفوري
+                                    for c in st.session_state["customers_data"]["data"]:
+                                        if str(c.get('id')) == str(cust_id):
+                                            c['first_name'] = ed_f_name
+                                            c['last_name'] = ed_l_name
+                                            c['email'] = ed_mail
+                                            c['location'] = ed_loc
+                                    st.rerun()
 
-                    st.markdown("</div>", unsafe_allow_html=True)
-        else:
-            st.warning("⚠️ لا يوجد عملاء يطابقون خيارات البحث الحالية.")
+                        st.markdown("</div>", unsafe_allow_html=True)
+
+                st.markdown("---")
+                render_cust_pagination("bottom")
+                st.markdown("---")
+            else:
+                st.warning("⚠️ لا توجد نتائج مطابقة للبحث.")
 
     # ==========================================
     # 🏷️ علامة التبويب الثانية: إدارة مجموعات العملاء
