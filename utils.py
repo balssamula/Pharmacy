@@ -803,9 +803,9 @@ def generate_salla_new_products_file(products: List[Dict]) -> bytes:
             is_taxable = p.get('with_tax', True)
             tax_cause = p.get('tax_exemption_cause', 'الأدوية والمعدات الطبية') if not is_taxable else ""
             row_data = [""] * len(headers)
-            row_data[0] = 'منتج'; row_data[1] = p.get('name', 'بدون اسم'); row_data[5] = 'منتج جاهز'; row_data[6] = price if price > 0 else 0
-            row_data[8] = 'نعم'; row_data[9] = p.get('sku', ""); row_data[17] = 1; row_data[18] = 'kg'; row_data[20] = p.get('promotion_title', "")
-            row_data[26] = 'نعم' if is_taxable else 'لا'; row_data[27] = tax_cause
+            row_data[0] = 'منتج'; row_data[1] = p.get('name', 'بدون اسم'); row_data[6] = 'منتج جاهز'; row_data[7] = price if price > 0 else 0
+            row_data[9] = 'نعم'; row_data[10] = p.get('sku', ""); row_data[18] = 0.01; row_data[19] = 'kg'; row_data[21] = p.get('promotion_title', "")
+            row_data[27] = 'نعم' if is_taxable else 'لا'; row_data[28] = tax_cause
             ws.append(row_data)
             for col_idx in range(1, len(headers) + 1): ws.cell(row=ws.max_row, column=col_idx).alignment = Alignment(horizontal="center", vertical="center")
 
