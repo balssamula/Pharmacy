@@ -733,8 +733,6 @@ def export_customers_to_excel(customers: List[Dict]) -> bytes:
                 'رمز الدولة': cust.get('mobile_code', ''), 'رقم الجوال': cust.get('mobile', ''), 'المدينة': cust.get('city', ''),
                 'المنطقة / العنوان': cust.get('location', ''), 'عدد الطلبات': orders_count, 'إجمالي المشتريات (SAR)': orders_amount
             })
-    if not customers:
-    return io.BytesIO()
         
         df = pd.DataFrame(data)
         buffer = io.BytesIO()
