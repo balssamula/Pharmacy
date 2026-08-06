@@ -6,6 +6,8 @@ import base64
 import time
 from datetime import datetime, timedelta
 from utils import get_headers, safe_api_request, get_branches_list
+import logging
+logging.getLogger('streamlit').setLevel(logging.ERROR)
 
 st.set_page_config(
     page_title="مدير المنظومة المركزي",
@@ -118,6 +120,34 @@ def fetch_store_data_fast(token, headers):
     
     return products, offers, po_map, customers
 
+def fetch_all_customers_with_progress(headers):
+    all_customers = []
+    page = 1
+    per_page = 200
+    total_pages = 1
+    
+    progress_bar = st.progress(0)
+    status_text = st.empty()
+    
+    # أولاً جلب الصفحة الأولى لمعرفة العدد الإجمالي
+    first_res = safe_api_request("GET", f"https://api.salla.dev/admin/v2/customers?per_page={per_page}&page=1", headers)
+    if first_res:
+        total_pages = first_res.get('pagination', {}).get('totalPages', 1)
+        all_customers.extend(first_res.get('data', []))
+    
+    for page in range(2, total_pages + 1):
+        status_text.text(f"جلب العملاء: صفحة {page} من {total_pages}")
+        progress_bar.progress(page / total_pages)
+        
+        url = f"https://api.salla.dev/admin/v2/customers?per_page={per_page}&page={page}"
+        res = safe_api_request("GET", url, headers)
+        if res and res.get('data'):
+            all_customers.extend(res['data'])
+    
+    progress_bar.empty()
+    status_text.empty()
+    return all_customers
+    
 def perform_initial_sync_with_ui(headers):
     placeholder = st.empty()
     with placeholder.container():
