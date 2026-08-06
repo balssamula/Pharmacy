@@ -71,7 +71,7 @@ def fetch_store_data_fast(token, headers):
         customers.extend(c_res.get("data", []))
         for page in range(2, tp + 1):
             status_text.info(f"👥 جاري سحب العملاء: صفحة {page} من {tp} | (تم تحميل {len(customers)} عميل)")
-            cp_res = safe_api_request("GET", f"https://api.salla.dev/admin/v2/customers?per_page=50&page={page}", headers)
+            cp_res = safe_api_request("GET", f"https://api.salla.dev/admin/v2/customers?per_page=100&page={page}", headers)
             if cp_res and cp_res.get("data"): customers.extend(cp_res["data"])
             progress_bar.progress(0.6 + (0.3 * (page / tp)))
             
