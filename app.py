@@ -65,7 +65,7 @@ def fetch_store_data_fast(token, headers):
     # 3️⃣ سحب العملاء بالكامل (لحل مشكلة عدم ظهورهم)
     status_text.info("👥 جاري سحب قاعدة بيانات العملاء...")
     customers = []
-    c_res = safe_api_request("GET", "https://api.salla.dev/admin/v2/customers?per_page=60&page=1", headers)
+    c_res = safe_api_request("GET", "https://api.salla.dev/admin/v2/customers?per_page=100&page=1", headers)
     if c_res:
         tp = c_res.get("pagination", {}).get("totalPages", 1)
         customers.extend(c_res.get("data", []))
