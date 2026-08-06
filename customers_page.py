@@ -89,7 +89,7 @@ def render_customers_page():
                 # ==========================================
                 # 📄 نظام عرض الصفحات (Pagination)
                 # ==========================================
-                limit = 20
+                limit = 50
                 total_pages = max(1, (len(filtered_customers) + limit - 1) // limit)
                 
                 # حماية في حال كان رقم الصفحة أكبر من المتاح بعد الفلترة
