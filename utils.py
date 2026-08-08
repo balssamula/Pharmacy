@@ -757,6 +757,7 @@ def export_customer_groups_to_excel(groups: List[Dict]) -> bytes:
 
 def generate_salla_new_products_file(products: List[Dict]) -> bytes:
     try:
+        import io
         from openpyxl import Workbook
         from openpyxl.styles import PatternFill, Font, Alignment, Border, Side
         from openpyxl.utils import get_column_letter
@@ -764,6 +765,9 @@ def generate_salla_new_products_file(products: List[Dict]) -> bytes:
         wb = Workbook()
         ws = wb.active
         ws.title = "Salla Products Template Sheet"
+        
+        row1 = ["بيانات المنتج"] + [""] * 18 + ["الخيارات والبيانات الإضافية"] + [""] * 20
+        ws.append(row1)
         
         headers = [
             "النوع ", "أسم المنتج", "تصنيف المنتج", "صورة المنتج", "وصف صورة المنتج",
@@ -849,35 +853,11 @@ def generate_salla_new_products_file(products: List[Dict]) -> bytes:
             cell.fill = dark_slate; cell.font = font_headers; cell.alignment = center_align; cell.border = thin_border
             ws.column_dimensions[get_column_letter(col_idx)].width = 22
 
-        for p in products:
-            price = get_flat_price(p.get('price', 0))
-            is_taxable = p.get('with_tax', True)
-            tax_cause = p.get('tax_exemption_cause', 'الأدوية والمعدات الطبية') if not is_taxable else ""
-            max_qty = p.get('maximum_quantity_per_order')
-            if max_qty is None or max_qty == "":
-                max_qty = 1
-            else:
-                try: max_qty = int(max_qty)
-                except: max_qty = 1
-                
-            max_items = p.get('max_items_per_user')
-            if max_items is None or max_items == "":
-                max_items = 1
-            else:
-                try: max_items = int(max_items)
-                except: max_items = 1
-            row_data = [""] * len(headers)
-            row_data[0] = 'منتج'; row_data[1] = p.get('name', 'بدون اسم'); row_data[5] = 'منتج جاهز'; row_data[6] = price if price > 0 else 0
-            row_data[8] = 'نعم'; row_data[9] = p.get('sku', ""); row_data[14] = max_qty; row_data[15] = max_items; row_data[17] = 0.01; row_data[18] = 'kg'; row_data[20] = p.get('promotion_title', "")
-            row_data[26] = 'نعم' if is_taxable else 'لا'; row_data[27] = tax_cause
-            ws.append(row_data)
-            for col_idx in range(1, len(headers) + 1): ws.cell(row=ws.max_row, column=col_idx).alignment = Alignment(horizontal="center", vertical="center")
-
         output = io.BytesIO()
         wb.save(output)
         return output.getvalue()
-    except: return b""
-
+    except Exception as e:
+        return b""
 # ==========================================
 # 🏷️ دوال التحكم الجماعي في العناوين والأسعار المخفضة (بدون ID)
 # ==========================================
