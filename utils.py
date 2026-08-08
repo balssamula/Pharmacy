@@ -751,8 +751,20 @@ def export_customer_groups_to_excel(groups: List[Dict]) -> bytes:
             df.to_excel(writer, index=False)
             style_excel_file(writer.sheets['Sheet1'], is_template=False, header_color="0F1C2E")
         return buffer.getvalue()
-    except: return b""
+    except Exception as e: 
+        st.error(f"خطأ في التصدير: {e}")
+        return b""
 
+def create_products_template(products=None) -> bytes:
+    try:
+        from openpyxl import Workbook
+        from openpyxl.styles import PatternFill, Font, Alignment, Border, Side
+        from openpyxl.utils import get_column_letter
+
+        wb = Workbook()
+        ws = wb.active
+        ws.title = "Salla Products Template Sheet"
+        
         headers = [
             "النوع ", "أسم المنتج", "تصنيف المنتج", "صورة المنتج", "وصف صورة المنتج",
             "نوع المنتج", "سعر المنتج", "الوصف", "هل يتطلب شحن؟", "رمز المنتج sku",
