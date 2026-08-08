@@ -755,7 +755,7 @@ def export_customer_groups_to_excel(groups: List[Dict]) -> bytes:
         st.error(f"خطأ في التصدير: {e}")
         return b""
 
-def create_products_template(products=None) -> bytes:
+def generate_salla_new_products_file(products: List[Dict]) -> bytes:
     try:
         from openpyxl import Workbook
         from openpyxl.styles import PatternFill, Font, Alignment, Border, Side
