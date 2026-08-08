@@ -389,6 +389,7 @@ def render_offers_page():
         div[data-testid="stElementContainer"]:has(span[id="qa-marker-4"]) + div[data-testid="stElementContainer"] { top: 315px; }
         div[data-testid="stElementContainer"]:has(span[id="qa-marker-5"]) + div[data-testid="stElementContainer"] { top: 380px; }
         div[data-testid="stElementContainer"]:has(span[id="qa-marker-6"]) + div[data-testid="stElementContainer"] { top: 445px; }
+        div[data-testid="stElementContainer"]:has(span[id="qa-marker-7"]) + div[data-testid="stElementContainer"] { top: 510px; }
         div[data-testid="stElementContainer"]:has(span[id^="qa-marker-"]) + div[data-testid="stElementContainer"] button { width: 100% !important; text-align: right !important; padding-right: 35px !important; font-size: 14px !important; font-weight: bold !important; background: transparent !important; border: none !important; color: white !important; box-shadow: none !important; }
         div[data-testid="stElementContainer"]:has(span[id^="qa-marker-"]) + div[data-testid="stElementContainer"]::before { content: "👈"; position: absolute; left: 10px; top: 50%; transform: translateY(-50%); font-size: 18px; pointer-events: none; }
         
@@ -526,6 +527,13 @@ def render_offers_page():
                 st.markdown("### ➕ إنشاء عرض جديد")
                 render_create_offer_section(headers, section_key="popup")
                 
+    # ✅ الزر الجديد للعروض المميزة (المجموعات)
+    st.markdown('<span id="qa-marker-7"></span>', unsafe_allow_html=True)
+    if st.button("⭐ مجموعات العروض المميزة", key="btn_qa_7"): st.session_state.qa_action = "featured_groups"; st.rerun()
+
+    # ==========================================
+    # ⚙️ عرض الشاشات المنبثقة للإجراءات
+    # ==========================================
     if st.session_state.qa_action in ["end_dates", "start_dates", "draft"]:
         with st.container(border=True):
             col_t, col_c = st.columns([5, 1])
@@ -534,6 +542,37 @@ def render_offers_page():
                     st.session_state.qa_action = None
                     st.rerun()
 
+            if st.session_state.qa_action == "featured_groups":
+                with col_t: st.markdown("### ⭐ إدارة مجموعات العروض المميزة")
+                st.info("💡 يمكنك من هنا تجميع عدة عروض تحت اسم واحد (مثلاً: عروض الشتاء، عروض الفلاش) لتسهيل فلترتها وتنفيذ إجراءات سريعة عليها لاحقاً.")
+                
+                col_g1, col_g2 = st.columns(2)
+                with col_g1:
+                    st.markdown("#### ➕ إنشاء مجموعة جديدة")
+                    new_g_name = st.text_input("اسم المجموعة الجديدة:")
+                    off_opts = {f"🎯 {o['name']} (ID: {o['id']})": o['id'] for o in raw_offers}
+                    sel_offs = st.multiselect("اختر العروض المراد إضافتها للمجموعة:", options=list(off_opts.keys()))
+                    if st.button("💾 حفظ المجموعة", type="primary"):
+                        if not new_g_name: st.error("الرجاء كتابة اسم المجموعة")
+                        elif not sel_offs: st.error("الرجاء اختيار عرض واحد على الأقل")
+                        else:
+                            st.session_state["featured_offer_groups"][new_g_name] = [off_opts[k] for k in sel_offs]
+                            st.success("✅ تم حفظ المجموعة بنجاح!")
+                            st.rerun()
+                with col_g2:
+                    st.markdown("#### 📋 المجموعات الحالية")
+                    if st.session_state["featured_offer_groups"]:
+                        for g_name, g_ids in st.session_state["featured_offer_groups"].items():
+                            with st.expander(f"📁 {g_name} ({len(g_ids)} عروض)"):
+                                for oid in g_ids:
+                                    offer_name = next((o['name'] for o in raw_offers if o['id'] == oid), "غير معروف")
+                                    st.markdown(f"- `{offer_name}`")
+                                if st.button("🗑️ حذف المجموعة", key=f"del_g_{g_name}", type="primary"):
+                                    del st.session_state["featured_offer_groups"][g_name]
+                                    st.rerun()
+                    else:
+                        st.warning("لا توجد مجموعات مميزة حالياً.")
+                        
             if st.session_state.qa_action == "end_dates":
                 with col_t: st.markdown("### 📅 إدارة وتمديد تواريخ الانتهاء")
                 target_scope_end = st.radio("استهداف العروض للتمديد/الإنهاء:", ["تنتهي في تاريخ محدد", "جميع العروض المتاحة"], key="b_end_scope")
@@ -827,15 +866,25 @@ def render_offers_page():
     # ==========================================
     with st.container(border=True):
         st.markdown("<div style='background: #0F1C2E; color: white; padding: 10px; border-radius: 8px; text-align: center; font-weight: bold;'>🔍 أدوات التصفية والبحث المتقدمة</div>", unsafe_allow_html=True)
-    
+        
+        # استخراج تواريخ الانتهاء الفريدة من العروض
+        avail_dates = set()
+        for o in raw_offers:
+            ed = safe_parse_date(o.get('expiry_date'))
+            if ed: avail_dates.add(ed.strftime('%Y-%m-%d'))
+        date_options = ["الكل", "بدون تاريخ"] + sorted(list(avail_dates))
+        
         col_search, col_status = st.columns([2, 1])
         with col_search: search_offer = st.text_input("🔎 ابحث باسم العرض أو بالمعرف:", key="filter_search_input")
         with col_status: status_filter = st.selectbox("📌 حالة العرض:", ["الكل", "نشط", "غير نشط"], key="filter_status_select")
     
-        col_date1, col_date2 = st.columns(2)
-        with col_date1: filter_date = st.date_input("📅 تاريخ الانتهاء:", value=None, key="filter_date_input")
-        with col_date2: filter_overlap = st.checkbox("🔄 فحص التداخل (منتجات مكررة)", key="f_overlap")
-    
+        col_date, col_feat, col_over = st.columns(3)
+        # ✅ 1. قائمة منسدلة لتاريخ الانتهاء
+        with col_date: filter_date_str = st.selectbox("📅 تاريخ الانتهاء:", date_options, key="filter_date_select")
+        # ✅ 2. فلتر العروض المميزة
+        with col_feat: filter_featured = st.selectbox("⭐ العروض المميزة:", ["الكل"] + list(st.session_state["featured_offer_groups"].keys()), key="filter_featured")
+        with col_over: filter_overlap = st.checkbox("🔄 فحص التداخل (منتجات مكررة)", key="f_overlap")
+            
         col_f1, col_f2, col_f3 = st.columns(3)
         with col_f1: type_filter = st.selectbox("📊 نوع العرض:", ["الكل"] + list(OFFER_TYPES_MAP.values()), key="type_filter")
         with col_f2: channel_filter = st.selectbox("📺 قناة النشر:", ["الكل"] + list(CHANNELS_MAP.values()), key="channel_filter")
@@ -870,13 +919,21 @@ def render_offers_page():
         status = offer.get('status', 'inactive')
         start_date = safe_parse_date(offer.get('start_date'))
         exp_date = safe_parse_date(offer.get('expiry_date'))
+        exp_date_str_val = exp_date_obj.strftime('%Y-%m-%d') if exp_date_obj else ""
     
         if search_offer:
             if search_offer.lower() not in offer_name.lower() and search_offer not in str(offer_id): continue
         if status_filter == "نشط" and status != "active": continue
         if status_filter == "غير نشط" and status == "active": continue
-        if filter_date and (not exp_date or exp_date.date() != filter_date): continue
         if filter_overlap and offer_id not in overlapping_offer_ids: continue
+        # ✅ تطبيق فلتر تاريخ الانتهاء المنسدل
+        if filter_date_str != "الكل":
+            if filter_date_str == "بدون تاريخ" and exp_date_str_val != "": continue
+            elif filter_date_str != "بدون تاريخ" and exp_date_str_val != filter_date_str: continue
+            
+        # ✅ تطبيق فلتر المجموعات المميزة
+        if filter_featured != "الكل":
+            if offer_id not in st.session_state["featured_offer_groups"].get(filter_featured, []): continue
         if type_filter != "الكل":
             offer_type_ar = OFFER_TYPES_MAP.get(offer.get('offer_type', ''), '')
             if offer_type_ar != type_filter: continue
@@ -893,9 +950,74 @@ def render_offers_page():
 
     st.markdown(f"<div style='background: #f0f4f8; padding: 8px 16px; border-radius: 8px; margin-bottom: 14px; border-right: 4px solid #00b4d8;'><strong>📊 عدد العروض المطابقة للبحث: {len(filtered_offers)} عرض</strong></div>", unsafe_allow_html=True)
 
-    if filtered_offers and len(filtered_offers) < len(raw_offers):
-        st.download_button("📥 تحميل العروض المفلترة", data=export_offers_to_excel(filtered_offers), file_name=f"filtered_offers_{datetime.now().strftime('%Y%m%d_%H%M%S')}.xlsx", mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", key="download_filtered_offers", type="primary", use_container_width=True)
-    
+    # ==========================================
+    # ✅ 3. أزرار التنزيل و (إجراءات العروض المفلترة)
+    # ==========================================
+    if filtered_offers:
+        col_dl_filt, col_act_filt = st.columns(2)
+        with col_dl_filt:
+            st.download_button("📥 تحميل العروض المفلترة", data=export_offers_to_excel(filtered_offers), file_name=f"filtered_offers_{datetime.now().strftime('%Y%m%d_%H%M%S')}.xlsx", mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", key="download_filtered_offers", type="primary", use_container_width=True)
+        
+        with col_act_filt:
+            with st.popover("⚙️ إجراءات العروض المفلترة", use_container_width=True):
+                st.markdown(f"<div style='text-align:center; margin-bottom:10px;'><b>تطبيق إجراء جماعي على ({len(filtered_offers)}) عرض</b></div>", unsafe_allow_html=True)
+                
+                bulk_action = st.radio("اختر الإجراء المطلوب تنفيذه دفعة واحدة:", [
+                    "▶️ تفعيل العروض",
+                    "📅 تمديد العروض",
+                    "🛑 إيقاف ومسح العناوين الترويجية من المنتجات",
+                    "🗑️ حذف العروض نهائياً"
+                ], key="bulk_action_offers")
+                
+                new_expiry_str = None
+                if bulk_action == "📅 تمديد العروض":
+                    cd1, cd2 = st.columns(2)
+                    with cd1: nd = st.date_input("التاريخ الجديد:")
+                    with cd2: nt = st.time_input("الوقت الجديد:")
+                    new_expiry_str = datetime.combine(nd, nt).strftime('%Y-%m-%d %H:%M:%S')
+                
+                if "حذف" in bulk_action:
+                    st.error("🚨 سيتم الحذف نهائياً من المتجر!")
+                    confirm_msg = "☑️ أوافق على الحذف"
+                else:
+                    confirm_msg = "☑️ تأكيد تنفيذ الإجراء المختار"
+                    
+                confirm_bulk = st.checkbox(confirm_msg, key="confirm_bulk_action_offers")
+                
+                if st.button("🚀 تنفيذ الإجراء", type="primary", disabled=not confirm_bulk, use_container_width=True, key="execute_bulk_action_offers"):
+                    with st.spinner("⏳ جاري التنفيذ... قد يستغرق بعض الوقت"):
+                        success_c = 0
+                        for off in filtered_offers:
+                            oid = off['id']
+                            if "تفعيل" in bulk_action:
+                                if safe_api_request("PUT", f"{SALLA_API_URL}/{oid}/status", headers, json={"status": "active"}): success_c += 1
+                            elif "تمديد" in bulk_action:
+                                full = safe_api_request("GET", f"{SALLA_API_URL}/{oid}", headers)
+                                if full and full.get('data'):
+                                    payload = rebuild_offer_payload(full['data'], {"expiry_date": new_expiry_str})
+                                    if safe_api_request("PUT", f"{SALLA_API_URL}/{oid}", headers, json=payload): success_c += 1
+                            elif "إيقاف ومسح" in bulk_action:
+                                # 1. إيقاف العرض
+                                safe_api_request("PUT", f"{SALLA_API_URL}/{oid}/status", headers, json={"status": "inactive"})
+                                # 2. مسح العناوين الترويجية
+                                full = safe_api_request("GET", f"{SALLA_API_URL}/{oid}", headers)
+                                if full and full.get('data'):
+                                    pids = set()
+                                    for p in full['data'].get('buy', {}).get('products', []):
+                                        if str(p.get('id', p)).isdigit(): pids.add(int(p.get('id', p)))
+                                    for p in full['data'].get('get', {}).get('products', []):
+                                        if str(p.get('id', p)).isdigit(): pids.add(int(p.get('id', p)))
+                                    for pid in pids:
+                                        update_product_promotions_secure(pid, "", "", headers)
+                                success_c += 1
+                            elif "حذف" in bulk_action:
+                                if safe_api_request("DELETE", f"{SALLA_API_URL}/{oid}", headers): success_c += 1
+                        
+                        st.success(f"✅ تم تنفيذ الإجراء على {success_c} عرض بنجاح!")
+                        time.sleep(1)
+                        if "all_offers" in st.session_state: del st.session_state["all_offers"] # لإجبار التحديث
+                        st.rerun()
+                        
     # ==========================================
     # 📄 عرض بطاقات العروض مع ترقيم الصفحات
     # ==========================================
