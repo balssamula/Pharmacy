@@ -947,7 +947,17 @@ def render_matching_section(headers: Dict[str, str]):
                                 for idx in selected_indices:
                                     pr = new_products[idx]
                                     is_taxable = str(pr['خاضع للضريبة']).strip().lower() in ['نعم', 'true', '1', 'yes']
-                                    p_for_template.append({"name": str(pr['اسم المنتج']), "price": float(pr['سعر المنتج']) if pr['سعر المنتج'] else 0, "sku": str(pr['رقم المنتج']), "with_tax": is_taxable, "tax_exemption_cause": "" if is_taxable else "الأدوية والمعدات الطبية", "maximum_quantity_per_order": "", "max_items_per_user": ""})
+                                    # ✅ قراءة القيم من الملف مع تعيين 1 كافتراضي
+                                    max_qty = pr.get('اقصي كمية لكل عميل', 1)
+                                    try: max_qty = int(max_qty)
+                                    except: max_qty = 1
+                                    if max_qty < 1: max_qty = 1
+                    
+                                    max_items = pr.get('الحد الأقصى للطلب', 1)
+                                    try: max_items = int(max_items)
+                                    except: max_items = 1
+                                    if max_items < 1: max_items = 1
+                                    p_for_template.append({"name": str(pr['اسم المنتج']), "price": float(pr['سعر المنتج']) if pr['سعر المنتج'] else 0, "sku": str(pr['رقم المنتج']), "with_tax": is_taxable, "tax_exemption_cause": "" if is_taxable else "الأدوية والمعدات الطبية", "maximum_quantity_per_order": max_qty, "max_items_per_user": max_items})
                                 
                                 tb = generate_salla_new_products_file(p_for_template)
                                 if tb:
