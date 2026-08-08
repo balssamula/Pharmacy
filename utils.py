@@ -753,30 +753,67 @@ def export_customer_groups_to_excel(groups: List[Dict]) -> bytes:
         return buffer.getvalue()
     except: return b""
 
-def generate_salla_new_products_file(products: List[Dict]) -> bytes:
-    try:
-        from openpyxl import Workbook
-        from openpyxl.styles import PatternFill, Font, Alignment, Border, Side
-        from openpyxl.utils import get_column_letter
-
-        wb = Workbook()
-        ws = wb.active
-        ws.title = "Salla Products Template Sheet"
-
-        row1 = ["بيانات المنتج"] + [""] * 18 + ["الخيارات والبيانات الإضافية"] + [""] * 20
-        ws.append(row1)
-
         headers = [
             "النوع ", "أسم المنتج", "تصنيف المنتج", "صورة المنتج", "وصف صورة المنتج",
             "نوع المنتج", "سعر المنتج", "الوصف", "هل يتطلب شحن؟", "رمز المنتج sku",
             "سعر التكلفة", "السعر المخفض", "تاريخ بداية التخفيض", "تاريخ نهاية التخفيض",
-            "اقصي كمية لكل عميل", "الحد الأقصى للطلب",
             "اقصي كمية لكل عميل", "إخفاء خيار تحديد الكمية", "اضافة صورة عند الطلب",
             "الوزن", "وحدة الوزن", "الماركة", "العنوان الترويجي", "تثبيت المنتج",
             "الباركود", "السعرات الحرارية", "MPN", "GTIN", "خاضع للضريبة ؟",
-            "سبب عدم الخضوع للضريبة"
+            "سبب عدم الخضوع للضريبة", 
+            "[1] الاسم", "[1] النوع", "[1] القيمة", "[1] الصورة / اللون",
+            "[2] الاسم", "[2] النوع", "[2] القيمة", "[2] الصورة / اللون",
+            "[3] الاسم", "[3] النوع", "[3] القيمة", "[3] الصورة / اللون"
         ]
+        
+        # صف البيانات الرئيسي
         ws.append(headers)
+
+        for p in products:
+            price = get_flat_price(p.get('price', 0))
+            is_taxable = p.get('with_tax', True)
+            tax_cause = p.get('tax_exemption_cause', '') if not is_taxable else ""
+            
+            # ✅ تعيين قيم افتراضية للحقول المطلوبة
+            max_qty = p.get('maximum_quantity_per_order', 1)
+            try: max_qty = int(max_qty)
+            except: max_qty = 1
+            if max_qty < 1: max_qty = 1
+            
+            row = [
+                "منتج",  # النوع
+                p.get('name', 'بدون اسم'),  # أسم المنتج
+                "",  # تصنيف المنتج
+                "",  # صورة المنتج
+                "",  # وصف صورة المنتج
+                "منتج جاهز",  # نوع المنتج
+                price if price > 0 else 0,  # سعر المنتج
+                "",  # الوصف
+                "نعم",  # هل يتطلب شحن؟
+                p.get('sku', ""),  # رمز المنتج sku
+                "",  # سعر التكلفة
+                "",  # السعر المخفض
+                "",  # تاريخ بداية التخفيض
+                "",  # تاريخ نهاية التخفيض
+                max_qty,  # اقصي كمية لكل عميل ✅
+                "لا",  # إخفاء خيار تحديد الكمية
+                "لا",  # اضافة صورة عند الطلب
+                1,  # الوزن
+                "kg",  # وحدة الوزن
+                "",  # الماركة
+                p.get('promotion_title', ""),  # العنوان الترويجي
+                "لا",  # تثبيت المنتج
+                "",  # الباركود
+                "",  # السعرات الحرارية
+                "",  # MPN
+                "",  # GTIN
+                "نعم" if is_taxable else "لا",  # خاضع للضريبة ؟
+                tax_cause,  # سبب عدم الخضوع للضريبة
+                "", "", "", "",  # الخيار 1
+                "", "", "", "",  # الخيار 2
+                "", "", "", ""   # الخيار 3
+            ]
+            ws.append(row)
 
         ws.merge_cells(start_row=1, start_column=1, end_row=1, end_column=19)
         ws.merge_cells(start_row=1, start_column=20, end_row=1, end_column=40)
