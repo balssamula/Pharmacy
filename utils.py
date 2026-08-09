@@ -1029,7 +1029,7 @@ def process_promotions_bulk(df: pd.DataFrame, products_list: List[Dict], headers
     return results
 
 def export_featured_group_to_excel(group_products: List[Dict], po_map: Dict) -> bytes:
-    """تصدير منتجات المجموعة المميزة إلى ملف Excel احترافي ومنسق (محدث بالعناوين)"""
+    """تصدير منتجات المجموعة المميزة إلى ملف Excel احترافي ومنسق (محدث بالعناوين والمخزون والحالة)"""
     try:
         import io
         from openpyxl import Workbook
@@ -1044,6 +1044,7 @@ def export_featured_group_to_excel(group_products: List[Dict], po_map: Dict) -> 
         headers = [
             "SKU", "اسم المنتج", "سعر المنتج", "السعر المخفض", 
             "تاريخ انتهاء التخفيض", "العنوان الترويجي", "العنوان الفرعي", 
+            "المخزون", "الحالة (متاح/مخفي)",
             "مشمول في عرض خاص؟", "اسم العرض الخاص"
         ]
         ws.append(headers)
@@ -1055,10 +1056,14 @@ def export_featured_group_to_excel(group_products: List[Dict], po_map: Dict) -> 
             base_price = regular_price if regular_price > 0 else price
             sale_price = get_flat_price(p.get('sale_price', 0))
 
-            # ✅ استخراج العناوين الترويجية والفرعية بدقة
+            # استخراج العناوين الترويجية والفرعية
             promo_obj = p.get('promotion', {})
             promo_title = p.get('promotion_title') or (promo_obj.get('title') if isinstance(promo_obj, dict) else '') or ""
             promo_sub = p.get('promotion_subtitle') or (promo_obj.get('sub_title') if isinstance(promo_obj, dict) else '') or ""
+
+            # ✅ استخراج المخزون والحالة
+            stock = p.get('quantity', 0)
+            status = "متاح" if p.get('status', 'sale') == 'sale' else "مخفي"
 
             # فحص العروض المربوطة
             offers = po_map.get(pid_str, [])
@@ -1071,8 +1076,10 @@ def export_featured_group_to_excel(group_products: List[Dict], po_map: Dict) -> 
                 base_price,
                 sale_price if sale_price > 0 else "بدون تخفيض",
                 p.get('sale_end', 'بدون تاريخ') if sale_price > 0 else "-",
-                promo_title, # إدراج العنوان الترويجي
-                promo_sub,   # إدراج العنوان الفرعي
+                promo_title,
+                promo_sub,
+                stock,        # إدراج المخزون
+                status,       # إدراج الحالة
                 in_offer,
                 offer_names
             ])
@@ -1094,7 +1101,7 @@ def export_featured_group_to_excel(group_products: List[Dict], po_map: Dict) -> 
             ws.column_dimensions[get_column_letter(col)].width = 22
 
         ws.column_dimensions['B'].width = 40 # توسيع عمود الاسم
-        ws.column_dimensions['I'].width = 35 # توسيع عمود اسم العرض (العمود I)
+        ws.column_dimensions['K'].width = 35 # توسيع عمود اسم العرض (أصبح العمود K بدل I لزيادة الأعمدة)
         
         # تفعيل الفلترة التلقائية
         ws.auto_filter.ref = f"A1:{get_column_letter(len(headers))}{ws.max_row}"
