@@ -705,25 +705,31 @@ def render_products_page():
                                 with col_d1:
                                     disc_pct = st.number_input("نسبة الخصم %:", min_value=1.0, max_value=99.0, value=10.0, step=1.0, key=f"dpct_{g_name}")
                                 with col_d2:
-                                    # إضافة تاريخ الانتهاء (يتم تعيين الوقت لـ 23:59:59 تلقائياً في الكود)
                                     disc_end_date = st.date_input("تاريخ انتهاء الخصم:", value=datetime.now().date() + timedelta(days=7), key=f"dend_{g_name}")
                                 
                                 if st.button("💰 تطبيق الخصم بالوقت المحدد", key=f"dbtn_{g_name}", use_container_width=True, type="primary"):
-                                    with st.spinner("جاري حساب وتطبيق الخصم..."):
-                                        c = 0
-                                        # دمج التاريخ مع نهاية اليوم
-                                        end_time_str = datetime.combine(disc_end_date, datetime.min.time().replace(hour=23, minute=59, second=59)).strftime('%Y-%m-%d %H:%M:%S')
+                                    # ✅ شريط التقدم والنص
+                                    progress_bar = st.progress(0)
+                                    status_text = st.empty()
+                                    c = 0
+                                    total_prods = len(g_ids)
+                                    end_time_str = datetime.combine(disc_end_date, datetime.min.time().replace(hour=23, minute=59, second=59)).strftime('%Y-%m-%d %H:%M:%S')
+                                    
+                                    for idx, pid in enumerate(g_ids):
+                                        status_text.info(f"⏳ جاري تحديث الخصم للمنتج {idx+1} من {total_prods}...")
+                                        prod = next((p for p in group_products_data if str(p['id']) == pid), None)
+                                        if prod:
+                                            base_price = get_flat_price(prod.get('regular_price', 0)) or get_flat_price(prod.get('price', 0))
+                                            new_sale = round(base_price - (base_price * (disc_pct / 100)), 2)
+                                            if update_product_sale_price(int(pid), new_sale, sale_end=end_time_str): c += 1
                                         
-                                        for pid in g_ids:
-                                            prod = next((p for p in group_products_data if str(p['id']) == pid), None)
-                                            if prod:
-                                                base_price = get_flat_price(prod.get('regular_price', 0)) or get_flat_price(prod.get('price', 0))
-                                                new_sale = round(base_price - (base_price * (disc_pct / 100)), 2)
-                                                if update_product_sale_price(int(pid), new_sale, sale_end=end_time_str): c += 1
-                                        st.success(f"تم تطبيق خصم {disc_pct}% على {c} منتج حتى {disc_end_date}!")
-                                        import time; time.sleep(1)
-                                        if "all_products_fetched" in st.session_state: del st.session_state["all_products_fetched"]
-                                        st.rerun()
+                                        progress_bar.progress((idx + 1) / total_prods)
+                                        import time; time.sleep(0.5) # ✅ سر منع خطأ 504 من سلة
+                                        
+                                    status_text.success(f"✅ تم تطبيق خصم {disc_pct}% على {c} منتج حتى {disc_end_date}!")
+                                    import time; time.sleep(1)
+                                    if "all_products_fetched" in st.session_state: del st.session_state["all_products_fetched"]
+                                    st.rerun()
                                             
                                 # 2. العنوان الترويجي الجماعي
                                 col_p1, col_p2 = st.columns([2, 1])
@@ -732,25 +738,44 @@ def render_products_page():
                                 with col_p2:
                                     st.markdown("<br>", unsafe_allow_html=True)
                                     if st.button("🏷️ تطبيق العنوان", key=f"pbtn_{g_name}", use_container_width=True):
-                                        with st.spinner("جاري التطبيق..."):
-                                            c = 0
-                                            for pid in g_ids:
-                                                if update_product_promotions_secure(int(pid), promo_title, "", headers): c += 1
-                                            st.success(f"تم تحديث {c} منتج!")
-                                            import time; time.sleep(1); st.rerun()
+                                        # ✅ شريط التقدم والنص
+                                        progress_bar = st.progress(0)
+                                        status_text = st.empty()
+                                        c = 0
+                                        total_prods = len(g_ids)
+                                        
+                                        for idx, pid in enumerate(g_ids):
+                                            status_text.info(f"⏳ جاري تحديث العنوان للمنتج {idx+1} من {total_prods}...")
+                                            if update_product_promotions_secure(int(pid), promo_title, "", headers): c += 1
+                                            
+                                            progress_bar.progress((idx + 1) / total_prods)
+                                            import time; time.sleep(0.5) # ✅ سر منع خطأ 504 من سلة
+                                            
+                                        status_text.success(f"✅ تم تحديث العناوين لـ {c} منتج!")
+                                        import time; time.sleep(1); st.rerun()
                                             
                                 # 3. مسح الخصم والعناوين
                                 if st.button("🧹 مسح السعر المخفض والعناوين نهائياً", key=f"cbtn_{g_name}", use_container_width=True):
-                                    with st.spinner("جاري المسح وإعادة الضبط..."):
-                                        c = 0
-                                        for pid in g_ids:
-                                            update_product_sale_price(int(pid), 0)
-                                            update_product_promotions_secure(int(pid), "", "", headers)
-                                            c += 1
-                                        st.success(f"تم مسح بيانات {c} منتج!")
-                                        import time; time.sleep(1)
-                                        if "all_products_fetched" in st.session_state: del st.session_state["all_products_fetched"]
-                                        st.rerun()
+                                    # ✅ شريط التقدم والنص
+                                    progress_bar = st.progress(0)
+                                    status_text = st.empty()
+                                    c = 0
+                                    total_prods = len(g_ids)
+                                    
+                                    for idx, pid in enumerate(g_ids):
+                                        status_text.info(f"⏳ جاري مسح بيانات المنتج {idx+1} من {total_prods}...")
+                                        update_product_sale_price(int(pid), 0)
+                                        import time; time.sleep(0.3) # فاصل صغير بين الطلبين لنفس المنتج
+                                        update_product_promotions_secure(int(pid), "", "", headers)
+                                        c += 1
+                                        
+                                        progress_bar.progress((idx + 1) / total_prods)
+                                        time.sleep(0.3) # ✅ سر منع خطأ 504 من سلة
+                                        
+                                    status_text.success(f"✅ تم مسح بيانات {c} منتج وإعادتها لحالتها الأصلية!")
+                                    import time; time.sleep(1)
+                                    if "all_products_fetched" in st.session_state: del st.session_state["all_products_fetched"]
+                                    st.rerun()
                                         
                                 st.markdown("---")
                                 
