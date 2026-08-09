@@ -798,11 +798,20 @@ def generate_salla_new_products_file(products: List[Dict]) -> bytes:
             is_taxable = p.get('with_tax', True)
             tax_cause = p.get('tax_exemption_cause', '') if not is_taxable else ""
             
-            # ✅ تعيين قيم افتراضية للحقول المطلوبة
-            max_qty = p.get('maximum_quantity_per_order', 1)
-            try: max_qty = int(max_qty)
-            except: max_qty = 1
-            if max_qty < 1: max_qty = 1
+            # ✅ تعيين الكميات الافتراضية لتكون 50
+            max_qty = p.get('maximum_quantity_per_order')
+            if max_qty is None or max_qty == "": max_qty = 50
+            else:
+                try: max_qty = int(max_qty)
+                except: max_qty = 50
+                if max_qty < 1: max_qty = 50
+                
+            max_items = p.get('max_items_per_user')
+            if max_items is None or max_items == "": max_items = 50
+            else:
+                try: max_items = int(max_items)
+                except: max_items = 50
+                if max_items < 1: max_items = 50
             
             row = [
                 "منتج",  # النوع
