@@ -49,38 +49,36 @@ def render_expiry_alerts(raw_offers, headers=None):
             expiring_soon_grouped[date_str].append(offer)
             total_count += 1
     
-    if "sound_playing" not in st.session_state:
-        st.session_state["sound_playing"] = True
+    if "sound_playing" not in st.session_state: st.session_state["sound_playing"] = True
+    if "show_expiry_alerts" not in st.session_state: st.session_state["show_expiry_alerts"] = True
+    
+    # 🔘 أزرار الإخفاء والتحديث أعلى التنبيهات
+    col_t1, col_t2, col_t3 = st.columns([2, 2, 6])
+    with col_t1:
+        toggle_lbl = "👁️ إخفاء التنبيهات" if st.session_state["show_expiry_alerts"] else "👁️ إظهار التنبيهات"
+        if st.button(toggle_lbl, use_container_width=True, key="toggle_alert_btn"):
+            st.session_state["show_expiry_alerts"] = not st.session_state["show_expiry_alerts"]
+            st.rerun()
+    with col_t2:
+        if st.button("🔄 تحديث الإجراءات", use_container_width=True, key="refresh_alert_btn"):
+            with st.spinner("تحديث البيانات..."):
+                res = safe_api_request("GET", f"{SALLA_API_URL}?per_page=100", headers)
+                if res and res.get("data"):
+                    fresh_dict = {str(o['id']): o for o in res["data"]}
+                    new_all = [fresh_dict.get(str(o['id']), o) for o in st.session_state.get("all_offers", [])]
+                    st.session_state["all_offers"] = new_all
+                st.rerun()
+
+    # إذا كانت مخفية أو لا توجد عروض، نوقف التنفيذ هنا
+    if not st.session_state["show_expiry_alerts"]: return
     
     if total_count > 0:
         st.markdown("""
         <style>
-            @keyframes blink-red {
-                0% { border-color: #ff0000; box-shadow: 0 0 10px rgba(255,0,0,0.2); }
-                50% { border-color: #cc0000; box-shadow: 0 0 30px rgba(255,0,0,0.6); }
-                100% { border-color: #ff0000; box-shadow: 0 0 10px rgba(255,0,0,0.2); }
-            }
-            .expiry-alert {
-                animation: blink-red 1.5s ease-in-out infinite;
-                padding: 20px;
-                border-radius: 12px;
-                background: linear-gradient(135deg, #1e0508 0%, #2c0b0e 100%);
-                color: white;
-                border: 2px solid #ff6b6b;
-                margin-bottom: 25px;
-                direction: rtl;
-            }
-            .date-group {
-                background: rgba(255,255,255,0.05);
-                border-radius: 10px;
-                padding: 12px 15px;
-                margin-bottom: 12px;
-                border-right: 5px solid #ffca28;
-            }
-            .date-group.expired {
-                border-right: 5px solid #ff4d4d;
-                background: rgba(255,0,0,0.08);
-            }
+            @keyframes blink-red { 0% { border-color: #ff0000; box-shadow: 0 0 10px rgba(255,0,0,0.2); } 50% { border-color: #cc0000; box-shadow: 0 0 30px rgba(255,0,0,0.6); } 100% { border-color: #ff0000; box-shadow: 0 0 10px rgba(255,0,0,0.2); } }
+            .expiry-alert { animation: blink-red 1.5s ease-in-out infinite; padding: 20px; border-radius: 12px; background: linear-gradient(135deg, #1e0508 0%, #2c0b0e 100%); color: white; border: 2px solid #ff6b6b; margin-bottom: 25px; direction: rtl; }
+            .date-group { background: rgba(255,255,255,0.05); border-radius: 10px; padding: 12px 15px; margin-bottom: 12px; border-right: 5px solid #ffca28; }
+            .date-group.expired { border-right: 5px solid #ff4d4d; background: rgba(255,0,0,0.08); }
         </style>
         """, unsafe_allow_html=True)
 
@@ -103,7 +101,6 @@ def render_expiry_alerts(raw_offers, headers=None):
             </div>
         """, unsafe_allow_html=True)
         
-        # ✅ عرض العروض والأزرار المجاورة
         for date_str, offers in sorted(expiring_soon_grouped.items()):
             days_left = (safe_parse_date(date_str + " 23:59:59") - now).days
             is_expired = days_left < 0
@@ -121,7 +118,6 @@ def render_expiry_alerts(raw_offers, headers=None):
             
             for offer in offers:
                 o_id = offer['id']
-                # استخدام الأعمدة لوضع الأزرار بجوار اسم العرض
                 col_txt, col_btn1, col_btn2, col_btn3 = st.columns([6, 1, 1, 1])
                 
                 with col_txt:
@@ -131,9 +127,8 @@ def render_expiry_alerts(raw_offers, headers=None):
                     if st.button("⏹️", key=f"al_stop_{o_id}", help="إيقاف العرض وإلغاء تفعيله"):
                         with st.spinner("⏳"):
                             if safe_api_request("PUT", f"{SALLA_API_URL}/{o_id}/status", headers, json={"status": "inactive"}):
-                                # ⚡ تحديث الذاكرة محلياً لاختفاء العرض فوراً
-                                for i, o in enumerate(st.session_state["all_offers"]):
-                                    if str(o.get('id')) == str(o_id): st.session_state["all_offers"][i]['status'] = 'inactive'
+                                # ⚡ إجبار الواجهة على تحديث الذاكرة للاختفاء التلقائي الفوري
+                                st.session_state["all_offers"] = [dict(o, status='inactive') if str(o.get('id')) == str(o_id) else o for o in st.session_state["all_offers"]]
                                 st.rerun()
                             
                 with col_btn2:
@@ -148,15 +143,13 @@ def render_expiry_alerts(raw_offers, headers=None):
                                 for p in full_res['data'].get('get', {}).get('products', []):
                                     pid = p.get('id', p) if isinstance(p, dict) else p
                                     if str(pid).isdigit(): pids.add(str(pid))
-                                for pid in pids:
-                                    update_product_promotions_secure(int(pid), "", "", headers)
+                                for pid in pids: update_product_promotions_secure(int(pid), "", "", headers)
                             st.rerun()
                             
                 with col_btn3:
                     if st.button("🗑️", key=f"al_del_{o_id}", help="حذف العرض نهائياً من المتجر"):
                         with st.spinner("⏳"):
                             if safe_api_request("DELETE", f"{SALLA_API_URL}/{o_id}", headers):
-                                # ⚡ حذف العرض من الذاكرة لاختفائه فوراً
                                 st.session_state["all_offers"] = [o for o in st.session_state["all_offers"] if str(o.get('id')) != str(o_id)]
                                 st.rerun()
 
@@ -534,7 +527,7 @@ def render_offers_page():
     # ==========================================
     # ⚙️ عرض الشاشات المنبثقة للإجراءات
     # ==========================================
-    if st.session_state.qa_action in ["end_dates", "start_dates", "draft"]:
+    if st.session_state.qa_action in ["end_dates", "start_dates", "draft", "featured_groups"]:
         with st.container(border=True):
             col_t, col_c = st.columns([5, 1])
             with col_c:
