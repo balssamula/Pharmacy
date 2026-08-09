@@ -1018,3 +1018,70 @@ def process_promotions_bulk(df: pd.DataFrame, products_list: List[Dict], headers
             results["errors"].append(f"فشل تنفيذ ({action}) للمنتج {sku_raw}.")
             
     return results
+
+def export_featured_group_to_excel(group_products: List[Dict], po_map: Dict) -> bytes:
+    """تصدير منتجات المجموعة المميزة إلى ملف Excel احترافي ومنسق"""
+    try:
+        import io
+        from openpyxl import Workbook
+        from openpyxl.styles import PatternFill, Font, Alignment, Border, Side
+        from openpyxl.utils import get_column_letter
+
+        wb = Workbook()
+        ws = wb.active
+        ws.title = "بيانات المجموعة"
+
+        # العناوين المطلوبة
+        headers = ["SKU", "اسم المنتج", "سعر المنتج", "السعر المخفض", "تاريخ انتهاء التخفيض", "مشمول في عرض خاص؟", "اسم العرض الخاص"]
+        ws.append(headers)
+
+        for p in group_products:
+            pid_str = str(p.get('id', ''))
+            price = get_flat_price(p.get('price', 0))
+            regular_price = get_flat_price(p.get('regular_price', 0))
+            base_price = regular_price if regular_price > 0 else price
+            sale_price = get_flat_price(p.get('sale_price', 0))
+
+            # فحص العروض المربوطة
+            offers = po_map.get(pid_str, [])
+            in_offer = "نعم" if offers else "لا"
+            offer_names = " ، ".join([o['name'] for o in offers]) if offers else "لا يوجد"
+
+            ws.append([
+                p.get('sku', 'لا يوجد'),
+                p.get('name', 'بدون اسم'),
+                base_price,
+                sale_price if sale_price > 0 else "بدون تخفيض",
+                p.get('sale_end', 'بدون تاريخ') if sale_price > 0 else "-",
+                in_offer,
+                offer_names
+            ])
+
+        # التنسيق الاحترافي
+        elegant_purple = PatternFill(start_color="8B5CF6", end_color="8B5CF6", fill_type="solid") # لون مميز للمجموعات
+        header_font = Font(name="Segoe UI", size=11, bold=True, color="FFFFFF")
+        center_align = Alignment(horizontal="center", vertical="center", wrap_text=True)
+        thin_border = Border(left=Side(style='thin', color='DDDDDD'), right=Side(style='thin', color='DDDDDD'),
+                             top=Side(style='thin', color='DDDDDD'), bottom=Side(style='thin', color='DDDDDD'))
+
+        ws.row_dimensions[1].height = 25
+        for col in range(1, len(headers) + 1):
+            cell = ws.cell(row=1, column=col)
+            cell.fill = elegant_purple
+            cell.font = header_font
+            cell.alignment = center_align
+            cell.border = thin_border
+            # ضبط عرض الأعمدة
+            ws.column_dimensions[get_column_letter(col)].width = 22
+
+        ws.column_dimensions['B'].width = 40 # توسيع عمود الاسم
+        ws.column_dimensions['G'].width = 35 # توسيع عمود اسم العرض
+        
+        # تفعيل الفلترة التلقائية
+        ws.auto_filter.ref = f"A1:{get_column_letter(len(headers))}{ws.max_row}"
+
+        output = io.BytesIO()
+        wb.save(output)
+        return output.getvalue()
+    except Exception as e:
+        return b""
