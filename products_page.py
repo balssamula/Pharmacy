@@ -10,7 +10,7 @@ from utils import (
     export_products_to_excel, attach_product_image_api, update_product_promotions_secure,
     update_product_tax_secure, get_branches_list, generate_quantities_template, 
     process_quantities_import, fill_salla_template, generate_salla_new_products_file, 
-    delete_product, update_product_price, update_product_sale_price, 
+    delete_product, update_product_price, update_product_sale_price, export_featured_group_to_excel,
     remove_product_from_group, add_product_to_group, get_product_details, get_group_products,
     update_group_product_quantity, generate_promotions_template, process_promotions_bulk
 )
@@ -655,29 +655,75 @@ def render_products_page():
                     st.markdown("#### 📋 المجموعات الحالية والإجراءات")
                     featured_groups = st.session_state.get("featured_product_groups", {})
                     if featured_groups:
+                        po_map = st.session_state.get("product_offers_map", {})
+                        
                         for g_name, g_ids in list(featured_groups.items()):
-                            with st.expander(f"📁 {g_name} ({len(g_ids)} منتجات)"):
+                            # فلترة المنتجات الخاصة بهذه المجموعة فقط
+                            group_products_data = [p for p in st.session_state.get("all_products", []) if str(p['id']) in g_ids]
+                            
+                            with st.expander(f"📁 {g_name} ({len(g_ids)} منتجات)", expanded=False):
+                                # 📥 زر التصدير الاحترافي
+                                st.download_button(
+                                    label="📥 تصدير منتجات المجموعة (Excel)",
+                                    data=export_featured_group_to_excel(group_products_data, po_map),
+                                    file_name=f"Group_{g_name}_{datetime.now().strftime('%Y%m%d')}.xlsx",
+                                    mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                                    use_container_width=True,
+                                    key=f"exp_g_{g_name}"
+                                )
+                                
+                                # 📦 زر استعراض وتعديل المحتوى (إضافة / حذف)
+                                with st.popover("📦 استعراض وتعديل منتجات المجموعة", use_container_width=True):
+                                    st.markdown(f"**المنتجات الحالية في ( {g_name} ):**")
+                                    if not g_ids: st.warning("المجموعة فارغة حالياً.")
+                                    
+                                    for pid in list(g_ids):
+                                        prod_info = next((p for p in group_products_data if str(p['id']) == pid), None)
+                                        if prod_info:
+                                            cx1, cx2 = st.columns([5, 1])
+                                            with cx1: st.markdown(f"- `{prod_info.get('sku')}` | {prod_info.get('name')}")
+                                            with cx2:
+                                                if st.button("❌", key=f"rm_{pid}_{g_name}", help="إزالة من المجموعة"):
+                                                    st.session_state["featured_product_groups"][g_name].remove(pid)
+                                                    st.rerun()
+                                                    
+                                    st.markdown("---")
+                                    st.markdown("**➕ إضافة منتجات جديدة للمجموعة:**")
+                                    add_opts = {f"📦 {p['name']} (SKU: {p.get('sku','')})": str(p['id']) for p in st.session_state.get("all_products", []) if str(p['id']) not in g_ids}
+                                    to_add = st.multiselect("اختر المنتجات:", options=list(add_opts.keys()), key=f"add_ms_{g_name}", label_visibility="collapsed")
+                                    if st.button("➕ إضافة للمجموعة", key=f"add_btn_{g_name}", type="primary"):
+                                        if to_add:
+                                            st.session_state["featured_product_groups"][g_name].extend([add_opts[k] for k in to_add])
+                                            st.success("تمت الإضافة!")
+                                            st.rerun()
+
+                                st.markdown("---")
                                 st.markdown("**⚡ الإجراءات السريعة للمجموعة:**")
                                 
-                                # 1. إنشاء سعر مخفض بالنسبة المئوية
-                                col_d1, col_d2 = st.columns([2, 1])
+                                # 1. إنشاء سعر مخفض مع تاريخ الانتهاء
+                                col_d1, col_d2 = st.columns(2)
                                 with col_d1:
-                                    disc_pct = st.number_input("نسبة الخصم المطلوبة %:", min_value=1.0, max_value=99.0, value=10.0, step=1.0, key=f"dpct_{g_name}")
+                                    disc_pct = st.number_input("نسبة الخصم %:", min_value=1.0, max_value=99.0, value=10.0, step=1.0, key=f"dpct_{g_name}")
                                 with col_d2:
-                                    st.markdown("<br>", unsafe_allow_html=True)
-                                    if st.button("💰 تطبيق الخصم", key=f"dbtn_{g_name}", use_container_width=True):
-                                        with st.spinner("جاري حساب وتطبيق الخصم..."):
-                                            c = 0
-                                            for pid in g_ids:
-                                                prod = next((p for p in st.session_state.get("all_products", []) if str(p['id']) == pid), None)
-                                                if prod:
-                                                    base_price = get_flat_price(prod.get('regular_price', 0)) or get_flat_price(prod.get('price', 0))
-                                                    new_sale = round(base_price - (base_price * (disc_pct / 100)), 2)
-                                                    if update_product_sale_price(int(pid), new_sale): c += 1
-                                            st.success(f"تم تخفيض {c} منتج بنسبة {disc_pct}%!")
-                                            time.sleep(1)
-                                            if "all_products_fetched" in st.session_state: del st.session_state["all_products_fetched"]
-                                            st.rerun()
+                                    # إضافة تاريخ الانتهاء (يتم تعيين الوقت لـ 23:59:59 تلقائياً في الكود)
+                                    disc_end_date = st.date_input("تاريخ انتهاء الخصم:", value=datetime.now().date() + timedelta(days=7), key=f"dend_{g_name}")
+                                
+                                if st.button("💰 تطبيق الخصم بالوقت المحدد", key=f"dbtn_{g_name}", use_container_width=True, type="primary"):
+                                    with st.spinner("جاري حساب وتطبيق الخصم..."):
+                                        c = 0
+                                        # دمج التاريخ مع نهاية اليوم
+                                        end_time_str = datetime.combine(disc_end_date, datetime.min.time().replace(hour=23, minute=59, second=59)).strftime('%Y-%m-%d %H:%M:%S')
+                                        
+                                        for pid in g_ids:
+                                            prod = next((p for p in group_products_data if str(p['id']) == pid), None)
+                                            if prod:
+                                                base_price = get_flat_price(prod.get('regular_price', 0)) or get_flat_price(prod.get('price', 0))
+                                                new_sale = round(base_price - (base_price * (disc_pct / 100)), 2)
+                                                if update_product_sale_price(int(pid), new_sale, sale_end=end_time_str): c += 1
+                                        st.success(f"تم تطبيق خصم {disc_pct}% على {c} منتج حتى {disc_end_date}!")
+                                        import time; time.sleep(1)
+                                        if "all_products_fetched" in st.session_state: del st.session_state["all_products_fetched"]
+                                        st.rerun()
                                             
                                 # 2. العنوان الترويجي الجماعي
                                 col_p1, col_p2 = st.columns([2, 1])
@@ -691,19 +737,18 @@ def render_products_page():
                                             for pid in g_ids:
                                                 if update_product_promotions_secure(int(pid), promo_title, "", headers): c += 1
                                             st.success(f"تم تحديث {c} منتج!")
-                                            time.sleep(1)
-                                            st.rerun()
+                                            import time; time.sleep(1); st.rerun()
                                             
                                 # 3. مسح الخصم والعناوين
                                 if st.button("🧹 مسح السعر المخفض والعناوين نهائياً", key=f"cbtn_{g_name}", use_container_width=True):
                                     with st.spinner("جاري المسح وإعادة الضبط..."):
                                         c = 0
                                         for pid in g_ids:
-                                            update_product_sale_price(int(pid), 0) # 0 يمسح السعر
-                                            update_product_promotions_secure(int(pid), "", "", headers) # يمسح العنوان
+                                            update_product_sale_price(int(pid), 0)
+                                            update_product_promotions_secure(int(pid), "", "", headers)
                                             c += 1
                                         st.success(f"تم مسح بيانات {c} منتج!")
-                                        time.sleep(1)
+                                        import time; time.sleep(1)
                                         if "all_products_fetched" in st.session_state: del st.session_state["all_products_fetched"]
                                         st.rerun()
                                         
