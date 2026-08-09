@@ -580,18 +580,76 @@ def render_products_page():
                 st.info("💡 يمكنك من هنا تجميع عدة منتجات لتنفيذ خصومات جماعية وعناوين ترويجية بضغطة زر واحدة.")
                 
                 col_g1, col_g2 = st.columns(2)
+                
                 with col_g1:
                     st.markdown("#### ➕ إنشاء مجموعة جديدة")
                     new_g_name = st.text_input("اسم المجموعة الجديدة:")
+                    
+                    st.markdown("**1️⃣ الاختيار اليدوي:**")
                     prod_opts = {f"📦 {p['name']} (SKU: {p.get('sku','')})": str(p['id']) for p in st.session_state.get("all_products", [])}
-                    sel_prods = st.multiselect("اختر المنتجات المراد إضافتها للمجموعة:", options=list(prod_opts.keys()))
-                    if st.button("💾 حفظ المجموعة", type="primary", key="save_prod_group"):
-                        if not new_g_name: st.error("الرجاء كتابة اسم المجموعة")
-                        elif not sel_prods: st.error("الرجاء اختيار منتج واحد على الأقل")
+                    sel_prods = st.multiselect("اختر المنتجات من القائمة:", options=list(prod_opts.keys()))
+                    
+                    st.markdown("**2️⃣ أو عبر رفع ملف (أسرع):**")
+                    st.info("💡 قم برفع ملف Excel/CSV يحتوي على رموز SKU للمنتجات في **العمود الأول**.")
+                    uploaded_group_file = st.file_uploader("📂 رفع ملف SKU للمنتجات:", type=['xlsx', 'csv'], key="upload_group_skus")
+                    
+                    if st.button("💾 حفظ المجموعة", type="primary", key="save_prod_group", use_container_width=True):
+                        if not new_g_name: 
+                            st.error("⚠️ الرجاء كتابة اسم المجموعة")
                         else:
-                            st.session_state.get("featured_product_groups", {})[new_g_name] = [prod_opts[k] for k in sel_prods]
-                            st.success("✅ تم حفظ المجموعة بنجاح!")
-                            st.rerun()
+                            final_product_ids = set()
+                            
+                            # إضافة المنتجات المختارة يدوياً
+                            if sel_prods:
+                                for k in sel_prods:
+                                    final_product_ids.add(prod_opts[k])
+                                    
+                            # معالجة المنتجات المرفوعة عبر الملف
+                            not_found_skus = []
+                            if uploaded_group_file:
+                                try:
+                                    if uploaded_group_file.name.endswith('.csv'):
+                                        df_skus = pd.read_csv(uploaded_group_file)
+                                    else:
+                                        df_skus = pd.read_excel(uploaded_group_file)
+                                        
+                                    if not df_skus.empty:
+                                        # استخراج العمود الأول وتنظيف القيم
+                                        file_skus = df_skus.iloc[:, 0].dropna().astype(str).str.strip().tolist()
+                                        
+                                        # بناء قاموس للبحث السريع (SKU -> ID)
+                                        sku_to_id = {}
+                                        for p in st.session_state.get("all_products", []):
+                                            if p.get('sku'):
+                                                clean_sku = str(p.get('sku')).strip()
+                                                if clean_sku.endswith('.0'): clean_sku = clean_sku[:-2]
+                                                sku_to_id[clean_sku] = str(p['id'])
+                                        
+                                        # المطابقة واستخراج الـ IDs
+                                        for s in file_skus:
+                                            if s.endswith('.0'): s = s[:-2]
+                                            if s in sku_to_id:
+                                                final_product_ids.add(sku_to_id[s])
+                                            else:
+                                                not_found_skus.append(s)
+                                                
+                                except Exception as e:
+                                    st.error(f"❌ خطأ في قراءة الملف: {e}")
+                                    
+                            # التحقق النهائي والحفظ
+                            if not final_product_ids:
+                                st.error("⚠️ الرجاء اختيار منتج واحد على الأقل (يدوياً أو عبر رفع ملف صالح).")
+                            else:
+                                st.session_state.get("featured_product_groups", {})[new_g_name] = list(final_product_ids)
+                                
+                                if not_found_skus:
+                                    st.warning(f"✅ تم حفظ المجموعة، ولكن لم يتم العثور على {len(not_found_skus)} SKU مثل: {', '.join(not_found_skus[:5])}")
+                                else:
+                                    st.success("✅ تم حفظ المجموعة بجميع المنتجات بنجاح!")
+                                    
+                                import time
+                                time.sleep(1.5)
+                                st.rerun()
                             
                 with col_g2:
                     st.markdown("#### 📋 المجموعات الحالية والإجراءات")
