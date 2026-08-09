@@ -355,6 +355,14 @@ def render_create_offer_section(headers: Dict[str, str], section_key: str = "mai
                 else: st.error("❌ فشل إنشاء العرض")
                     
 def render_offers_page():
+    # ✅ تأسيس الذاكرة الجوهرية قبل تشغيل أي شيء في الصفحة
+    if "featured_offer_groups" not in st.session_state:
+        st.session_state["featured_offer_groups"] = {}
+    if "sound_playing" not in st.session_state:
+        st.session_state["sound_playing"] = True
+    if "qa_action" not in st.session_state: 
+        st.session_state.qa_action = None
+
     st.markdown("""
     <div style="background: linear-gradient(135deg, #0F1C2E 0%, #00EBCF 100%); padding: 15px 25px; border-radius: 12px; color: white; margin-bottom: 20px; box-shadow: 0 4px 6px rgba(0,0,0,0.1);">
         <h2 style="color: white; margin: 0;">📊 مركز إدارة العروض الخاصة المتقدم</h2>
@@ -1296,15 +1304,15 @@ def render_offers_page():
     st.markdown("---")
 
 def rebuild_offer_payload(existing_data, overrides=None):
-    """بناء آمن للطلب (Payload) يستخرج الأرقام فقط (IDs) لتجنب أخطاء 500 من سلة"""
+    """بناء آمن وذكي للطلب (Payload) يعالج شروط سلة الصارمة ويمنع أخطاء 422 و 500"""
     if overrides is None: overrides = {}
     
     def extract_ids(items):
         if not items: return []
         return [item.get('id', item) if isinstance(item, dict) else item for item in items]
         
-    buy_data = existing_data.get('buy', {})
-    get_data = existing_data.get('get', {})
+    buy_data = existing_data.get('buy', {}) or {}
+    get_data = existing_data.get('get', {}) or {}
 
     payload = {
         "name": existing_data.get('name', 'عرض بدون اسم'),
@@ -1333,16 +1341,32 @@ def rebuild_offer_payload(existing_data, overrides=None):
     if existing_data.get('customer_groups'):
         payload["customer_groups"] = extract_ids(existing_data.get('customer_groups'))
 
-    # استخراج IDs للمشتريات
-    if 'products' in buy_data: payload['buy']['products'] = extract_ids(buy_data['products'])
-    if 'categories' in buy_data: payload['buy']['categories'] = extract_ids(buy_data['categories'])
-    if 'brands' in buy_data: payload['buy']['brands'] = extract_ids(buy_data['brands'])
+    # ✅ الإصلاح الجذري لمعالجة خطأ 422 (توزيع المنتجات بذكاء)
+    applied_to = payload["applied_to"]
+    
+    # تجميع كافة المعرفات من أي مكان في العرض الأصلي
+    all_pids = extract_ids(existing_data.get('products', [])) + extract_ids(buy_data.get('products', [])) + extract_ids(get_data.get('products', []))
+    all_pids = list(set(all_pids)) # إزالة التكرار
+    
+    all_cids = extract_ids(existing_data.get('categories', [])) + extract_ids(buy_data.get('categories', [])) + extract_ids(get_data.get('categories', []))
+    all_cids = list(set(all_cids))
+    
+    all_bids = extract_ids(existing_data.get('brands', [])) + extract_ids(buy_data.get('brands', [])) + extract_ids(get_data.get('brands', []))
+    all_bids = list(set(all_bids))
 
-    # استخراج IDs للهدايا
-    if 'products' in get_data: payload['get']['products'] = extract_ids(get_data['products'])
-    if 'categories' in get_data: payload['get']['categories'] = extract_ids(get_data['categories'])
-    if 'brands' in get_data: payload['get']['brands'] = extract_ids(get_data['brands'])
-    if 'discount_amount' in get_data: payload['get']['discount_amount'] = float(get_data['discount_amount'])
+    # توزيع المعرفات إجبارياً على Buy و Get لترضي سلة
+    if applied_to == 'product' and all_pids:
+        payload['buy']['products'] = all_pids
+        payload['get']['products'] = all_pids
+    elif applied_to == 'category' and all_cids:
+        payload['buy']['categories'] = all_cids
+        payload['get']['categories'] = all_cids
+    elif applied_to == 'brand' and all_bids:
+        payload['buy']['brands'] = all_bids
+        payload['get']['brands'] = all_bids
+
+    if 'discount_amount' in get_data: 
+        payload['get']['discount_amount'] = float(get_data['discount_amount'])
 
     for key, value in overrides.items():
         if key in payload: payload[key] = value
