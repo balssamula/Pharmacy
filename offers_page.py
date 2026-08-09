@@ -561,8 +561,8 @@ def render_offers_page():
                             st.rerun()
                 with col_g2:
                     st.markdown("#### 📋 المجموعات الحالية")
-                    if st.session_state["featured_offer_groups"]:
-                        for g_name, g_ids in st.session_state["featured_offer_groups"].items():
+                    if st.session_state.get("featured_offer_groups"):
+                        for g_name, g_ids in st.session_state.get("featured_offer_groups", {}).items():
                             with st.expander(f"📁 {g_name} ({len(g_ids)} عروض)"):
                                 for oid in g_ids:
                                     offer_name = next((o['name'] for o in raw_offers if o['id'] == oid), "غير معروف")
@@ -882,7 +882,7 @@ def render_offers_page():
         # ✅ 1. قائمة منسدلة لتاريخ الانتهاء
         with col_date: filter_date_str = st.selectbox("📅 تاريخ الانتهاء:", date_options, key="filter_date_select")
         # ✅ 2. فلتر العروض المميزة
-        with col_feat: filter_featured = st.selectbox("⭐ العروض المميزة:", ["الكل"] + list(st.session_state["featured_offer_groups"].keys()), key="filter_featured")
+        with col_feat: filter_featured = st.selectbox("⭐ العروض المميزة:", ["الكل"] + list(st.session_state.get("featured_offer_groups", {}).keys()), key="filter_featured")
         with col_over: filter_overlap = st.checkbox("🔄 فحص التداخل (منتجات مكررة)", key="f_overlap")
             
         col_f1, col_f2, col_f3 = st.columns(3)
@@ -933,7 +933,7 @@ def render_offers_page():
             
         # ✅ تطبيق فلتر المجموعات المميزة
         if filter_featured != "الكل":
-            if offer_id not in st.session_state["featured_offer_groups"].get(filter_featured, []): continue
+            if offer_id not in st.session_state.get("featured_offer_groups", {}).get(filter_featured, []): continue
         if type_filter != "الكل":
             offer_type_ar = OFFER_TYPES_MAP.get(offer.get('offer_type', ''), '')
             if offer_type_ar != type_filter: continue
