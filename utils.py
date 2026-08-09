@@ -890,11 +890,12 @@ def generate_promotions_template() -> bytes:
     ws.title = "تحديث العناوين والأسعار"
 
     # إضافة صف الإرشادات
-    ws.append(["💡 إرشادات: ادخل رقم الـ SKU، العناوين الجديدة، والسعر المخفض (إن وجد)، ثم اختر الإجراء المطلوب."])
-    ws.merge_cells('A1:E1')
+    ws.append(["💡 إرشادات: ادخل رقم الـ SKU، العناوين الجديدة، السعر المخفض وتاريخ الانتهاء، ثم اختر الإجراء المطلوب."])
+    ws.merge_cells('A1:F1')
     ws.row_dimensions[1].height = 24
 
-    headers = ["SKU (رقم المنتج)", "العنوان الترويجي", "العنوان الفرعي", "السعر المخفض", "الإجراء المطلوب"]
+    # ✅ العناوين الجديدة مع عمود تاريخ الانتهاء
+    headers = ["SKU (رقم المنتج)", "العنوان الترويجي", "العنوان الفرعي", "السعر المخفض", "تاريخ انتهاء التخفيض", "الإجراء المطلوب"]
     ws.append(headers)
 
     # التنسيق الاحترافي
@@ -912,10 +913,10 @@ def generate_promotions_template() -> bytes:
         cell.border = thin_border
         ws.column_dimensions[get_column_letter(col)].width = 25
 
-    # قائمة منسدلة
-    dv = DataValidation(type="list", formula1='"تحديث,تحديث السعر المخفض,مسح الترويجي,مسح الفرعي,مسح الكل"', allow_blank=False)
+    # ✅ قائمة منسدلة للإجراءات (تم إضافة: تحديث تاريخ الانتهاء) في العمود السادس (F)
+    dv = DataValidation(type="list", formula1='"تحديث,تحديث السعر المخفض,تحديث تاريخ الانتهاء,مسح الترويجي,مسح الفرعي,مسح الكل"', allow_blank=False)
     ws.add_data_validation(dv)
-    dv.add("E3:E1000")
+    dv.add("F3:F1000")
 
     output = io.BytesIO()
     wb.save(output)
@@ -951,6 +952,20 @@ def process_promotions_bulk(df: pd.DataFrame, products_list: List[Dict], headers
         sub_val = str(row.get('العنوان الفرعي', '')).strip()
         sale_price_val = str(row.get('السعر المخفض', '')).strip()
         
+        # ✅ استخراج تاريخ الانتهاء بذكاء وتحويله للصيغة المقبولة في سلة
+        sale_end_raw = row.get('تاريخ انتهاء التخفيض', '')
+        sale_end_val = ""
+        if pd.notna(sale_end_raw) and str(sale_end_raw).strip() not in ['', 'nan']:
+            try:
+                parsed_date = pd.to_datetime(sale_end_raw)
+                # إذا قام التاجر بكتابة التاريخ فقط (بدون وقت)، سيتم وضع نهاية اليوم تلقائياً
+                if parsed_date.hour == 0 and parsed_date.minute == 0:
+                    sale_end_val = parsed_date.strftime('%Y-%m-%d 23:59:59')
+                else:
+                    sale_end_val = parsed_date.strftime('%Y-%m-%d %H:%M:%S')
+            except:
+                sale_end_val = str(sale_end_raw).strip()
+        
         if promo_val == 'nan': promo_val = ""
         if sub_val == 'nan': sub_val = ""
         if sale_price_val == 'nan': sale_price_val = ""
@@ -959,28 +974,39 @@ def process_promotions_bulk(df: pd.DataFrame, products_list: List[Dict], headers
         current_promo = p.get('promotion_title', '') or (p.get('promotion', {}).get('title', '') if isinstance(p.get('promotion'), dict) else '')
         current_sub = p.get('promotion_subtitle', '') or (p.get('promotion', {}).get('sub_title', '') if isinstance(p.get('promotion'), dict) else '')
         current_sale = get_flat_price(p.get('sale_price', 0))
+        current_sale_end = str(p.get('sale_end', '')) if p.get('sale_end') else ""
         
         new_promo = current_promo
         new_sub = current_sub
         new_sale = current_sale
+        new_sale_end = current_sale_end
         
-        # ✅ تطبيق المنطق الجديد: "تحديث" يعكس محتوى الإكسيل تماماً (فارغ = مسح)
+        # ✅ تطبيق المنطق الذكي للإجراءات الجديدة
         if action == 'تحديث':
-            new_promo = promo_val  # إذا كانت فارغة، ستصبح "" ويتم مسحها
-            new_sub = sub_val      # إذا كانت فارغة، ستصبح "" ويتم مسحها
-            if sale_price_val == "":
-                new_sale = 0.0     # إذا كان فارغاً، سيتم إلغاء السعر المخفض
-            else:
-                try: new_sale = float(sale_price_val)
-                except: new_sale = current_sale
-                
-        elif action == 'تحديث السعر المخفض':
-            # يُحدث السعر المخفض فقط (وإذا كان فارغاً يمسحه)، ويحتفظ بالعناوين كما هي
+            new_promo = promo_val
+            new_sub = sub_val
             if sale_price_val == "":
                 new_sale = 0.0
             else:
                 try: new_sale = float(sale_price_val)
                 except: new_sale = current_sale
+            if sale_end_val != "":
+                new_sale_end = sale_end_val
+                
+        elif action == 'تحديث السعر المخفض':
+            if sale_price_val == "":
+                new_sale = 0.0
+            else:
+                try: new_sale = float(sale_price_val)
+                except: new_sale = current_sale
+            if sale_end_val != "":
+                new_sale_end = sale_end_val
+                
+        elif action == 'تحديث تاريخ الانتهاء': # الإجراء الجديد
+            if sale_end_val != "":
+                new_sale_end = sale_end_val
+            else:
+                new_sale_end = ""
                 
         elif action == 'مسح الترويجي':
             new_promo = ""
@@ -989,6 +1015,7 @@ def process_promotions_bulk(df: pd.DataFrame, products_list: List[Dict], headers
             elif sale_price_val:
                 try: new_sale = float(sale_price_val)
                 except: pass
+            if sale_end_val != "": new_sale_end = sale_end_val
                 
         elif action == 'مسح الفرعي':
             new_sub = ""
@@ -997,13 +1024,20 @@ def process_promotions_bulk(df: pd.DataFrame, products_list: List[Dict], headers
             elif sale_price_val:
                 try: new_sale = float(sale_price_val)
                 except: pass
+            if sale_end_val != "": new_sale_end = sale_end_val
                 
         elif action == 'مسح الكل':
             new_promo = ""
             new_sub = ""
             new_sale = 0.0
+            new_sale_end = ""
         
         base_price = get_flat_price(p.get('regular_price', 0)) or get_flat_price(p.get('price', 0))
+        
+        # منع خطأ 422 وحماية المتجر من الأخطاء البشرية
+        if new_sale > 0 and new_sale >= base_price:
+            results["errors"].append(f"السطر {idx+2}: السعر المخفض ({new_sale}) يجب أن يكون أقل من الأصلي ({base_price}) للمنتج {sku_raw}")
+            continue
         
         # بناء البيانات المُرسلة لسلة
         payload = {
@@ -1017,8 +1051,13 @@ def process_promotions_bulk(df: pd.DataFrame, products_list: List[Dict], headers
         
         if new_sale > 0:
             payload['sale_price'] = new_sale
+            if new_sale_end:
+                payload['sale_end'] = new_sale_end
+            else:
+                payload['sale_end'] = None
         else:
-            payload['sale_price'] = None # سلة تستخدم None لإلغاء وإزالة السعر المخفض
+            payload['sale_price'] = None
+            payload['sale_end'] = None
             
         res = safe_api_request("PUT", f"https://api.salla.dev/admin/v2/products/{p_id}", headers, json=payload)
         if res:
