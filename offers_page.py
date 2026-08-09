@@ -62,7 +62,7 @@ def render_expiry_alerts(raw_offers, headers=None):
     with col_t2:
         if st.button("🔄 تحديث الإجراءات", use_container_width=True, key="refresh_alert_btn"):
             with st.spinner("تحديث البيانات..."):
-                res = safe_api_request("GET", f"{SALLA_API_URL}?per_page=100", headers)
+                res = safe_api_request("GET", f"{SALLA_API_URL}?per_page=60", headers)
                 if res and res.get("data"):
                     fresh_dict = {str(o['id']): o for o in res["data"]}
                     new_all = [fresh_dict.get(str(o['id']), o) for o in st.session_state.get("all_offers", [])]
