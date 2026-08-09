@@ -549,20 +549,28 @@ def update_product_sale_price(product_id: int, sale_price: float, sale_start: st
     headers = get_headers()
     current_res = safe_api_request("GET", f"https://api.salla.dev/admin/v2/products/{product_id}", headers)
     if not current_res or not current_res.get('data'): return False
-    p_data = current_res['data']
-    current_price = get_flat_price(p_data.get('price', 0))
     
-    if sale_price > 0 and sale_price >= current_price:
-        st.error(f"⚠️ السعر المخفض يجب أن يكون أقل من السعر الأصلي")
+    p_data = current_res['data']
+    
+    # ✅ الإصلاح الجذري: استخراج السعر الأصلي الحقيقي وتجاهل السعر المتأثر بالتخفيض السابق
+    price_val = get_flat_price(p_data.get('price', 0))
+    regular_val = get_flat_price(p_data.get('regular_price', 0))
+    base_price = regular_val if regular_val > 0 else price_val
+    
+    # التحقق المنطقي قبل الإرسال لمنع أخطاء 422 من سلة
+    if sale_price > 0 and sale_price >= base_price:
+        st.error(f"⚠️ السعر المخفض المطلوب ({sale_price}) يجب أن يكون أقل من السعر الأصلي ({base_price})")
         return False
     
-    payload = {"name": p_data.get('name'), "price": current_price, "status": p_data.get('status', 'sale')}
+    # إرسال السعر الأصلي الحقيقي في الـ Payload لضمان عدم تخريبه
+    payload = {"name": p_data.get('name'), "price": base_price, "status": p_data.get('status', 'sale')}
+    
     if sale_price > 0:
         payload['sale_price'] = sale_price
         if sale_start: payload['sale_start'] = sale_start
         if sale_end: payload['sale_end'] = sale_end
     else:
-        payload['sale_price'] = None
+        payload['sale_price'] = None # مسح السعر المخفض
         
     res = safe_api_request("PUT", f"https://api.salla.dev/admin/v2/products/{product_id}", headers, json=payload)
     return res is not None
