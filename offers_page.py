@@ -918,7 +918,7 @@ def render_offers_page():
         offer_name = offer.get('name', 'عرض بدون اسم')
         status = offer.get('status', 'inactive')
         start_date = safe_parse_date(offer.get('start_date'))
-        exp_date = safe_parse_date(offer.get('expiry_date'))
+        exp_date_obj = safe_parse_date(offer.get('expiry_date'))
         exp_date_str_val = exp_date_obj.strftime('%Y-%m-%d') if exp_date_obj else ""
     
         if search_offer:
