@@ -20,7 +20,8 @@ TAX_EXEMPTION_CAUSES = ["الخدمات المالية", "عقد تأمين عل
 def initialize_session():
     if "qa_action_prod" not in st.session_state: st.session_state.qa_action_prod = None
     if "prod_page" not in st.session_state: st.session_state.prod_page = 1
-
+    if "featured_product_groups" not in st.session_state: st.session_state["featured_product_groups"] = {}
+        
 def render_product_card(idx: int, p: Dict, headers: Dict[str, str]):
     """رسم وإدارة كارت منتج واحد بطريقة معزولة وآمنة (Clean Code)"""
     try:
@@ -365,6 +366,7 @@ def render_products_page():
         div[data-testid="stElementContainer"]:has(span[id="qa-marker-2"]) + div[data-testid="stElementContainer"] { top: 185px; }
         div[data-testid="stElementContainer"]:has(span[id="qa-marker-3"]) + div[data-testid="stElementContainer"] { top: 250px; }
         div[data-testid="stElementContainer"]:has(span[id="qa-marker-4"]) + div[data-testid="stElementContainer"] { top: 315px; }
+        div[data-testid="stElementContainer"]:has(span[id="qa-marker-5"]) + div[data-testid="stElementContainer"] { top: 380px; }
         div[data-testid="stElementContainer"]:has(span[id^="qa-marker-"]) + div[data-testid="stElementContainer"] button {
             width: 100% !important; text-align: right !important; padding-right: 35px !important; font-size: 14px !important;
             font-weight: bold !important; background: transparent !important; border: none !important; color: white !important; box-shadow: none !important;
@@ -407,7 +409,12 @@ def render_products_page():
     if st.button("🏷️ التحكم في العناوين والأسعار", key="btn_qa_4"):
         st.session_state.qa_action_prod = "promotions_control"
         st.rerun()
-
+        
+    st.markdown('<span id="qa-marker-5"></span>', unsafe_allow_html=True)
+    if st.button("⭐ مجموعات المنتجات المميزة", key="btn_qa_5"):
+        st.session_state.qa_action_prod = "featured_groups"
+        st.rerun()
+        
     if st.session_state.qa_action_prod:
         with st.container(border=True):
             col_t, col_c = st.columns([5, 1])
@@ -568,6 +575,100 @@ def render_products_page():
                         except Exception as e:
                             st.error(f"❌ خطأ في قراءة الملف: {str(e)}")
 
+            elif st.session_state.qa_action_prod == "featured_groups":
+                with col_t: st.markdown("### ⭐ إدارة مجموعات المنتجات المميزة")
+                st.info("💡 يمكنك من هنا تجميع عدة منتجات لتنفيذ خصومات جماعية وعناوين ترويجية بضغطة زر واحدة.")
+                
+                col_g1, col_g2 = st.columns(2)
+                with col_g1:
+                    st.markdown("#### ➕ إنشاء مجموعة جديدة")
+                    new_g_name = st.text_input("اسم المجموعة الجديدة:")
+                    prod_opts = {f"📦 {p['name']} (SKU: {p.get('sku','')})": str(p['id']) for p in st.session_state.get("all_products", [])}
+                    sel_prods = st.multiselect("اختر المنتجات المراد إضافتها للمجموعة:", options=list(prod_opts.keys()))
+                    if st.button("💾 حفظ المجموعة", type="primary", key="save_prod_group"):
+                        if not new_g_name: st.error("الرجاء كتابة اسم المجموعة")
+                        elif not sel_prods: st.error("الرجاء اختيار منتج واحد على الأقل")
+                        else:
+                            st.session_state.get("featured_product_groups", {})[new_g_name] = [prod_opts[k] for k in sel_prods]
+                            st.success("✅ تم حفظ المجموعة بنجاح!")
+                            st.rerun()
+                            
+                with col_g2:
+                    st.markdown("#### 📋 المجموعات الحالية والإجراءات")
+                    featured_groups = st.session_state.get("featured_product_groups", {})
+                    if featured_groups:
+                        for g_name, g_ids in list(featured_groups.items()):
+                            with st.expander(f"📁 {g_name} ({len(g_ids)} منتجات)"):
+                                st.markdown("**⚡ الإجراءات السريعة للمجموعة:**")
+                                
+                                # 1. إنشاء سعر مخفض بالنسبة المئوية
+                                col_d1, col_d2 = st.columns([2, 1])
+                                with col_d1:
+                                    disc_pct = st.number_input("نسبة الخصم المطلوبة %:", min_value=1.0, max_value=99.0, value=10.0, step=1.0, key=f"dpct_{g_name}")
+                                with col_d2:
+                                    st.markdown("<br>", unsafe_allow_html=True)
+                                    if st.button("💰 تطبيق الخصم", key=f"dbtn_{g_name}", use_container_width=True):
+                                        with st.spinner("جاري حساب وتطبيق الخصم..."):
+                                            c = 0
+                                            for pid in g_ids:
+                                                prod = next((p for p in st.session_state.get("all_products", []) if str(p['id']) == pid), None)
+                                                if prod:
+                                                    base_price = get_flat_price(prod.get('regular_price', 0)) or get_flat_price(prod.get('price', 0))
+                                                    new_sale = round(base_price - (base_price * (disc_pct / 100)), 2)
+                                                    if update_product_sale_price(int(pid), new_sale): c += 1
+                                            st.success(f"تم تخفيض {c} منتج بنسبة {disc_pct}%!")
+                                            time.sleep(1)
+                                            if "all_products_fetched" in st.session_state: del st.session_state["all_products_fetched"]
+                                            st.rerun()
+                                            
+                                # 2. العنوان الترويجي الجماعي
+                                col_p1, col_p2 = st.columns([2, 1])
+                                with col_p1:
+                                    promo_title = st.text_input("العنوان الترويجي الجماعي:", key=f"ptxt_{g_name}")
+                                with col_p2:
+                                    st.markdown("<br>", unsafe_allow_html=True)
+                                    if st.button("🏷️ تطبيق العنوان", key=f"pbtn_{g_name}", use_container_width=True):
+                                        with st.spinner("جاري التطبيق..."):
+                                            c = 0
+                                            for pid in g_ids:
+                                                if update_product_promotions_secure(int(pid), promo_title, "", headers): c += 1
+                                            st.success(f"تم تحديث {c} منتج!")
+                                            time.sleep(1)
+                                            st.rerun()
+                                            
+                                # 3. مسح الخصم والعناوين
+                                if st.button("🧹 مسح السعر المخفض والعناوين نهائياً", key=f"cbtn_{g_name}", use_container_width=True):
+                                    with st.spinner("جاري المسح وإعادة الضبط..."):
+                                        c = 0
+                                        for pid in g_ids:
+                                            update_product_sale_price(int(pid), 0) # 0 يمسح السعر
+                                            update_product_promotions_secure(int(pid), "", "", headers) # يمسح العنوان
+                                            c += 1
+                                        st.success(f"تم مسح بيانات {c} منتج!")
+                                        time.sleep(1)
+                                        if "all_products_fetched" in st.session_state: del st.session_state["all_products_fetched"]
+                                        st.rerun()
+                                        
+                                st.markdown("---")
+                                
+                                # 4 & 5. إعادة التسمية والحذف
+                                col_rn1, col_rn2 = st.columns([2, 1])
+                                with col_rn1:
+                                    new_rename = st.text_input("اسم جديد للمجموعة:", value=g_name, key=f"rntxt_{g_name}")
+                                with col_rn2:
+                                    st.markdown("<br>", unsafe_allow_html=True)
+                                    if st.button("✏️ إعادة تسمية", key=f"rnbtn_{g_name}", use_container_width=True):
+                                        if new_rename and new_rename != g_name:
+                                            st.session_state.get("featured_product_groups", {})[new_rename] = st.session_state.get("featured_product_groups", {}).pop(g_name)
+                                            st.success("تم تغيير الاسم!")
+                                            st.rerun()
+                                            
+                                if st.button("🗑️ حذف المجموعة", key=f"delg_{g_name}", type="primary", use_container_width=True):
+                                    del st.session_state.get("featured_product_groups", {})[g_name]
+                                    st.rerun()
+                    else:
+                        st.warning("لا توجد مجموعات مميزة حالياً.")
+                        
     st.markdown("### 🔍 أدوات التصفية والبحث في المنتجات")
     
     # ✅ استخراج تواريخ الانتهاء المتاحة للفلتر الجديد
@@ -579,12 +680,15 @@ def render_products_page():
     date_options = ["الكل", "بدون تاريخ"] + sorted(list(available_dates))
 
     with st.container(border=True):
-        col_search, col_date = st.columns([3, 1])
+        col_search, col_date, col_feat = st.columns([2, 1, 1])
         with col_search:
             sq = st.text_input("ابحث باسم أو SKU:", placeholder="أدخل الكود للبحث...").lower()
         with col_date:
             f_sale_end = st.selectbox("📅 انتهاء السعر المخفض:", options=date_options)
-
+        with col_feat:
+            # ✅ قائمة المجموعات المميزة المنسدلة للفلترة السريعة
+            f_feat_group = st.selectbox("⭐ مجموعة المنتجات:", ["الكل"] + list(st.session_state.get("featured_product_groups", {}).keys()), key="filter_prod_group")
+    
     with st.container(border=True):
         col_f1, col_f2, col_f3, col_f4, col_f5, col_f6 = st.columns(6)
         with col_f1:
@@ -611,6 +715,11 @@ def render_products_page():
     all_products_offers = po_map.get("ALL_PRODUCTS", [])
     
     for p in st.session_state.get("all_products", []):
+        p_id_str = str(p.get('id', '')).strip()
+        
+        # ✅ تطبيق فلتر المجموعات المميزة
+        if f_feat_group != "الكل":
+            if p_id_str not in st.session_state.get("featured_product_groups", {}).get(f_feat_group, []): continue
         if sq and sq not in str(p.get('name', '')).lower() and sq not in str(p.get('sku', '')).lower(): continue
         if f_status == "مخفي" and p.get('status') != 'hidden': continue
         if f_status == "معروض" and p.get('status') == 'hidden': continue
