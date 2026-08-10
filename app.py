@@ -70,6 +70,7 @@ def fetch_store_data_fast(token, headers):
     c_res = safe_api_request("GET", "https://api.salla.dev/admin/v2/customers?per_page=100&page=1", headers)
     if c_res:
         tp = c_res.get("pagination", {}).get("totalPages", 1)
+        tp_safe = min(tp, 100)
         customers.extend(c_res.get("data", []))
         for page in range(2, tp + 1):
             status_text.info(f"👥 جاري سحب العملاء: صفحة {page} من {tp} | (تم تحميل {len(customers)} عميل)")
