@@ -990,8 +990,9 @@ def process_promotions_bulk(df: pd.DataFrame, products_list: List[Dict], headers
             else:
                 try: new_sale = float(sale_price_val)
                 except: new_sale = current_sale
-            if sale_end_val != "":
-                new_sale_end = sale_end_val
+            
+            # ✅ الإصلاح: إزالة الشرط وجعل القيمة تتبع الملف تماماً (فارغ = مسح)
+            new_sale_end = sale_end_val
                 
         elif action == 'تحديث السعر المخفض':
             if sale_price_val == "":
@@ -999,14 +1000,13 @@ def process_promotions_bulk(df: pd.DataFrame, products_list: List[Dict], headers
             else:
                 try: new_sale = float(sale_price_val)
                 except: new_sale = current_sale
-            if sale_end_val != "":
-                new_sale_end = sale_end_val
                 
-        elif action == 'تحديث تاريخ الانتهاء': # الإجراء الجديد
-            if sale_end_val != "":
-                new_sale_end = sale_end_val
-            else:
-                new_sale_end = ""
+            # ✅ الإصلاح
+            new_sale_end = sale_end_val
+                
+        elif action == 'تحديث تاريخ الانتهاء':
+            # ✅ الإصلاح
+            new_sale_end = sale_end_val
                 
         elif action == 'مسح الترويجي':
             new_promo = ""
