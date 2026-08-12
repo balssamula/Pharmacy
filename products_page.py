@@ -893,7 +893,7 @@ def render_products_page():
         with col_act1:
             st.download_button(
                 label="📥 تحميل المنتجات المفلترة (Excel)",
-                data=export_products_to_excel(filtered),
+                data=export_products_to_excel(filtered, po_map),
                 file_name=f"Filtered_Products_{datetime.now().strftime('%Y%m%d_%H%M%S')}.xlsx",
                 mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
                 type="primary",
