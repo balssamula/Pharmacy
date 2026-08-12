@@ -909,7 +909,7 @@ def render_products_page():
             f_feat_group = st.selectbox("⭐ مجموعة المنتجات:", ["الكل"] + list(st.session_state.get("featured_product_groups", {}).keys()), key="filter_prod_group")
     
     with st.container(border=True):
-        col_f1, col_f2, col_f3, col_f4, col_f5, col_f6 = st.columns(7)
+        col_f1, col_f2, col_f3, col_f4, col_f5, col_f6, col_f7 = st.columns(7)
         with col_f1:
             st.markdown("<div style='text-align:center; color:#00EBCF; font-weight:bold;'>📌 الحالة</div>", unsafe_allow_html=True)
             f_status = st.radio("الحالة", ["الكل", "مخفي", "معروض"], horizontal=True, label_visibility="collapsed", key="f_status_radio")
