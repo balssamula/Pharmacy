@@ -394,8 +394,8 @@ with st.sidebar.popover("⚙️ إعدادات التطبيق (Settings)", use_c
         st.session_state["saved_app_id"] = app_id_set
         st.rerun()
 
-    # 1. زر الاستعلام (App Setting Details)
-    if st.button("🔍 App Setting Details", key="btn_get_settings", use_container_width=True):
+    # 1. زر الاستعلام (تفاصيل إعدادات التطبيق)
+    if st.button("🔍 تفاصيل إعدادات التطبيق", key="btn_get_settings", use_container_width=True):
         if not app_id_set:
             st.warning("الرجاء إدخال معرف التطبيق")
         else:
@@ -417,8 +417,8 @@ with st.sidebar.popover("⚙️ إعدادات التطبيق (Settings)", use_c
     current_json = st.session_state.get("app_settings_json", "{\n  \n}")
     updated_json = st.text_area("تعديل البيانات (JSON):", value=current_json, height=150, key="settings_json_input")
 
-    # 2. زر التحديث (Update App Settings)
-    if st.button("💾 Update App Settings", key="btn_update_settings", use_container_width=True, type="primary"):
+    # 2. زر التحديث (تحديث إعدادات التطبيق)
+    if st.button("💾 تحديث إعدادات التطبيق", key="btn_update_settings", use_container_width=True, type="primary"):
         if not app_id_set:
             st.warning("الرجاء إدخال معرف التطبيق")
         else:
