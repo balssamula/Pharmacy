@@ -658,7 +658,7 @@ def render_products_page():
                     except Exception as e:
                         st.error(f"❌ خطأ في معالجة الملف: {str(e)}")
 
-elif st.session_state.qa_action_prod == "promotions_control":
+            elif st.session_state.qa_action_prod == "promotions_control":
                 with col_t: st.markdown("### 🏷️ التحكم الشامل في العناوين والأسعار المخفضة")
                 st.info("قم بتنزيل القالب، ضع معرفات المنتجات (SKU)، وحدد الإجراء (تحديث، تحديث السعر المخفض، مسح الترويجي، مسح الفرعي، مسح الكل).")
                 
