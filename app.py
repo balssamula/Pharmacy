@@ -292,9 +292,15 @@ st.markdown("""
 </div>
 """, unsafe_allow_html=True)
 
+# ✅ جلب معرف التطبيق المحفوظ ليعرض في الأعلى
+saved_app_id = st.session_state.get("saved_app_id", "لم يحدد بعد")
+
 st.sidebar.markdown(f"""
-<div style="background: linear-gradient(135deg, #0F1C2E, #1a365d); padding: 20px 15px; border-radius: 12px; border: 1px solid #334155; margin-bottom: 25px; box-shadow: 0 4px 10px rgba(0,0,0,0.2);">
-    <div style="text-align: center; margin-bottom: 12px;">
+<div style="background: linear-gradient(135deg, #0F1C2E, #1a365d); padding: 20px 15px; border-radius: 12px; border: 1px solid #334155; margin-bottom: 25px; box-shadow: 0 4px 10px rgba(0,0,0,0.2); position: relative; overflow: hidden;">
+    <div style="position: absolute; top: 0; right: 0; background: linear-gradient(90deg, #F59E0B, #D97706); color: #FFF; padding: 4px 12px; border-bottom-left-radius: 12px; font-weight: bold; font-size: 12px; box-shadow: -2px 2px 8px rgba(0,0,0,0.3); z-index: 10;">
+        🆔 App ID: {saved_app_id}
+    </div>
+    <div style="text-align: center; margin-bottom: 12px; margin-top: 15px;">
         <div style="font-size: 32px; margin-bottom: 5px;">🏪</div>
         <h3 style="color: #FFFFFF; margin: 0; font-size: 18px;">{st.session_state.get('store_name', 'متجرك')}</h3>
     </div>
@@ -315,7 +321,12 @@ st.sidebar.markdown(f"""
 
 with st.sidebar.popover("📋 تفاصيل واشتراكات التطبيق", use_container_width=True):
     st.markdown("<b style='color:#0f1c2e;'>🔍 استعلام عن الاشتراك</b>", unsafe_allow_html=True)
-    app_id_val = st.text_input("معرف التطبيق (App ID):", key="app_id_input")
+    # ✅ بمجرد إدخال المعرف هنا سيتم حفظه ليظهر في الشارة العلوية
+    app_id_val = st.text_input("معرف التطبيق (App ID):", value=st.session_state.get("saved_app_id", ""), key="app_id_input")
+    if app_id_val != st.session_state.get("saved_app_id", ""):
+        st.session_state["saved_app_id"] = app_id_val
+        st.rerun()
+        
     if st.button("استعلام", key="btn_sub_info", use_container_width=True, type="primary"):
         if not app_id_val:
             st.warning("الرجاء إدخال معرف التطبيق")
@@ -325,8 +336,6 @@ with st.sidebar.popover("📋 تفاصيل واشتراكات التطبيق", u
                 res = safe_api_request("GET", f"https://api.salla.dev/admin/v2/apps/{app_id_val}/subscriptions", headers)
                 if res and res.get("data"):
                     st.success("✅ جلب البيانات بنجاح!")
-                    
-                    # ✅ تنسيق البيانات في بطاقات احترافية بدلاً من الكود
                     subs = res["data"]
                     for sub in subs:
                         app_name = sub.get("app_name", "غير معروف")
@@ -338,14 +347,7 @@ with st.sidebar.popover("📋 تفاصيل واشتراكات التطبيق", u
                         balance = sub.get("subscription_balance")
                         balance_text = str(balance) if balance is not None else "لا يوجد (غير مطبق)"
                         
-                        # ترجمة أنواع الباقات للعربية
-                        type_ar = {
-                            "once": "مرة واحدة", 
-                            "recurring": "متكرر (دوري)", 
-                            "on_demand": "حسب الاستهلاك", 
-                            "free": "مجاني"
-                        }.get(plan_type, plan_type)
-
+                        type_ar = {"once": "مرة واحدة", "recurring": "متكرر (دوري)", "on_demand": "حسب الاستهلاك", "free": "مجاني"}.get(plan_type, plan_type)
                         st.markdown(f"""
                         <div style="background: #f8fafc; border: 1px solid #cbd5e1; border-radius: 8px; padding: 15px; margin-top: 10px; text-align: right;">
                             <h4 style="color: #0f1c2e; margin-top: 0; margin-bottom: 10px;">📱 {app_name}</h4>
@@ -363,16 +365,13 @@ with st.sidebar.popover("🔄 تجديد اشتراك التطبيق", use_conta
     st.markdown("<b style='color:#0f1c2e;'>🔄 تجديد اشتراك (تطبيق/إضافة)</b>", unsafe_allow_html=True)
     sub_id_val = st.text_input("معرف الاشتراك:", key="sub_id_input")
     if st.button("تجديد الآن", key="btn_sub_renew", use_container_width=True, type="primary"):
-        if not sub_id_val:
-            st.warning("الرجاء إدخال معرف الاشتراك")
+        if not sub_id_val: st.warning("الرجاء إدخال معرف الاشتراك")
         else:
             headers = {"Authorization": f"Bearer {st.session_state.get('access_token')}"}
             with st.spinner("⏳"):
                 res = safe_api_request("POST", f"https://api.salla.dev/admin/v2/apps/subscriptions/{sub_id_val}/renew", headers, json={})
-                if res:
-                    st.success("✅ تم التجديد بنجاح!")
-                else:
-                    st.error("❌ فشل التجديد")
+                if res: st.success("✅ تم التجديد بنجاح!")
+                else: st.error("❌ فشل التجديد")
 
 with st.sidebar.popover("💰 تحديث رصيد الاستهلاك", use_container_width=True):
     st.markdown("<b style='color:#0f1c2e;'>💰 تحديث رصيد الاستهلاك</b>", unsafe_allow_html=True)
@@ -382,10 +381,8 @@ with st.sidebar.popover("💰 تحديث رصيد الاستهلاك", use_conta
         headers = {"Authorization": f"Bearer {st.session_state.get('access_token')}"}
         with st.spinner("⏳"):
             res = safe_api_request("POST", "https://api.salla.dev/admin/v2/apps/balance", headers, json={"balance": int(balance_val)})
-            if res:
-                st.success("✅ تم التحديث بنجاح!")
-            else:
-                st.error("❌ فشل التحديث")
+            if res: st.success("✅ تم التحديث بنجاح!")
+            else: st.error("❌ فشل التحديث")
 
 st.sidebar.markdown("<div style='margin-bottom: 15px;'></div>", unsafe_allow_html=True)
 # ==========================================
