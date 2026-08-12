@@ -658,7 +658,7 @@ def render_products_page():
                     except Exception as e:
                         st.error(f"❌ خطأ في معالجة الملف: {str(e)}")
 
-            elif st.session_state.qa_action_prod == "promotions_control":
+elif st.session_state.qa_action_prod == "promotions_control":
                 with col_t: st.markdown("### 🏷️ التحكم الشامل في العناوين والأسعار المخفضة")
                 st.info("قم بتنزيل القالب، ضع معرفات المنتجات (SKU)، وحدد الإجراء (تحديث، تحديث السعر المخفض، مسح الترويجي، مسح الفرعي، مسح الكل).")
                 
@@ -668,7 +668,7 @@ def render_products_page():
                 if uploaded_promo:
                     try:
                         df_promo = pd.read_excel(uploaded_promo)
-                        # ✅ تنظيف الـ SKU للفحص
+                        # تنظيف الـ SKU للفحص
                         df_promo['clean_sku'] = df_promo['SKU (رقم المنتج)'].astype(str).str.strip().str.replace(r'\.0$', '', regex=True)
                         valid_skus = df_promo['clean_sku'].tolist()
                         
@@ -687,7 +687,7 @@ def render_products_page():
                                     reasons = []
                                     if sale > 0: reasons.append(f"سعر مخفض ({sale})")
                                     if offers: reasons.append("مشمول في عرض خاص")
-                                    conflicts.append({'sku': p_sku, 'name': p['name'], 'promo': promo_text, 'reason': " + ".join(reasons)})
+                                    conflicts.append({'sku': p_sku, 'name': p['name'], 'id': str(p['id']), 'promo': promo_text, 'reason': " + ".join(reasons)})
 
                         if conflicts:
                             st.error(f"⚠️ تحذير: تم اكتشاف ({len(conflicts)}) منتج في الملف يحتوي بالفعل على تخفيضات أو عروض نشطة!")
@@ -696,14 +696,15 @@ def render_products_page():
                                     st.markdown(f"- **{c['name']}** (SKU: `{c['sku']}`)<br>  <span style='color:#e74c3c; font-size:13px;'>سبب التعارض: {c['reason']} | العنوان الحالي: {c['promo']}</span>", unsafe_allow_html=True)
                                     
                             st.markdown("**يرجى اتخاذ إجراء لاكتمال عملية الرفع:**")
-                            c1, c2, c3 = st.columns(3)
-                            if c1.button("🚀 تنفيذ على الكل (تجاهل التحذير)", type="primary", use_container_width=True):
+                            # ✅ تعديل لـ 4 أعمدة وإضافة زر أخرى
+                            c1, c2, c3, c4 = st.columns(4)
+                            if c1.button("🚀 تنفيذ عـ الكل (تجاهل)", type="primary", use_container_width=True):
                                 with st.spinner("⏳ جاري المعالجة..."):
                                     res = process_promotions_bulk(df_promo, st.session_state.get("all_products", []), headers)
                                     for m in res["success"]: st.success(m)
                                     for m in res["errors"]: st.error(m)
                                     st.session_state["all_products_fetched"] = False
-                            if c2.button("✅ التنفيذ على الباقي (استبعاد المتعارض)", type="primary", use_container_width=True):
+                            if c2.button("✅ التنفيذ عـ الباقي (استبعاد)", type="primary", use_container_width=True):
                                 with st.spinner("⏳ جاري المعالجة..."):
                                     conflict_skus = [c['sku'] for c in conflicts]
                                     df_clean = df_promo[~df_promo['clean_sku'].isin(conflict_skus)]
@@ -713,8 +714,39 @@ def render_products_page():
                                     st.session_state["all_products_fetched"] = False
                             if c3.button("❌ إلغاء العملية", use_container_width=True):
                                 st.info("تم إلغاء عملية الرفع.")
+                                
+                            with c4:
+                                with st.popover("⚙️ أخرى", use_container_width=True):
+                                    st.markdown("**إجراءات إضافية:**")
+                                    # 1. تحميل المنتجات المتعارضة
+                                    conflict_prods = [p for p in st.session_state.get("all_products", []) if str(p.get('sku', '')).strip().replace('.0', '') in [c['sku'] for c in conflicts]]
+                                    st.download_button(
+                                        label="📥 تحميل المنتجات المتعارضة",
+                                        data=export_products_to_excel(conflict_prods, po_map),
+                                        file_name=f"Conflicting_Products_Upload.xlsx",
+                                        mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                                        use_container_width=True,
+                                        key="dl_conf_upload"
+                                    )
+                                    # 2. إيقاف العروض الخاصة لهذه المنتجات
+                                    if st.button("🛑 إيقاف عروضها الخاصة", key="stop_off_upload", use_container_width=True):
+                                        with st.spinner("جاري إيقاف العروض..."):
+                                            offer_ids_to_stop = set()
+                                            for p in conflict_prods:
+                                                for off in po_map.get(str(p['id']), []):
+                                                    offer_ids_to_stop.add(str(off['id']))
+                                            
+                                            stopped_count = 0
+                                            for oid in offer_ids_to_stop:
+                                                if safe_api_request("PUT", f"https://api.salla.dev/admin/v2/specialoffers/{oid}/status", headers, json={"status": "inactive"}):
+                                                    stopped_count += 1
+                                                    for i, o in enumerate(st.session_state.get("all_offers", [])):
+                                                        if str(o.get('id')) == oid: st.session_state["all_offers"][i]['status'] = 'inactive'
+                                                    for pid in list(st.session_state.get("product_offers_map", {}).keys()):
+                                                        st.session_state["product_offers_map"][pid] = [o for o in st.session_state["product_offers_map"][pid] if str(o['id']) != oid]
+                                            st.success(f"✅ تم إيقاف {stopped_count} عرض خاص بنجاح!")
+                                            import time; time.sleep(1.5); st.rerun()
                         else:
-                            # لا يوجد تعارض
                             if st.button("🚀 تنفيذ التحديثات دفعة واحدة", type="primary", use_container_width=True):
                                 with st.spinner("⏳ جاري المعالجة..."):
                                     res = process_promotions_bulk(df_promo, st.session_state.get("all_products", []), headers)
@@ -780,7 +812,6 @@ def render_products_page():
                     if featured_groups:
                         po_map = st.session_state.get("product_offers_map", {})
                         
-                        # دالة داخلية مساعدة لتنفيذ خصم المجموعات
                         def execute_group_discount(target_ids, d_pct, d_end_date):
                             progress_bar = st.progress(0)
                             status_text = st.empty()
@@ -828,14 +859,13 @@ def render_products_page():
                                 st.markdown("---")
                                 st.markdown("**⚡ الإجراءات السريعة للمجموعة:**")
                                 
-                                # 1. إنشاء سعر مخفض (مع نظام الفحص الاستباقي الذكي)
+                                # 1. إنشاء سعر مخفض (مع الفحص الذكي وعرض الـ SKU)
                                 col_d1, col_d2 = st.columns(2)
                                 with col_d1:
                                     disc_pct = st.number_input("نسبة الخصم %:", min_value=1.0, max_value=99.0, value=10.0, step=1.0, key=f"dpct_{g_name}")
                                 with col_d2:
                                     disc_end_date = st.date_input("تاريخ الانتهاء:", value=datetime.now().date() + timedelta(days=7), key=f"dend_{g_name}")
                                 
-                                # ✅ الفحص التلقائي قبل التطبيق
                                 confs = []
                                 for p in group_products_data:
                                     sale = get_flat_price(p.get('sale_price', 0))
@@ -845,22 +875,56 @@ def render_products_page():
                                         reasons = []
                                         if sale > 0: reasons.append(f"مخفض ({sale})")
                                         if offers: reasons.append("عرض خاص")
-                                        confs.append({'id': str(p['id']), 'name': p['name'], 'promo': promo_text, 'reason': " + ".join(reasons)})
+                                        # ✅ إضافة SKU لقائمة التعارضات
+                                        p_sku = p.get('sku', 'لا يوجد')
+                                        confs.append({'id': str(p['id']), 'name': p['name'], 'sku': p_sku, 'promo': promo_text, 'reason': " + ".join(reasons)})
                                         
                                 if confs:
                                     st.error(f"⚠️ يوجد ({len(confs)}) منتج في هذه المجموعة تحتوي بالفعل على عروض!")
                                     with st.expander("👀 عرض المنتجات المتعارضة", expanded=False):
                                         for c in confs:
-                                            st.markdown(f"- **{c['name']}**<br><span style='color:#e74c3c; font-size:12px;'>السبب: {c['reason']} | العنوان: {c['promo']}</span>", unsafe_allow_html=True)
+                                            # ✅ إظهار الـ SKU هنا بوضوح
+                                            st.markdown(f"- **{c['name']}** (SKU: `{c['sku']}`)<br><span style='color:#e74c3c; font-size:12px;'>السبب: {c['reason']} | العنوان: {c['promo']}</span>", unsafe_allow_html=True)
                                     
-                                    c1, c2, c3 = st.columns(3)
-                                    if c1.button("🚀 تنفيذ وتجاهل", key=f"frc_{g_name}", type="primary"):
+                                    # ✅ تعديل لـ 4 أعمدة وإضافة زر أخرى للمجموعات
+                                    c1, c2, c3, c4 = st.columns(4)
+                                    if c1.button("🚀 تنفيذ وتجاهل", key=f"frc_{g_name}", type="primary", use_container_width=True):
                                         execute_group_discount(g_ids, disc_pct, disc_end_date)
-                                    if c2.button("✅ التنفيذ على الباقي", key=f"skp_{g_name}", type="primary"):
+                                    if c2.button("✅ تنفيذ عالباقي", key=f"skp_{g_name}", type="primary", use_container_width=True):
                                         conf_ids = [c['id'] for c in confs]
                                         clean_ids = [pid for pid in g_ids if pid not in conf_ids]
                                         execute_group_discount(clean_ids, disc_pct, disc_end_date)
-                                    if c3.button("❌ إلغاء", key=f"cncl_{g_name}"): pass
+                                    if c3.button("❌ إلغاء", key=f"cncl_{g_name}", use_container_width=True): pass
+                                    
+                                    with c4:
+                                        with st.popover("⚙️ أخرى", use_container_width=True):
+                                            st.markdown("**إجراءات إضافية:**")
+                                            conflict_prods = [p for p in group_products_data if str(p['id']) in [c['id'] for c in confs]]
+                                            st.download_button(
+                                                label="📥 تحميل المنتجات المتعارضة",
+                                                data=export_products_to_excel(conflict_prods, po_map),
+                                                file_name=f"Conflicting_Products_Group_{g_name}.xlsx",
+                                                mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                                                use_container_width=True,
+                                                key=f"dl_conf_{g_name}"
+                                            )
+                                            if st.button("🛑 إيقاف عروضها الخاصة", key=f"stop_off_{g_name}", use_container_width=True):
+                                                with st.spinner("جاري إيقاف العروض..."):
+                                                    offer_ids_to_stop = set()
+                                                    for c_id in [c['id'] for c in confs]:
+                                                        for off in po_map.get(c_id, []):
+                                                            offer_ids_to_stop.add(str(off['id']))
+                                                    
+                                                    stopped_count = 0
+                                                    for oid in offer_ids_to_stop:
+                                                        if safe_api_request("PUT", f"https://api.salla.dev/admin/v2/specialoffers/{oid}/status", headers, json={"status": "inactive"}):
+                                                            stopped_count += 1
+                                                            for i, o in enumerate(st.session_state.get("all_offers", [])):
+                                                                if str(o.get('id')) == oid: st.session_state["all_offers"][i]['status'] = 'inactive'
+                                                            for pid in list(st.session_state.get("product_offers_map", {}).keys()):
+                                                                st.session_state["product_offers_map"][pid] = [o for o in st.session_state["product_offers_map"][pid] if str(o['id']) != oid]
+                                                    st.success(f"✅ تم إيقاف {stopped_count} عرض خاص بنجاح!")
+                                                    import time; time.sleep(1.5); st.rerun()
                                 else:
                                     if st.button("💰 تطبيق الخصم", key=f"dbtn_{g_name}", use_container_width=True, type="primary"):
                                         execute_group_discount(g_ids, disc_pct, disc_end_date)
