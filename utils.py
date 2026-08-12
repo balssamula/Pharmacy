@@ -369,10 +369,13 @@ def update_product_status(product_id: int, status: str) -> bool:
     res = safe_api_request("POST", url, headers, json={"status": status})
     return res is not None
 
-def export_products_to_excel(products: List[Dict]) -> bytes:
+def export_products_to_excel(products: List[Dict], po_map: Dict = None) -> bytes:
+    if po_map is None:
+        po_map = {}
     try:
         data = []
         for p in products:
+            pid_str = str(p.get('id', ''))
             price = get_flat_price(p.get('price', 0))
             sale_price = get_flat_price(p.get('sale_price', 0))
             regular_price = get_flat_price(p.get('regular_price', 0))
@@ -382,6 +385,12 @@ def export_products_to_excel(products: List[Dict]) -> bytes:
             promo_sub = (promo.get('sub_title') if isinstance(promo, dict) else '') or "لا يوجد"
             sale_start = p.get('sale_start') or (p.get('sale_price', {}).get('start_at') if isinstance(p.get('sale_price'), dict) else None) or "غير محدد"
             sale_end = p.get('sale_end') or (p.get('sale_price', {}).get('expired_at') if isinstance(p.get('sale_price'), dict) else None) or "غير محدد"
+            
+            # ✅ استخراج بيانات العروض الخاصة للمنتج
+            offers = po_map.get(pid_str, [])
+            in_offer = "نعم" if offers else "لا"
+            offer_names = " ، ".join([o['name'] for o in offers]) if offers else "لا يوجد"
+
             data.append({
                 'المعرف': p.get('id', ''), 'الاسم': p.get('name', ''), 'SKU': p.get('sku', ''),
                 'السعر الأساسي الأصل': base_price, 'السعر المخفض الحالي': sale_price if sale_price > 0 else 'لا يوجد',
@@ -389,15 +398,26 @@ def export_products_to_excel(products: List[Dict]) -> bytes:
                 'العنوان الترويجي': promo_title, 'العنوان الفرعي': promo_sub,
                 'تاريخ بداية التخفيض': sale_start, 'تاريخ نهاية التخفيض': sale_end,
                 'المخزون': p.get('quantity', 0), 'المبيعات': p.get('sold_quantity', 0),
-                'الحالة': 'معروض' if p.get('status') == 'sale' else 'مخفي'
+                'الحالة': 'معروض' if p.get('status') == 'sale' else 'مخفي',
+                'مشمول في عرض خاص؟': in_offer,        # ✅ العمود الجديد 1
+                'اسم العرض الخاص': offer_names         # ✅ العمود الجديد 2
             })
+            
         df = pd.DataFrame(data)
         buffer = io.BytesIO()
         with pd.ExcelWriter(buffer, engine='openpyxl') as writer:
             df.to_excel(writer, index=False)
             style_excel_file(writer.sheets['Sheet1'], is_template=False, header_color="0F1C2E")
+            
+            # توسيع الأعمدة لتناسب النصوص الطويلة
+            ws = writer.sheets['Sheet1']
+            ws.column_dimensions['B'].width = 40  # عمود الاسم
+            ws.column_dimensions['O'].width = 35  # عمود اسم العرض الخاص
+            
         return buffer.getvalue()
     except Exception as e:
+        import streamlit as st
+        st.error(f"خطأ في التصدير: {e}")
         return b""
 
 def fill_salla_template(products: List[Dict], template_path: str = "Salla_Products_Template.xlsx") -> bytes:
