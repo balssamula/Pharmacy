@@ -662,24 +662,67 @@ def render_products_page():
                 with col_t: st.markdown("### 🏷️ التحكم الشامل في العناوين والأسعار المخفضة")
                 st.info("قم بتنزيل القالب، ضع معرفات المنتجات (SKU)، وحدد الإجراء (تحديث، تحديث السعر المخفض، مسح الترويجي، مسح الفرعي، مسح الكل).")
                 
-                st.download_button(
-                    "📥 تنزيل القالب الاحترافي للتحديث", 
-                    data=generate_promotions_template(), 
-                    file_name="Promotions_Prices_Template.xlsx", 
-                    use_container_width=True
-                )
-                
+                st.download_button("📥 تنزيل القالب الاحترافي للتحديث", data=generate_promotions_template(), file_name="Promotions_Prices_Template.xlsx", use_container_width=True)
                 uploaded_promo = st.file_uploader("📂 رفع ملف البيانات المعبأ:", type=['xlsx'], key="up_promo")
-                if uploaded_promo and st.button("🚀 تنفيذ التحديثات دفعة واحدة", type="primary", use_container_width=True):
-                    with st.spinner("⏳ جاري المعالجة والاتصال بمتجرك..."):
-                        try:
-                            df_promo = pd.read_excel(uploaded_promo)
-                            res = process_promotions_bulk(df_promo, st.session_state.get("all_products", []), headers)
-                            for m in res["success"]: st.success(m)
-                            for m in res["errors"]: st.error(m)
-                            st.session_state["all_products_fetched"] = False 
-                        except Exception as e:
-                            st.error(f"❌ خطأ في قراءة الملف: {str(e)}")
+                
+                if uploaded_promo:
+                    try:
+                        df_promo = pd.read_excel(uploaded_promo)
+                        # ✅ تنظيف الـ SKU للفحص
+                        df_promo['clean_sku'] = df_promo['SKU (رقم المنتج)'].astype(str).str.strip().str.replace(r'\.0$', '', regex=True)
+                        valid_skus = df_promo['clean_sku'].tolist()
+                        
+                        po_map = st.session_state.get("product_offers_map", {})
+                        conflicts = []
+                        
+                        for p in st.session_state.get("all_products", []):
+                            p_sku = str(p.get('sku', '')).strip()
+                            if p_sku.endswith('.0'): p_sku = p_sku[:-2]
+                            
+                            if p_sku in valid_skus:
+                                sale = get_flat_price(p.get('sale_price', 0))
+                                offers = po_map.get(str(p['id']), [])
+                                if sale > 0 or offers:
+                                    promo_text = p.get('promotion_title') or (p.get('promotion', {}).get('title') if isinstance(p.get('promotion'), dict) else '') or "بدون عنوان ترويجي"
+                                    reasons = []
+                                    if sale > 0: reasons.append(f"سعر مخفض ({sale})")
+                                    if offers: reasons.append("مشمول في عرض خاص")
+                                    conflicts.append({'sku': p_sku, 'name': p['name'], 'promo': promo_text, 'reason': " + ".join(reasons)})
+
+                        if conflicts:
+                            st.error(f"⚠️ تحذير: تم اكتشاف ({len(conflicts)}) منتج في الملف يحتوي بالفعل على تخفيضات أو عروض نشطة!")
+                            with st.expander("👀 عرض تفاصيل المنتجات المتعارضة", expanded=True):
+                                for c in conflicts:
+                                    st.markdown(f"- **{c['name']}** (SKU: `{c['sku']}`)<br>  <span style='color:#e74c3c; font-size:13px;'>سبب التعارض: {c['reason']} | العنوان الحالي: {c['promo']}</span>", unsafe_allow_html=True)
+                                    
+                            st.markdown("**يرجى اتخاذ إجراء لاكتمال عملية الرفع:**")
+                            c1, c2, c3 = st.columns(3)
+                            if c1.button("🚀 تنفيذ على الكل (تجاهل التحذير)", type="primary", use_container_width=True):
+                                with st.spinner("⏳ جاري المعالجة..."):
+                                    res = process_promotions_bulk(df_promo, st.session_state.get("all_products", []), headers)
+                                    for m in res["success"]: st.success(m)
+                                    for m in res["errors"]: st.error(m)
+                                    st.session_state["all_products_fetched"] = False
+                            if c2.button("✅ التنفيذ على الباقي (استبعاد المتعارض)", type="primary", use_container_width=True):
+                                with st.spinner("⏳ جاري المعالجة..."):
+                                    conflict_skus = [c['sku'] for c in conflicts]
+                                    df_clean = df_promo[~df_promo['clean_sku'].isin(conflict_skus)]
+                                    res = process_promotions_bulk(df_clean, st.session_state.get("all_products", []), headers)
+                                    for m in res["success"]: st.success(m)
+                                    for m in res["errors"]: st.error(m)
+                                    st.session_state["all_products_fetched"] = False
+                            if c3.button("❌ إلغاء العملية", use_container_width=True):
+                                st.info("تم إلغاء عملية الرفع.")
+                        else:
+                            # لا يوجد تعارض
+                            if st.button("🚀 تنفيذ التحديثات دفعة واحدة", type="primary", use_container_width=True):
+                                with st.spinner("⏳ جاري المعالجة..."):
+                                    res = process_promotions_bulk(df_promo, st.session_state.get("all_products", []), headers)
+                                    for m in res["success"]: st.success(m)
+                                    for m in res["errors"]: st.error(m)
+                                    st.session_state["all_products_fetched"] = False 
+                    except Exception as e:
+                        st.error(f"❌ خطأ في قراءة الملف: {str(e)}")
 
             elif st.session_state.qa_action_prod == "featured_groups":
                 with col_t: st.markdown("### ⭐ إدارة مجموعات المنتجات المميزة")
@@ -704,58 +747,32 @@ def render_products_page():
                             st.error("⚠️ الرجاء كتابة اسم المجموعة")
                         else:
                             final_product_ids = set()
-                            
-                            # إضافة المنتجات المختارة يدوياً
                             if sel_prods:
-                                for k in sel_prods:
-                                    final_product_ids.add(prod_opts[k])
-                                    
-                            # معالجة المنتجات المرفوعة عبر الملف
+                                for k in sel_prods: final_product_ids.add(prod_opts[k])
                             not_found_skus = []
                             if uploaded_group_file:
                                 try:
-                                    if uploaded_group_file.name.endswith('.csv'):
-                                        df_skus = pd.read_csv(uploaded_group_file)
-                                    else:
-                                        df_skus = pd.read_excel(uploaded_group_file)
-                                        
+                                    df_skus = pd.read_csv(uploaded_group_file) if uploaded_group_file.name.endswith('.csv') else pd.read_excel(uploaded_group_file)
                                     if not df_skus.empty:
-                                        # استخراج العمود الأول وتنظيف القيم
                                         file_skus = df_skus.iloc[:, 0].dropna().astype(str).str.strip().tolist()
-                                        
-                                        # بناء قاموس للبحث السريع (SKU -> ID)
                                         sku_to_id = {}
                                         for p in st.session_state.get("all_products", []):
                                             if p.get('sku'):
                                                 clean_sku = str(p.get('sku')).strip()
                                                 if clean_sku.endswith('.0'): clean_sku = clean_sku[:-2]
                                                 sku_to_id[clean_sku] = str(p['id'])
-                                        
-                                        # المطابقة واستخراج الـ IDs
                                         for s in file_skus:
                                             if s.endswith('.0'): s = s[:-2]
-                                            if s in sku_to_id:
-                                                final_product_ids.add(sku_to_id[s])
-                                            else:
-                                                not_found_skus.append(s)
-                                                
-                                except Exception as e:
-                                    st.error(f"❌ خطأ في قراءة الملف: {e}")
+                                            if s in sku_to_id: final_product_ids.add(sku_to_id[s])
+                                            else: not_found_skus.append(s)
+                                except Exception as e: st.error(f"❌ خطأ: {e}")
                                     
-                            # التحقق النهائي والحفظ
-                            if not final_product_ids:
-                                st.error("⚠️ الرجاء اختيار منتج واحد على الأقل (يدوياً أو عبر رفع ملف صالح).")
+                            if not final_product_ids: st.error("⚠️ الرجاء اختيار منتج واحد على الأقل.")
                             else:
                                 st.session_state.get("featured_product_groups", {})[new_g_name] = list(final_product_ids)
-                                
-                                if not_found_skus:
-                                    st.warning(f"✅ تم حفظ المجموعة، ولكن لم يتم العثور على {len(not_found_skus)} SKU مثل: {', '.join(not_found_skus[:5])}")
-                                else:
-                                    st.success("✅ تم حفظ المجموعة بجميع المنتجات بنجاح!")
-                                    
-                                import time
-                                time.sleep(1.5)
-                                st.rerun()
+                                if not_found_skus: st.warning(f"✅ تم الحفظ، ولكن لم نعثر على {len(not_found_skus)} SKU")
+                                else: st.success("✅ تم حفظ المجموعة بنجاح!")
+                                import time; time.sleep(1.5); st.rerun()
                             
                 with col_g2:
                     st.markdown("#### 📋 المجموعات الحالية والإجراءات")
@@ -763,123 +780,114 @@ def render_products_page():
                     if featured_groups:
                         po_map = st.session_state.get("product_offers_map", {})
                         
+                        # دالة داخلية مساعدة لتنفيذ خصم المجموعات
+                        def execute_group_discount(target_ids, d_pct, d_end_date):
+                            progress_bar = st.progress(0)
+                            status_text = st.empty()
+                            c = 0
+                            end_time_str = datetime.combine(d_end_date, datetime.min.time().replace(hour=23, minute=59, second=59)).strftime('%Y-%m-%d %H:%M:%S')
+                            total = len(target_ids)
+                            for idx, pid in enumerate(target_ids):
+                                status_text.info(f"⏳ جاري التحديث: {idx+1} من {total}...")
+                                prod = next((p for p in st.session_state.get("all_products", []) if str(p['id']) == pid), None)
+                                if prod:
+                                    base_price = get_flat_price(prod.get('regular_price', 0)) or get_flat_price(prod.get('price', 0))
+                                    new_sale = round(base_price - (base_price * (d_pct / 100)), 2)
+                                    if update_product_sale_price(int(pid), new_sale, sale_end=end_time_str): c += 1
+                                progress_bar.progress((idx + 1) / total)
+                                import time; time.sleep(0.5)
+                            status_text.success(f"✅ تم تطبيق خصم {d_pct}% على {c} منتج!")
+                            import time; time.sleep(1)
+                            if "all_products_fetched" in st.session_state: del st.session_state["all_products_fetched"]
+                            st.rerun()
+
                         for g_name, g_ids in list(featured_groups.items()):
-                            # فلترة المنتجات الخاصة بهذه المجموعة فقط
                             group_products_data = [p for p in st.session_state.get("all_products", []) if str(p['id']) in g_ids]
                             
                             with st.expander(f"📁 {g_name} ({len(g_ids)} منتجات)", expanded=False):
-                                # 📥 زر التصدير الاحترافي
-                                st.download_button(
-                                    label="📥 تصدير منتجات المجموعة (Excel)",
-                                    data=export_featured_group_to_excel(group_products_data, po_map),
-                                    file_name=f"Group_{g_name}_{datetime.now().strftime('%Y%m%d')}.xlsx",
-                                    mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-                                    use_container_width=True,
-                                    key=f"exp_g_{g_name}"
-                                )
+                                st.download_button("📥 تصدير (Excel)", data=export_featured_group_to_excel(group_products_data, po_map), file_name=f"Group_{g_name}.xlsx", use_container_width=True)
                                 
-                                # 📦 زر استعراض وتعديل المحتوى (إضافة / حذف)
-                                with st.popover("📦 استعراض وتعديل منتجات المجموعة", use_container_width=True):
-                                    st.markdown(f"**المنتجات الحالية في ( {g_name} ):**")
-                                    if not g_ids: st.warning("المجموعة فارغة حالياً.")
-                                    
+                                with st.popover("📦 استعراض المحتوى", use_container_width=True):
                                     for pid in list(g_ids):
                                         prod_info = next((p for p in group_products_data if str(p['id']) == pid), None)
                                         if prod_info:
                                             cx1, cx2 = st.columns([5, 1])
                                             with cx1: st.markdown(f"- `{prod_info.get('sku')}` | {prod_info.get('name')}")
                                             with cx2:
-                                                if st.button("❌", key=f"rm_{pid}_{g_name}", help="إزالة من المجموعة"):
+                                                if st.button("❌", key=f"rm_{pid}_{g_name}"):
                                                     st.session_state["featured_product_groups"][g_name].remove(pid)
                                                     st.rerun()
-                                                    
                                     st.markdown("---")
-                                    st.markdown("**➕ إضافة منتجات جديدة للمجموعة:**")
                                     add_opts = {f"📦 {p['name']} (SKU: {p.get('sku','')})": str(p['id']) for p in st.session_state.get("all_products", []) if str(p['id']) not in g_ids}
-                                    to_add = st.multiselect("اختر المنتجات:", options=list(add_opts.keys()), key=f"add_ms_{g_name}", label_visibility="collapsed")
-                                    if st.button("➕ إضافة للمجموعة", key=f"add_btn_{g_name}", type="primary"):
+                                    to_add = st.multiselect("اختر لإضافة المزيد:", options=list(add_opts.keys()), key=f"add_ms_{g_name}", label_visibility="collapsed")
+                                    if st.button("➕ إضافة", key=f"add_btn_{g_name}"):
                                         if to_add:
                                             st.session_state["featured_product_groups"][g_name].extend([add_opts[k] for k in to_add])
-                                            st.success("تمت الإضافة!")
                                             st.rerun()
 
                                 st.markdown("---")
                                 st.markdown("**⚡ الإجراءات السريعة للمجموعة:**")
                                 
-                                # 1. إنشاء سعر مخفض مع تاريخ الانتهاء
+                                # 1. إنشاء سعر مخفض (مع نظام الفحص الاستباقي الذكي)
                                 col_d1, col_d2 = st.columns(2)
                                 with col_d1:
                                     disc_pct = st.number_input("نسبة الخصم %:", min_value=1.0, max_value=99.0, value=10.0, step=1.0, key=f"dpct_{g_name}")
                                 with col_d2:
-                                    disc_end_date = st.date_input("تاريخ انتهاء الخصم:", value=datetime.now().date() + timedelta(days=7), key=f"dend_{g_name}")
+                                    disc_end_date = st.date_input("تاريخ الانتهاء:", value=datetime.now().date() + timedelta(days=7), key=f"dend_{g_name}")
                                 
-                                if st.button("💰 تطبيق الخصم بالوقت المحدد", key=f"dbtn_{g_name}", use_container_width=True, type="primary"):
-                                    # ✅ شريط التقدم والنص
-                                    progress_bar = st.progress(0)
-                                    status_text = st.empty()
-                                    c = 0
-                                    total_prods = len(g_ids)
-                                    end_time_str = datetime.combine(disc_end_date, datetime.min.time().replace(hour=23, minute=59, second=59)).strftime('%Y-%m-%d %H:%M:%S')
+                                # ✅ الفحص التلقائي قبل التطبيق
+                                confs = []
+                                for p in group_products_data:
+                                    sale = get_flat_price(p.get('sale_price', 0))
+                                    offers = po_map.get(str(p['id']), [])
+                                    if sale > 0 or offers:
+                                        promo_text = p.get('promotion_title') or (p.get('promotion', {}).get('title') if isinstance(p.get('promotion'), dict) else '') or "بدون عنوان ترويجي"
+                                        reasons = []
+                                        if sale > 0: reasons.append(f"مخفض ({sale})")
+                                        if offers: reasons.append("عرض خاص")
+                                        confs.append({'id': str(p['id']), 'name': p['name'], 'promo': promo_text, 'reason': " + ".join(reasons)})
+                                        
+                                if confs:
+                                    st.error(f"⚠️ يوجد ({len(confs)}) منتج في هذه المجموعة تحتوي بالفعل على عروض!")
+                                    with st.expander("👀 عرض المنتجات المتعارضة", expanded=False):
+                                        for c in confs:
+                                            st.markdown(f"- **{c['name']}**<br><span style='color:#e74c3c; font-size:12px;'>السبب: {c['reason']} | العنوان: {c['promo']}</span>", unsafe_allow_html=True)
                                     
-                                    for idx, pid in enumerate(g_ids):
-                                        status_text.info(f"⏳ جاري تحديث الخصم للمنتج {idx+1} من {total_prods}...")
-                                        prod = next((p for p in group_products_data if str(p['id']) == pid), None)
-                                        if prod:
-                                            base_price = get_flat_price(prod.get('regular_price', 0)) or get_flat_price(prod.get('price', 0))
-                                            new_sale = round(base_price - (base_price * (disc_pct / 100)), 2)
-                                            if update_product_sale_price(int(pid), new_sale, sale_end=end_time_str): c += 1
-                                        
-                                        progress_bar.progress((idx + 1) / total_prods)
-                                        import time; time.sleep(0.5) # ✅ سر منع خطأ 504 من سلة
-                                        
-                                    status_text.success(f"✅ تم تطبيق خصم {disc_pct}% على {c} منتج حتى {disc_end_date}!")
-                                    import time; time.sleep(1)
-                                    if "all_products_fetched" in st.session_state: del st.session_state["all_products_fetched"]
-                                    st.rerun()
+                                    c1, c2, c3 = st.columns(3)
+                                    if c1.button("🚀 تنفيذ وتجاهل", key=f"frc_{g_name}", type="primary"):
+                                        execute_group_discount(g_ids, disc_pct, disc_end_date)
+                                    if c2.button("✅ التنفيذ على الباقي", key=f"skp_{g_name}", type="primary"):
+                                        conf_ids = [c['id'] for c in confs]
+                                        clean_ids = [pid for pid in g_ids if pid not in conf_ids]
+                                        execute_group_discount(clean_ids, disc_pct, disc_end_date)
+                                    if c3.button("❌ إلغاء", key=f"cncl_{g_name}"): pass
+                                else:
+                                    if st.button("💰 تطبيق الخصم", key=f"dbtn_{g_name}", use_container_width=True, type="primary"):
+                                        execute_group_discount(g_ids, disc_pct, disc_end_date)
                                             
                                 # 2. العنوان الترويجي الجماعي
                                 col_p1, col_p2 = st.columns([2, 1])
-                                with col_p1:
-                                    promo_title = st.text_input("العنوان الترويجي الجماعي:", key=f"ptxt_{g_name}")
+                                with col_p1: promo_title = st.text_input("العنوان الترويجي:", key=f"ptxt_{g_name}")
                                 with col_p2:
                                     st.markdown("<br>", unsafe_allow_html=True)
                                     if st.button("🏷️ تطبيق العنوان", key=f"pbtn_{g_name}", use_container_width=True):
-                                        # ✅ شريط التقدم والنص
-                                        progress_bar = st.progress(0)
-                                        status_text = st.empty()
-                                        c = 0
-                                        total_prods = len(g_ids)
-                                        
+                                        progress_bar = st.progress(0); status_text = st.empty(); c = 0; total = len(g_ids)
                                         for idx, pid in enumerate(g_ids):
-                                            status_text.info(f"⏳ جاري تحديث العنوان للمنتج {idx+1} من {total_prods}...")
+                                            status_text.info(f"⏳ جاري تحديث العنوان {idx+1} من {total}...")
                                             if update_product_promotions_secure(int(pid), promo_title, "", headers): c += 1
-                                            
-                                            progress_bar.progress((idx + 1) / total_prods)
-                                            import time; time.sleep(0.5) # ✅ سر منع خطأ 504 من سلة
-                                            
-                                        status_text.success(f"✅ تم تحديث العناوين لـ {c} منتج!")
-                                        import time; time.sleep(1); st.rerun()
+                                            progress_bar.progress((idx + 1) / total); import time; time.sleep(0.5) 
+                                        status_text.success(f"✅ تم تحديث {c} منتج!"); import time; time.sleep(1); st.rerun()
                                             
                                 # 3. مسح الخصم والعناوين
-                                if st.button("🧹 مسح السعر المخفض والعناوين نهائياً", key=f"cbtn_{g_name}", use_container_width=True):
-                                    # ✅ شريط التقدم والنص
-                                    progress_bar = st.progress(0)
-                                    status_text = st.empty()
-                                    c = 0
-                                    total_prods = len(g_ids)
-                                    
+                                if st.button("🧹 مسح التخفيضات والعناوين نهائياً", key=f"cbtn_{g_name}", use_container_width=True):
+                                    progress_bar = st.progress(0); status_text = st.empty(); c = 0; total = len(g_ids)
                                     for idx, pid in enumerate(g_ids):
-                                        status_text.info(f"⏳ جاري مسح بيانات المنتج {idx+1} من {total_prods}...")
+                                        status_text.info(f"⏳ جاري مسح بيانات المنتج {idx+1} من {total}...")
                                         update_product_sale_price(int(pid), 0)
-                                        import time; time.sleep(0.3) # فاصل صغير بين الطلبين لنفس المنتج
-                                        update_product_promotions_secure(int(pid), "", "", headers)
-                                        c += 1
-                                        
-                                        progress_bar.progress((idx + 1) / total_prods)
-                                        time.sleep(0.3) # ✅ سر منع خطأ 504 من سلة
-                                        
-                                    status_text.success(f"✅ تم مسح بيانات {c} منتج وإعادتها لحالتها الأصلية!")
-                                    import time; time.sleep(1)
+                                        import time; time.sleep(0.3) 
+                                        update_product_promotions_secure(int(pid), "", "", headers); c += 1
+                                        progress_bar.progress((idx + 1) / total); time.sleep(0.3) 
+                                    status_text.success(f"✅ تم المسح لـ {c} منتج!"); import time; time.sleep(1)
                                     if "all_products_fetched" in st.session_state: del st.session_state["all_products_fetched"]
                                     st.rerun()
                                         
@@ -887,14 +895,12 @@ def render_products_page():
                                 
                                 # 4 & 5. إعادة التسمية والحذف
                                 col_rn1, col_rn2 = st.columns([2, 1])
-                                with col_rn1:
-                                    new_rename = st.text_input("اسم جديد للمجموعة:", value=g_name, key=f"rntxt_{g_name}")
+                                with col_rn1: new_rename = st.text_input("اسم جديد للمجموعة:", value=g_name, key=f"rntxt_{g_name}")
                                 with col_rn2:
                                     st.markdown("<br>", unsafe_allow_html=True)
                                     if st.button("✏️ إعادة تسمية", key=f"rnbtn_{g_name}", use_container_width=True):
                                         if new_rename and new_rename != g_name:
                                             st.session_state.get("featured_product_groups", {})[new_rename] = st.session_state.get("featured_product_groups", {}).pop(g_name)
-                                            st.success("تم تغيير الاسم!")
                                             st.rerun()
                                             
                                 if st.button("🗑️ حذف المجموعة", key=f"delg_{g_name}", type="primary", use_container_width=True):
