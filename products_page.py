@@ -999,10 +999,11 @@ def render_products_page():
     st.info(f"📊 النتائج: {len(filtered)} منتج مطابِق للبحث")
 
     # ==========================================
-    # ✅ زر التنزيل المدمج مع إجراءات المنتجات المفلترة
+    # ✅ زر التنزيل المدمج مع إجراءات المنتجات المفلترة وتحديثها
     # ==========================================
     if filtered:
-        col_act1, col_act2 = st.columns([1, 1])
+        # ✅ قسمنا المساحة إلى 3 أعمدة لإضافة زر التحديث الجديد
+        col_act1, col_act2, col_act3 = st.columns([1, 1, 1.2])
         
         with col_act1:
             st.download_button(
@@ -1016,6 +1017,33 @@ def render_products_page():
             )
             
         with col_act2:
+            # ✅ الزر الجديد لتحديث جميع المنتجات المفلترة بضغطة واحدة
+            if st.button("🔄 تحديث بيانات المنتجات المفلترة", use_container_width=True):
+                progress_bar = st.progress(0)
+                status_text = st.empty()
+                total_prods = len(filtered)
+                updated_count = 0
+                
+                for idx, p in enumerate(filtered):
+                    p_id = str(p.get('id'))
+                    status_text.info(f"⏳ جاري سحب أحدث البيانات للمنتج {idx+1} من {total_prods}...")
+                    
+                    fresh_res = safe_api_request("GET", f"https://api.salla.dev/admin/v2/products/{p_id}", headers)
+                    if fresh_res and fresh_res.get('data'):
+                        for i, prod in enumerate(st.session_state.get("all_products", [])):
+                            if str(prod.get('id')) == p_id:
+                                st.session_state["all_products"][i] = fresh_res['data']
+                                updated_count += 1
+                                break
+                                
+                    progress_bar.progress((idx + 1) / total_prods)
+                    import time; time.sleep(0.3) # ✅ حماية من خطأ 504
+                    
+                status_text.success(f"✅ تم سحب وتحديث بيانات {updated_count} منتج بنجاح!")
+                import time; time.sleep(1.5)
+                st.rerun()
+                
+        with col_act3:
             with st.popover("⚙️ إجراءات المنتجات المفلترة", use_container_width=True):
                 st.markdown(f"<div style='text-align:center; margin-bottom:10px;'><b>تطبيق إجراء جماعي على ({len(filtered)}) منتج</b></div>", unsafe_allow_html=True)
                 
@@ -1026,13 +1054,12 @@ def render_products_page():
                         "🛒 إظهار المنتجات (متاح للبيع)", 
                         "🧹 مسح العناوين (الترويجية والفرعية)", 
                         "🛑 إلغاء السعر المخفض ومسح تواريخ التخفيض", 
-                        "📅 تمديد تواريخ التخفيض",  # ✅ الإجراء الجديد
+                        "📅 تمديد تواريخ التخفيض",
                         "🗑️ حذف المنتجات نهائياً"
                     ],
                     key="bulk_action_radio"
                 )
                 
-                # ✅ إظهار حقول التاريخ والوقت إذا تم اختيار إجراء التمديد
                 new_sale_end_str = None
                 if bulk_action == "📅 تمديد تواريخ التخفيض":
                     col_ext_d, col_ext_t = st.columns(2)
@@ -1051,7 +1078,6 @@ def render_products_page():
                 confirm_bulk = st.checkbox(confirm_msg, key="confirm_bulk_action")
                 
                 if st.button("🚀 تنفيذ الإجراء", type="primary", disabled=not confirm_bulk, use_container_width=True, key="execute_bulk_action"):
-                    # ✅ إضافة شريط تقدم للحماية من 504 (Gateway Timeout) ولمعرفة مسار التحديث
                     progress_bar = st.progress(0)
                     status_text = st.empty()
                     success_count = 0
@@ -1081,18 +1107,18 @@ def render_products_page():
                                 success_count += 1
                         elif "تمديد تواريخ التخفيض" in bulk_action:
                             sale_price = get_flat_price(p.get('sale_price', 0))
-                            if sale_price > 0: # لا نمدد إلا للمنتجات التي تحتوي على خصم فعلياً
+                            if sale_price > 0:
                                 if update_product_sale_price(int(p_id), sale_price, sale_end=new_sale_end_str): 
                                     success_count += 1
                         elif "حذف" in bulk_action:
                             if delete_product(p_id): success_count += 1
                             
                         progress_bar.progress((idx + 1) / total_prods)
-                        import time; time.sleep(0.3) # ✅ فاصل زمني لتجنب خطأ 504
+                        import time; time.sleep(0.3)
                         
                     status_text.success(f"✅ تم تنفيذ الإجراء بنجاح على {success_count} منتج!")
                     import time; time.sleep(1)
-                    st.session_state["all_products_fetched"] = False # مسح الذاكرة لتحديث الواجهة
+                    st.session_state["all_products_fetched"] = False 
                     st.rerun()
 
     # Pagination
