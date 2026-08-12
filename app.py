@@ -323,9 +323,6 @@ with st.sidebar.popover("📋 تفاصيل واشتراكات التطبيق", u
     st.markdown("<b style='color:#0f1c2e;'>🔍 استعلام عن الاشتراك</b>", unsafe_allow_html=True)
     # ✅ بمجرد إدخال المعرف هنا سيتم حفظه ليظهر في الشارة العلوية
     app_id_val = st.text_input("معرف التطبيق (App ID):", value=st.session_state.get("saved_app_id", ""), key="app_id_input")
-    if app_id_val != st.session_state.get("saved_app_id", ""):
-        st.session_state["saved_app_id"] = app_id_val
-        st.rerun()
         
     if st.button("استعلام", key="btn_sub_info", use_container_width=True, type="primary"):
         if not app_id_val:
@@ -386,16 +383,13 @@ with st.sidebar.popover("💰 تحديث رصيد الاستهلاك", use_conta
 
 with st.sidebar.popover("⚙️ إعدادات التطبيق (Settings)", use_container_width=True):
     st.markdown("<b style='color:#0f1c2e;'>⚙️ إدارة إعدادات التطبيق</b>", unsafe_allow_html=True)
-    st.info("⚠️ تحذير سلة: يجب إرسال كافة الإعدادات عند التحديث لتجنب مسح البيانات الأخرى.")
+    st.info("💡 يتم عرض الإعدادات كحقول ديناميكية ذكية لتسهيل التعديل. يجب حفظ التغييرات لاعتمادها في المتجر.")
     
-    # حقل معرف التطبيق (مرتبط تلقائياً بالشارة العلوية)
+    # ✅ نقل أولوية حفظ وتغيير الـ App ID إلى هذا الزر
     app_id_set = st.text_input("معرف التطبيق (App ID):", value=st.session_state.get("saved_app_id", ""), key="app_id_settings")
-    if app_id_set != st.session_state.get("saved_app_id", ""):
-        st.session_state["saved_app_id"] = app_id_set
-        st.rerun()
 
-    # 1. زر الاستعلام (تفاصيل إعدادات التطبيق)
-    if st.button("🔍 تفاصيل إعدادات التطبيق", key="btn_get_settings", use_container_width=True):
+    # 1. زر الاستعلام
+    if st.button("🔍 عرض تفاصيل الإعدادات", key="btn_get_settings", use_container_width=True):
         if not app_id_set:
             st.warning("الرجاء إدخال معرف التطبيق")
         else:
@@ -403,37 +397,54 @@ with st.sidebar.popover("⚙️ إعدادات التطبيق (Settings)", use_c
             with st.spinner("⏳"):
                 res = safe_api_request("GET", f"https://api.salla.dev/admin/v2/apps/{app_id_set}/settings", headers)
                 if res and res.get("data"):
-                    st.success("✅ تم جلب الإعدادات!")
-                    # استخراج الإعدادات المخصصة من الرد
-                    settings_data = res["data"].get("settings", {})
-                    st.session_state["app_settings_json"] = json.dumps(settings_data, indent=4, ensure_ascii=False)
+                    st.success("✅ تم جلب الإعدادات بنجاح!")
+                    # حفظ المعرف ليظهر في الشارة العلوية
+                    st.session_state["saved_app_id"] = app_id_set
+                    # حفظ البيانات كقاموس (Dictionary) وليس كنص JSON
+                    st.session_state["app_settings_data"] = res["data"].get("settings", {})
                     st.rerun()
                 else:
                     st.error("❌ فشل أو لا توجد إعدادات مهيأة")
 
-    st.markdown("<hr style='margin: 10px 0;'>", unsafe_allow_html=True)
-    
-    # مربع تعديل البيانات
-    current_json = st.session_state.get("app_settings_json", "{\n  \n}")
-    updated_json = st.text_area("تعديل البيانات (JSON):", value=current_json, height=150, key="settings_json_input")
+    # 2. عرض الحقول بشكل ديناميكي وجمالي
+    if "app_settings_data" in st.session_state:
+        st.markdown("<hr style='margin: 15px 0; border-top: 2px solid #00EBCF;'>", unsafe_allow_html=True)
+        st.markdown("<b style='color:#0f1c2e;'>✏️ تعديل قيم الإعدادات:</b>", unsafe_allow_html=True)
 
-    # 2. زر التحديث (تحديث إعدادات التطبيق)
-    if st.button("💾 تحديث إعدادات التطبيق", key="btn_update_settings", use_container_width=True, type="primary"):
-        if not app_id_set:
-            st.warning("الرجاء إدخال معرف التطبيق")
+        settings_data = st.session_state["app_settings_data"]
+        updated_settings = {}
+
+        if not settings_data:
+            st.warning("لا توجد إعدادات محفوظة حالياً لهذا التطبيق.")
         else:
-            try:
-                # التأكد من صحة صيغة JSON قبل الإرسال
-                payload = json.loads(updated_json)
+            with st.container(border=True):
+                for key, val in settings_data.items():
+                    # ✅ بناء حقول مخصصة وذكية بناءً على نوع البيانات
+                    if isinstance(val, bool):
+                        updated_settings[key] = st.toggle(f"🔘 {key}", value=val, key=f"set_bool_{key}")
+                    elif isinstance(val, int) and not isinstance(val, bool):
+                        updated_settings[key] = st.number_input(f"🔢 {key}", value=val, step=1, key=f"set_int_{key}")
+                    elif isinstance(val, float):
+                        updated_settings[key] = st.number_input(f"🔢 {key}", value=val, step=0.1, key=f"set_float_{key}")
+                    else:
+                        # إخفاء القيم السرية (مثل كلمة المرور)
+                        is_pwd = "password" in str(key).lower() or "secret" in str(key).lower()
+                        updated_settings[key] = st.text_input(f"📝 {key}", value=str(val) if val is not None else "", type="password" if is_pwd else "default", key=f"set_str_{key}")
+
+            st.markdown("<br>", unsafe_allow_html=True)
+            # 3. زر التحديث (Update App Settings)
+            if st.button("💾 تحديث الإعدادات للمتجر", key="btn_update_settings", use_container_width=True, type="primary"):
                 headers = {"Authorization": f"Bearer {st.session_state.get('access_token')}"}
-                with st.spinner("⏳"):
-                    res = safe_api_request("POST", f"https://api.salla.dev/admin/v2/apps/{app_id_set}/settings", headers, json=payload)
+                with st.spinner("⏳ جاري الحفظ..."):
+                    res = safe_api_request("POST", f"https://api.salla.dev/admin/v2/apps/{app_id_set}/settings", headers, json=updated_settings)
                     if res:
                         st.success("✅ تم تحديث الإعدادات بنجاح!")
+                        # تحديث الذاكرة المحلية بالبيانات الجديدة
+                        st.session_state["app_settings_data"] = updated_settings 
+                        import time; time.sleep(1)
+                        st.rerun()
                     else:
                         st.error("❌ فشل تحديث الإعدادات")
-            except json.JSONDecodeError:
-                st.error("❌ صيغة JSON غير صحيحة، تأكد من الأقواس والفواصل.")
                 
 st.sidebar.markdown("<div style='margin-bottom: 15px;'></div>", unsafe_allow_html=True)
 # ==========================================
