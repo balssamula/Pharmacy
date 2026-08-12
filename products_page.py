@@ -1026,10 +1026,21 @@ def render_products_page():
                         "🛒 إظهار المنتجات (متاح للبيع)", 
                         "🧹 مسح العناوين (الترويجية والفرعية)", 
                         "🛑 إلغاء السعر المخفض ومسح تواريخ التخفيض", 
+                        "📅 تمديد تواريخ التخفيض",  # ✅ الإجراء الجديد
                         "🗑️ حذف المنتجات نهائياً"
                     ],
                     key="bulk_action_radio"
                 )
+                
+                # ✅ إظهار حقول التاريخ والوقت إذا تم اختيار إجراء التمديد
+                new_sale_end_str = None
+                if bulk_action == "📅 تمديد تواريخ التخفيض":
+                    col_ext_d, col_ext_t = st.columns(2)
+                    with col_ext_d:
+                        ext_date = st.date_input("التاريخ الجديد:", value=datetime.now().date() + timedelta(days=7))
+                    with col_ext_t:
+                        ext_time = st.time_input("الوقت الجديد:", value=datetime.min.time().replace(hour=23, minute=59, second=59))
+                    new_sale_end_str = datetime.combine(ext_date, ext_time).strftime('%Y-%m-%d %H:%M:%S')
                 
                 if "حذف" in bulk_action:
                     st.error("🚨 تحذير: سيتم حذف المنتجات نهائياً من المتجر ولن يمكن استرجاعها!")
@@ -1040,35 +1051,49 @@ def render_products_page():
                 confirm_bulk = st.checkbox(confirm_msg, key="confirm_bulk_action")
                 
                 if st.button("🚀 تنفيذ الإجراء", type="primary", disabled=not confirm_bulk, use_container_width=True, key="execute_bulk_action"):
-                    with st.spinner("⏳ جاري تنفيذ الإجراء على المنتجات..."):
-                        success_count = 0
-                        for p in filtered:
-                            p_id = p.get('id')
-                            if "إخفاء" in bulk_action:
-                                if update_product_status(p_id, "hidden"): success_count += 1
-                            elif "إظهار" in bulk_action:
-                                if update_product_status(p_id, "sale"): success_count += 1
-                            elif "مسح العناوين" in bulk_action:
-                                if update_product_promotions_secure(p_id, "", "", headers): success_count += 1
-                            elif "إيقاف العرض" in bulk_action:
-                                # التعديل هنا: إرسال أمر صريح بإلغاء السعر والتواريخ معاً
-                                base_price = get_flat_price(p.get('regular_price', 0)) or get_flat_price(p.get('price', 0))
-                                payload = {
-                                    "name": p.get('name'), 
-                                    "price": base_price, 
-                                    "status": p.get('status', 'sale'),
-                                    "sale_price": None,
-                                    "sale_start": None,
-                                    "sale_end": None
-                                }
-                                if safe_api_request("PUT", f"https://api.salla.dev/admin/v2/products/{p_id}", headers, json=payload):
+                    # ✅ إضافة شريط تقدم للحماية من 504 (Gateway Timeout) ولمعرفة مسار التحديث
+                    progress_bar = st.progress(0)
+                    status_text = st.empty()
+                    success_count = 0
+                    total_prods = len(filtered)
+                    
+                    for idx, p in enumerate(filtered):
+                        p_id = p.get('id')
+                        status_text.info(f"⏳ جاري تنفيذ الإجراء على المنتج {idx+1} من {total_prods}...")
+                        
+                        if "إخفاء" in bulk_action:
+                            if update_product_status(p_id, "hidden"): success_count += 1
+                        elif "إظهار" in bulk_action:
+                            if update_product_status(p_id, "sale"): success_count += 1
+                        elif "مسح العناوين" in bulk_action:
+                            if update_product_promotions_secure(p_id, "", "", headers): success_count += 1
+                        elif "إلغاء السعر المخفض" in bulk_action:
+                            base_price = get_flat_price(p.get('regular_price', 0)) or get_flat_price(p.get('price', 0))
+                            payload = {
+                                "name": p.get('name'), 
+                                "price": base_price, 
+                                "status": p.get('status', 'sale'),
+                                "sale_price": None,
+                                "sale_start": None,
+                                "sale_end": None
+                            }
+                            if safe_api_request("PUT", f"https://api.salla.dev/admin/v2/products/{p_id}", headers, json=payload):
+                                success_count += 1
+                        elif "تمديد تواريخ التخفيض" in bulk_action:
+                            sale_price = get_flat_price(p.get('sale_price', 0))
+                            if sale_price > 0: # لا نمدد إلا للمنتجات التي تحتوي على خصم فعلياً
+                                if update_product_sale_price(int(p_id), sale_price, sale_end=new_sale_end_str): 
                                     success_count += 1
-                            elif "حذف" in bulk_action:
-                                if delete_product(p_id): success_count += 1
-                                
-                        st.success(f"✅ تم تنفيذ الإجراء بنجاح على {success_count} منتج!")
-                        st.session_state["all_products_fetched"] = False # مسح الذاكرة لتحديث الواجهة
-                        st.rerun()
+                        elif "حذف" in bulk_action:
+                            if delete_product(p_id): success_count += 1
+                            
+                        progress_bar.progress((idx + 1) / total_prods)
+                        import time; time.sleep(0.3) # ✅ فاصل زمني لتجنب خطأ 504
+                        
+                    status_text.success(f"✅ تم تنفيذ الإجراء بنجاح على {success_count} منتج!")
+                    import time; time.sleep(1)
+                    st.session_state["all_products_fetched"] = False # مسح الذاكرة لتحديث الواجهة
+                    st.rerun()
 
     # Pagination
     limit = 20
