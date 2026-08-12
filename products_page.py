@@ -342,6 +342,94 @@ def render_product_card(idx: int, p: Dict, headers: Dict[str, str]):
     except Exception as e:
         st.error(f"❌ خطأ أثناء عرض بطاقة المنتج (ID: {p.get('id')}): {str(e)}")
 
+def render_discount_expiry_alerts(headers: Dict[str, str]):
+    """نظام تنبيه ذكي للمنتجات التي سينتهي تخفيضها قريباً أو انتهى"""
+    if "ignored_discount_alerts" not in st.session_state:
+        st.session_state["ignored_discount_alerts"] = set()
+        
+    now = datetime.now()
+    expiring_products = []
+    
+    for p in st.session_state.get("all_products", []):
+        p_id = str(p.get('id', ''))
+        # تخطي المنتجات التي تم تجاهلها
+        if p_id in st.session_state["ignored_discount_alerts"]:
+            continue
+            
+        sale_val = get_flat_price(p.get('sale_price', 0))
+        if sale_val <= 0: continue # لا يوجد تخفيض
+            
+        sale_end_raw = p.get('sale_end') or (p.get('sale_price', {}).get('expired_at') if isinstance(p.get('sale_price'), dict) else None)
+        if not sale_end_raw: continue
+        
+        try:
+            # قراءة التاريخ بذكاء وحساب الأيام المتبقية
+            end_date_obj = pd.to_datetime(sale_end_raw).tz_localize(None)
+            days_left = (end_date_obj - now).total_seconds() / 86400.0
+            
+            if days_left <= 1.0: # إذا تبقى 24 ساعة أو انتهى
+                expiring_products.append({
+                    'product': p, 
+                    'days_left': days_left, 
+                    'end_date_str': str(sale_end_raw)[:10]
+                })
+        except:
+            continue
+            
+    if expiring_products:
+        st.markdown("""
+        <div style="background: linear-gradient(135deg, #2c0b0e 0%, #1e0508 100%); border: 2px solid #ff4d4d; border-radius: 12px; padding: 15px; margin-bottom: 20px;">
+            <h3 style='color: #ff6b6b; margin: 0 0 10px 0;'>🚨 تنبيه: منتجات ينتهي تخفيضها خلال 24 ساعة (أو انتهى بالفعل)!</h3>
+        </div>
+        """, unsafe_allow_html=True)
+        
+        for item in expiring_products:
+            p = item['product']
+            p_id = str(p.get('id'))
+            p_name = p.get('name')
+            days_left = item['days_left']
+            
+            status_lbl = "انتهى بالفعل!" if days_left < 0 else "ينتهي اليوم!"
+            color = "#ff4d4d" if days_left < 0 else "#ffca28"
+            
+            with st.container(border=True):
+                c1, c2 = st.columns([3, 4])
+                with c1:
+                    st.markdown(f"**📦 {p_name}**<br>تاريخ الانتهاء: <b style='color:{color};'>{item['end_date_str']} ({status_lbl})</b>", unsafe_allow_html=True)
+                with c2:
+                    st.markdown("<br>", unsafe_allow_html=True)
+                    b1, b2, b3 = st.columns(3)
+                    with b1:
+                        if st.button("👁️ تجاهل التنبيه", key=f"ign_alrt_{p_id}", use_container_width=True):
+                            st.session_state["ignored_discount_alerts"].add(p_id)
+                            st.rerun()
+                    with b2:
+                        if st.button("🕒 مسح التاريخ فقط", key=f"clr_dt_{p_id}", use_container_width=True, help="جعل التخفيض مستمراً بدون تاريخ انتهاء"):
+                            with st.spinner("⏳"):
+                                base_price = get_flat_price(p.get('regular_price', 0)) or get_flat_price(p.get('price', 0))
+                                sale_price = get_flat_price(p.get('sale_price', 0))
+                                payload = {"name": p_name, "price": base_price, "status": p.get('status', 'sale'), "sale_price": sale_price, "sale_end": None}
+                                if safe_api_request("PUT", f"https://api.salla.dev/admin/v2/products/{p_id}", headers, json=payload):
+                                    for i, prod in enumerate(st.session_state["all_products"]):
+                                        if str(prod.get('id')) == p_id:
+                                            st.session_state["all_products"][i]['sale_end'] = None
+                                            break
+                                    st.session_state["ignored_discount_alerts"].add(p_id)
+                                    st.rerun()
+                    with b3:
+                        if st.button("🗑️ مسح الخصم", key=f"clr_all_{p_id}", type="primary", use_container_width=True, help="إلغاء السعر المخفض تماماً"):
+                            with st.spinner("⏳"):
+                                base_price = get_flat_price(p.get('regular_price', 0)) or get_flat_price(p.get('price', 0))
+                                payload = {"name": p_name, "price": base_price, "status": p.get('status', 'sale'), "sale_price": None, "sale_end": None}
+                                if safe_api_request("PUT", f"https://api.salla.dev/admin/v2/products/{p_id}", headers, json=payload):
+                                    for i, prod in enumerate(st.session_state["all_products"]):
+                                        if str(prod.get('id')) == p_id:
+                                            st.session_state["all_products"][i]['sale_price'] = None
+                                            st.session_state["all_products"][i]['sale_end'] = None
+                                            break
+                                    st.session_state["ignored_discount_alerts"].add(p_id)
+                                    st.rerun()
+
 def render_products_page():
     initialize_session()
     headers = get_headers()
@@ -352,6 +440,9 @@ def render_products_page():
         <h2 style="color: white; margin: 0;">📦 مركز إدارة المنتجات الذكي والمتقدم</h2>
     </div>
     """, unsafe_allow_html=True)
+    
+    # ✅ عرض تنبيهات التخفيضات المنتهية
+    render_discount_expiry_alerts(headers)
 
     st.markdown("""
     <style>
@@ -818,7 +909,7 @@ def render_products_page():
             f_feat_group = st.selectbox("⭐ مجموعة المنتجات:", ["الكل"] + list(st.session_state.get("featured_product_groups", {}).keys()), key="filter_prod_group")
     
     with st.container(border=True):
-        col_f1, col_f2, col_f3, col_f4, col_f5, col_f6 = st.columns(6)
+        col_f1, col_f2, col_f3, col_f4, col_f5, col_f6 = st.columns(7)
         with col_f1:
             st.markdown("<div style='text-align:center; color:#00EBCF; font-weight:bold;'>📌 الحالة</div>", unsafe_allow_html=True)
             f_status = st.radio("الحالة", ["الكل", "مخفي", "معروض"], horizontal=True, label_visibility="collapsed", key="f_status_radio")
@@ -837,7 +928,10 @@ def render_products_page():
         with col_f6:
             st.markdown("<div style='text-align:center; color:#00EBCF; font-weight:bold;'>🎁 العروض</div>", unsafe_allow_html=True)
             f_offer = st.radio("العروض", ["الكل", "مشمول", "غير مشمول"], horizontal=True, label_visibility="collapsed", key="f_offer_radio")
-
+        with col_f7:
+            st.markdown("<div style='text-align:center; color:#00EBCF; font-weight:bold;'>🛒 الرصيد</div>", unsafe_allow_html=True)
+            f_stock = st.radio("الرصيد", ["الكل", "له رصيد", "نفد"], horizontal=True, label_visibility="collapsed", key="f_stock_radio")
+    
     filtered = []
     po_map = st.session_state.get("product_offers_map", {})
     all_products_offers = po_map.get("ALL_PRODUCTS", [])
@@ -848,6 +942,11 @@ def render_products_page():
         # ✅ تطبيق فلتر المجموعات المميزة
         if f_feat_group != "الكل":
             if p_id_str not in st.session_state.get("featured_product_groups", {}).get(f_feat_group, []): continue
+        # ✅ تطبيق فلتر الرصيد الجديد
+        stock_qty = p.get('quantity', 0)
+        if f_stock == "له رصيد" and stock_qty <= 0: continue
+        if f_stock == "نفد" and stock_qty > 0: continue
+            
         if sq and sq not in str(p.get('name', '')).lower() and sq not in str(p.get('sku', '')).lower(): continue
         if f_status == "مخفي" and p.get('status') != 'hidden': continue
         if f_status == "معروض" and p.get('status') == 'hidden': continue
