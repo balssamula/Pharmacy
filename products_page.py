@@ -360,7 +360,10 @@ def render_discount_expiry_alerts(headers: Dict[str, str]):
         if sale_val <= 0: continue # لا يوجد تخفيض
             
         sale_end_raw = p.get('sale_end') or (p.get('sale_price', {}).get('expired_at') if isinstance(p.get('sale_price'), dict) else None)
-        if not sale_end_raw: continue
+        
+        # ✅ تجاهل التاريخ الافتراضي 1970-01-01 والقيم الفارغة تماماً
+        if not sale_end_raw or "1970-01-01" in str(sale_end_raw): 
+            continue
         
         try:
             # قراءة التاريخ بذكاء وحساب الأيام المتبقية
@@ -368,10 +371,15 @@ def render_discount_expiry_alerts(headers: Dict[str, str]):
             days_left = (end_date_obj - now).total_seconds() / 86400.0
             
             if days_left <= 1.0: # إذا تبقى 24 ساعة أو انتهى
+                # ✅ استخراج العنوان الترويجي الحالي بذكاء
+                promo_obj = p.get('promotion', {})
+                promo_title = p.get('promotion_title') or (promo_obj.get('title') if isinstance(promo_obj, dict) else '') or "لا يوجد عنوان ترويجي"
+                
                 expiring_products.append({
                     'product': p, 
                     'days_left': days_left, 
-                    'end_date_str': str(sale_end_raw)[:10]
+                    'end_date_str': str(sale_end_raw)[:10],
+                    'promo_title': promo_title
                 })
         except:
             continue
@@ -382,7 +390,7 @@ def render_discount_expiry_alerts(headers: Dict[str, str]):
             
             st.markdown("""
             <div style="background: linear-gradient(135deg, #2c0b0e 0%, #1e0508 100%); border: 1px solid #ff4d4d; border-radius: 8px; padding: 10px; margin-bottom: 15px;">
-                <span style='color: #ff6b6b; font-weight: bold;'>يرجى مراجعة هذه المنتجات واتخاذ إجراء (تجاهل، مسح التاريخ، أو مسح الخصم).</span>
+                <span style='color: #ff6b6b; font-weight: bold;'>يرجى مراجعة هذه المنتجات واتخاذ إجراء (تجاهل، مسح التاريخ، أو مسح الخصم وتاريخه معاً).</span>
             </div>
             """, unsafe_allow_html=True)
             
@@ -391,6 +399,7 @@ def render_discount_expiry_alerts(headers: Dict[str, str]):
                 p_id = str(p.get('id'))
                 p_name = p.get('name')
                 days_left = item['days_left']
+                promo_title = item['promo_title']
                 
                 status_lbl = "انتهى بالفعل!" if days_left < 0 else "ينتهي اليوم!"
                 color = "#ff4d4d" if days_left < 0 else "#ffca28"
@@ -398,7 +407,8 @@ def render_discount_expiry_alerts(headers: Dict[str, str]):
                 with st.container(border=True):
                     c1, c2 = st.columns([3, 4])
                     with c1:
-                        st.markdown(f"**📦 {p_name}**<br>تاريخ الانتهاء: <b style='color:{color};'>{item['end_date_str']} ({status_lbl})</b>", unsafe_allow_html=True)
+                        # ✅ إظهار العنوان الترويجي أسفل اسم المنتج وتاريخ الانتهاء
+                        st.markdown(f"**📦 {p_name}**<br>تاريخ الانتهاء: <b style='color:{color};'>{item['end_date_str']} ({status_lbl})</b><br><span style='color:#b45309; font-size:12px; background:#fef3c7; padding:2px 6px; border-radius:4px;'>🔖 العنوان الترويجي: {promo_title}</span>", unsafe_allow_html=True)
                     with c2:
                         st.markdown("<br>", unsafe_allow_html=True)
                         b1, b2, b3 = st.columns(3)
@@ -420,9 +430,11 @@ def render_discount_expiry_alerts(headers: Dict[str, str]):
                                         st.session_state["ignored_discount_alerts"].add(p_id)
                                         st.rerun()
                         with b3:
-                            if st.button("🗑️ مسح الخصم", key=f"clr_all_{p_id}", type="primary", use_container_width=True, help="إلغاء السعر المخفض تماماً"):
+                            # ✅ زر مسح الخصم وتاريخ الانتهاء معاً
+                            if st.button("🗑️ مسح الخصم والتاريخ", key=f"clr_all_{p_id}", type="primary", use_container_width=True, help="إلغاء السعر المخفض وتاريخ الانتهاء تماماً"):
                                 with st.spinner("⏳"):
                                     base_price = get_flat_price(p.get('regular_price', 0)) or get_flat_price(p.get('price', 0))
+                                    # إرسال None للسعر المخفض و None للتاريخ
                                     payload = {"name": p_name, "price": base_price, "status": p.get('status', 'sale'), "sale_price": None, "sale_end": None}
                                     if safe_api_request("PUT", f"https://api.salla.dev/admin/v2/products/{p_id}", headers, json=payload):
                                         for i, prod in enumerate(st.session_state["all_products"]):
