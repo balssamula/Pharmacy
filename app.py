@@ -310,56 +310,82 @@ st.sidebar.markdown(f"""
 """, unsafe_allow_html=True)
 
 # ==========================================
-# ✅ أزرار إدارة اشتراكات التطبيق (صغيرة وأنيقة)
+# ✅ أزرار إدارة اشتراكات التطبيق (عرضية واحترافية)
 # ==========================================
-col_s1, col_s2, col_s3 = st.sidebar.columns(3)
 
-with col_s1:
-    with st.popover("📋 التفاصيل", help="تفاصيل اشتراك التطبيق", use_container_width=True):
-        st.markdown("<b style='color:#0f1c2e;'>🔍 استعلام عن الاشتراك</b>", unsafe_allow_html=True)
-        app_id_val = st.text_input("معرف التطبيق (App ID):", key="app_id_input")
-        if st.button("استعلام", key="btn_sub_info", use_container_width=True, type="primary"):
-            if not app_id_val:
-                st.warning("الرجاء إدخال معرف التطبيق")
-            else:
-                headers = {"Authorization": f"Bearer {st.session_state.get('access_token')}"}
-                with st.spinner("⏳"):
-                    res = safe_api_request("GET", f"https://api.salla.dev/admin/v2/apps/{app_id_val}/subscriptions", headers)
-                    if res and res.get("data"):
-                        st.success("✅ جلب البيانات بنجاح!")
-                        st.json(res["data"])
-                    else:
-                        st.error("❌ فشل أو لا يوجد اشتراك")
-
-with col_s2:
-    with st.popover("🔄 تجديد", help="تجديد الاشتراك", use_container_width=True):
-        st.markdown("<b style='color:#0f1c2e;'>🔄 تجديد اشتراك (تطبيق/إضافة)</b>", unsafe_allow_html=True)
-        sub_id_val = st.text_input("معرف الاشتراك:", key="sub_id_input")
-        if st.button("تجديد الآن", key="btn_sub_renew", use_container_width=True, type="primary"):
-            if not sub_id_val:
-                st.warning("الرجاء إدخال معرف الاشتراك")
-            else:
-                headers = {"Authorization": f"Bearer {st.session_state.get('access_token')}"}
-                with st.spinner("⏳"):
-                    res = safe_api_request("POST", f"https://api.salla.dev/admin/v2/apps/subscriptions/{sub_id_val}/renew", headers, json={})
-                    if res:
-                        st.success("✅ تم التجديد بنجاح!")
-                        if res.get("data"): st.json(res["data"])
-                    else:
-                        st.error("❌ فشل التجديد")
-
-with col_s3:
-    with st.popover("💰 رصيد", help="تحديث رصيد الاشتراك", use_container_width=True):
-        st.markdown("<b style='color:#0f1c2e;'>💰 تحديث رصيد الاستهلاك</b>", unsafe_allow_html=True)
-        balance_val = st.number_input("الرصيد الجديد:", min_value=0, value=100, step=10, key="balance_input")
-        if st.button("تحديث", key="btn_sub_balance", use_container_width=True, type="primary"):
+with st.sidebar.popover("📋 تفاصيل واشتراكات التطبيق", use_container_width=True):
+    st.markdown("<b style='color:#0f1c2e;'>🔍 استعلام عن الاشتراك</b>", unsafe_allow_html=True)
+    app_id_val = st.text_input("معرف التطبيق (App ID):", key="app_id_input")
+    if st.button("استعلام", key="btn_sub_info", use_container_width=True, type="primary"):
+        if not app_id_val:
+            st.warning("الرجاء إدخال معرف التطبيق")
+        else:
             headers = {"Authorization": f"Bearer {st.session_state.get('access_token')}"}
             with st.spinner("⏳"):
-                res = safe_api_request("POST", "https://api.salla.dev/admin/v2/apps/balance", headers, json={"balance": int(balance_val)})
-                if res:
-                    st.success("✅ تم التحديث بنجاح!")
+                res = safe_api_request("GET", f"https://api.salla.dev/admin/v2/apps/{app_id_val}/subscriptions", headers)
+                if res and res.get("data"):
+                    st.success("✅ جلب البيانات بنجاح!")
+                    
+                    # ✅ تنسيق البيانات في بطاقات احترافية بدلاً من الكود
+                    subs = res["data"]
+                    for sub in subs:
+                        app_name = sub.get("app_name", "غير معروف")
+                        plan_name = sub.get("plan_name", "غير معروف")
+                        plan_type = sub.get("plan_type", "")
+                        price = sub.get("price", "0")
+                        s_date = sub.get("start_date") or "غير محدد"
+                        e_date = sub.get("end_date") or "غير محدد"
+                        balance = sub.get("subscription_balance")
+                        balance_text = str(balance) if balance is not None else "لا يوجد (غير مطبق)"
+                        
+                        # ترجمة أنواع الباقات للعربية
+                        type_ar = {
+                            "once": "مرة واحدة", 
+                            "recurring": "متكرر (دوري)", 
+                            "on_demand": "حسب الاستهلاك", 
+                            "free": "مجاني"
+                        }.get(plan_type, plan_type)
+
+                        st.markdown(f"""
+                        <div style="background: #f8fafc; border: 1px solid #cbd5e1; border-radius: 8px; padding: 15px; margin-top: 10px; text-align: right;">
+                            <h4 style="color: #0f1c2e; margin-top: 0; margin-bottom: 10px;">📱 {app_name}</h4>
+                            <p style="margin: 5px 0; font-size: 14px;"><b>الباقة:</b> {plan_name} <span style="color: #64748b; font-size: 12px;">({type_ar})</span></p>
+                            <p style="margin: 5px 0; font-size: 14px;"><b>السعر:</b> <span style="color: #059669; font-weight: bold;">{price} ر.س</span></p>
+                            <p style="margin: 5px 0; font-size: 14px;"><b>رصيد الاستهلاك:</b> <span style="color: #ea580c;">{balance_text}</span></p>
+                            <hr style="margin: 10px 0; border-top: 1px dashed #cbd5e1;">
+                            <p style="margin: 5px 0; font-size: 12px; color: #64748b;">📅 البداية: {s_date} | الانتهاء: {e_date}</p>
+                        </div>
+                        """, unsafe_allow_html=True)
                 else:
-                    st.error("❌ فشل التحديث")
+                    st.error("❌ فشل أو لا يوجد اشتراك لهذا التطبيق")
+
+with st.sidebar.popover("🔄 تجديد اشتراك التطبيق", use_container_width=True):
+    st.markdown("<b style='color:#0f1c2e;'>🔄 تجديد اشتراك (تطبيق/إضافة)</b>", unsafe_allow_html=True)
+    sub_id_val = st.text_input("معرف الاشتراك:", key="sub_id_input")
+    if st.button("تجديد الآن", key="btn_sub_renew", use_container_width=True, type="primary"):
+        if not sub_id_val:
+            st.warning("الرجاء إدخال معرف الاشتراك")
+        else:
+            headers = {"Authorization": f"Bearer {st.session_state.get('access_token')}"}
+            with st.spinner("⏳"):
+                res = safe_api_request("POST", f"https://api.salla.dev/admin/v2/apps/subscriptions/{sub_id_val}/renew", headers, json={})
+                if res:
+                    st.success("✅ تم التجديد بنجاح!")
+                else:
+                    st.error("❌ فشل التجديد")
+
+with st.sidebar.popover("💰 تحديث رصيد الاستهلاك", use_container_width=True):
+    st.markdown("<b style='color:#0f1c2e;'>💰 تحديث رصيد الاستهلاك</b>", unsafe_allow_html=True)
+    st.info("💡 هذا الرصيد يُستخدم فقط للتطبيقات التي تعتمد على باقات الدفع حسب الاستهلاك (Pay As You Go).")
+    balance_val = st.number_input("الرصيد الجديد:", min_value=0, value=0, step=10, key="balance_input")
+    if st.button("تحديث الرصيد", key="btn_sub_balance", use_container_width=True, type="primary"):
+        headers = {"Authorization": f"Bearer {st.session_state.get('access_token')}"}
+        with st.spinner("⏳"):
+            res = safe_api_request("POST", "https://api.salla.dev/admin/v2/apps/balance", headers, json={"balance": int(balance_val)})
+            if res:
+                st.success("✅ تم التحديث بنجاح!")
+            else:
+                st.error("❌ فشل التحديث")
 
 st.sidebar.markdown("<div style='margin-bottom: 15px;'></div>", unsafe_allow_html=True)
 # ==========================================
