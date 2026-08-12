@@ -384,6 +384,57 @@ with st.sidebar.popover("💰 تحديث رصيد الاستهلاك", use_conta
             if res: st.success("✅ تم التحديث بنجاح!")
             else: st.error("❌ فشل التحديث")
 
+with st.sidebar.popover("⚙️ إعدادات التطبيق (Settings)", use_container_width=True):
+    st.markdown("<b style='color:#0f1c2e;'>⚙️ إدارة إعدادات التطبيق</b>", unsafe_allow_html=True)
+    st.info("⚠️ تحذير سلة: يجب إرسال كافة الإعدادات عند التحديث لتجنب مسح البيانات الأخرى.")
+    
+    # حقل معرف التطبيق (مرتبط تلقائياً بالشارة العلوية)
+    app_id_set = st.text_input("معرف التطبيق (App ID):", value=st.session_state.get("saved_app_id", ""), key="app_id_settings")
+    if app_id_set != st.session_state.get("saved_app_id", ""):
+        st.session_state["saved_app_id"] = app_id_set
+        st.rerun()
+
+    # 1. زر الاستعلام (App Setting Details)
+    if st.button("🔍 App Setting Details", key="btn_get_settings", use_container_width=True):
+        if not app_id_set:
+            st.warning("الرجاء إدخال معرف التطبيق")
+        else:
+            headers = {"Authorization": f"Bearer {st.session_state.get('access_token')}"}
+            with st.spinner("⏳"):
+                res = safe_api_request("GET", f"https://api.salla.dev/admin/v2/apps/{app_id_set}/settings", headers)
+                if res and res.get("data"):
+                    st.success("✅ تم جلب الإعدادات!")
+                    # استخراج الإعدادات المخصصة من الرد
+                    settings_data = res["data"].get("settings", {})
+                    st.session_state["app_settings_json"] = json.dumps(settings_data, indent=4, ensure_ascii=False)
+                    st.rerun()
+                else:
+                    st.error("❌ فشل أو لا توجد إعدادات مهيأة")
+
+    st.markdown("<hr style='margin: 10px 0;'>", unsafe_allow_html=True)
+    
+    # مربع تعديل البيانات
+    current_json = st.session_state.get("app_settings_json", "{\n  \n}")
+    updated_json = st.text_area("تعديل البيانات (JSON):", value=current_json, height=150, key="settings_json_input")
+
+    # 2. زر التحديث (Update App Settings)
+    if st.button("💾 Update App Settings", key="btn_update_settings", use_container_width=True, type="primary"):
+        if not app_id_set:
+            st.warning("الرجاء إدخال معرف التطبيق")
+        else:
+            try:
+                # التأكد من صحة صيغة JSON قبل الإرسال
+                payload = json.loads(updated_json)
+                headers = {"Authorization": f"Bearer {st.session_state.get('access_token')}"}
+                with st.spinner("⏳"):
+                    res = safe_api_request("POST", f"https://api.salla.dev/admin/v2/apps/{app_id_set}/settings", headers, json=payload)
+                    if res:
+                        st.success("✅ تم تحديث الإعدادات بنجاح!")
+                    else:
+                        st.error("❌ فشل تحديث الإعدادات")
+            except json.JSONDecodeError:
+                st.error("❌ صيغة JSON غير صحيحة، تأكد من الأقواس والفواصل.")
+                
 st.sidebar.markdown("<div style='margin-bottom: 15px;'></div>", unsafe_allow_html=True)
 # ==========================================
 
