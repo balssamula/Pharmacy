@@ -60,13 +60,36 @@ def render_expiry_alerts(raw_offers, headers=None):
             st.session_state["show_expiry_alerts"] = not st.session_state["show_expiry_alerts"]
             st.rerun()
     with col_t2:
-        if st.button("🔄 تحديث الإجراءات", use_container_width=True, key="refresh_alert_btn"):
-            with st.spinner("تحديث البيانات..."):
-                res = safe_api_request("GET", f"{SALLA_API_URL}?per_page=60", headers)
-                if res and res.get("data"):
-                    fresh_dict = {str(o['id']): o for o in res["data"]}
-                    new_all = [fresh_dict.get(str(o['id']), o) for o in st.session_state.get("all_offers", [])]
-                    st.session_state["all_offers"] = new_all
+        if st.button("🔄 مزامنة العروض", use_container_width=True, key="refresh_alert_btn"):
+            with st.spinner("جاري سحب ومزامنة كافة العروض..."):
+                fresh_offers = fetch_all_pages(SALLA_API_URL, "تحديث العروض", headers)
+                if fresh_offers:
+                    st.session_state["all_offers"] = fresh_offers
+                    
+                    # ✅ إعادة بناء خريطة المنتجات المرتبطة بالعروض بذكاء وسرعة
+                    po_map = {"ALL_PRODUCTS": []}
+                    active_offers = [o for o in fresh_offers if o.get('status') == 'active']
+                    for o in active_offers:
+                        oid = str(o.get("id"))
+                        summary = {"id": oid, "name": o.get("name")}
+                        if o.get("applied_to") in ["order", "all"] or o.get("offer_type") in ["cart_offer", "tiered_offer"]:
+                            po_map["ALL_PRODUCTS"].append(summary)
+                        else:
+                            pids = set()
+                            for px in (o.get("buy", {}) or {}).get("products", []):
+                                pid = str(px.get("id", px) if isinstance(px, dict) else px)
+                                if pid.isdigit(): pids.add(pid)
+                            for px in (o.get("get", {}) or {}).get("products", []):
+                                pid = str(px.get("id", px) if isinstance(px, dict) else px)
+                                if pid.isdigit(): pids.add(pid)
+                            for px in o.get("products", []):
+                                pid = str(px.get("id", px) if isinstance(px, dict) else px)
+                                if pid.isdigit(): pids.add(pid)
+                            for pid in pids:
+                                if pid not in po_map: po_map[pid] = []
+                                po_map[pid].append(summary)
+                    
+                    st.session_state["product_offers_map"] = po_map
                 st.rerun()
 
     # إذا كانت مخفية أو لا توجد عروض، نوقف التنفيذ هنا
