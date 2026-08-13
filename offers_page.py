@@ -986,38 +986,48 @@ def render_offers_page():
                 confirm_bulk = st.checkbox(confirm_msg, key="confirm_bulk_action_offers")
                 
                 if st.button("🚀 تنفيذ الإجراء", type="primary", disabled=not confirm_bulk, use_container_width=True, key="execute_bulk_action_offers"):
-                    with st.spinner("⏳ جاري التنفيذ... قد يستغرق بعض الوقت"):
-                        success_c = 0
-                        for off in filtered_offers:
-                            oid = off['id']
-                            if "تفعيل" in bulk_action:
-                                if safe_api_request("PUT", f"{SALLA_API_URL}/{oid}/status", headers, json={"status": "active"}): success_c += 1
-                            elif "تمديد" in bulk_action:
-                                full = safe_api_request("GET", f"{SALLA_API_URL}/{oid}", headers)
-                                if full and full.get('data'):
-                                    payload = rebuild_offer_payload(full['data'], {"expiry_date": new_expiry_str})
-                                    if safe_api_request("PUT", f"{SALLA_API_URL}/{oid}", headers, json=payload): success_c += 1
-                            elif "إيقاف ومسح" in bulk_action:
-                                # 1. إيقاف العرض
-                                safe_api_request("PUT", f"{SALLA_API_URL}/{oid}/status", headers, json={"status": "inactive"})
-                                # 2. مسح العناوين الترويجية
-                                full = safe_api_request("GET", f"{SALLA_API_URL}/{oid}", headers)
-                                if full and full.get('data'):
-                                    pids = set()
-                                    for p in full['data'].get('buy', {}).get('products', []):
-                                        if str(p.get('id', p)).isdigit(): pids.add(int(p.get('id', p)))
-                                    for p in full['data'].get('get', {}).get('products', []):
-                                        if str(p.get('id', p)).isdigit(): pids.add(int(p.get('id', p)))
-                                    for pid in pids:
-                                        update_product_promotions_secure(pid, "", "", headers)
-                                success_c += 1
-                            elif "حذف" in bulk_action:
-                                if safe_api_request("DELETE", f"{SALLA_API_URL}/{oid}", headers): success_c += 1
+                    # ✅ إضافة شريط التقدم التفاعلي وعداد العروض
+                    progress_bar = st.progress(0)
+                    status_text = st.empty()
+                    success_c = 0
+                    total_offers = len(filtered_offers)
+                    
+                    for idx, off in enumerate(filtered_offers):
+                        oid = off['id']
+                        status_text.info(f"⏳ جاري تنفيذ الإجراء على العرض {idx+1} من {total_offers}...")
                         
-                        st.success(f"✅ تم تنفيذ الإجراء على {success_c} عرض بنجاح!")
-                        time.sleep(1)
-                        if "all_offers" in st.session_state: del st.session_state["all_offers"] # لإجبار التحديث
-                        st.rerun()
+                        if "تفعيل" in bulk_action:
+                            if safe_api_request("PUT", f"{SALLA_API_URL}/{oid}/status", headers, json={"status": "active"}): success_c += 1
+                        elif "تمديد" in bulk_action:
+                            full = safe_api_request("GET", f"{SALLA_API_URL}/{oid}", headers)
+                            if full and full.get('data'):
+                                payload = rebuild_offer_payload(full['data'], {"expiry_date": new_expiry_str})
+                                if safe_api_request("PUT", f"{SALLA_API_URL}/{oid}", headers, json=payload): success_c += 1
+                        elif "إيقاف ومسح" in bulk_action:
+                            # 1. إيقاف العرض
+                            safe_api_request("PUT", f"{SALLA_API_URL}/{oid}/status", headers, json={"status": "inactive"})
+                            # 2. مسح العناوين الترويجية
+                            full = safe_api_request("GET", f"{SALLA_API_URL}/{oid}", headers)
+                            if full and full.get('data'):
+                                pids = set()
+                                for p in full['data'].get('buy', {}).get('products', []):
+                                    if str(p.get('id', p)).isdigit(): pids.add(int(p.get('id', p)))
+                                for p in full['data'].get('get', {}).get('products', []):
+                                    if str(p.get('id', p)).isdigit(): pids.add(int(p.get('id', p)))
+                                for pid in pids:
+                                    update_product_promotions_secure(pid, "", "", headers)
+                            success_c += 1
+                        elif "حذف" in bulk_action:
+                            if safe_api_request("DELETE", f"{SALLA_API_URL}/{oid}", headers): success_c += 1
+                            
+                        # ✅ تحديث شريط التقدم وإضافة مهلة زمنية للحماية من حظر API سلة
+                        progress_bar.progress((idx + 1) / total_offers)
+                        import time; time.sleep(0.3)
+                        
+                    status_text.success(f"✅ تم تنفيذ الإجراء على {success_c} عرض بنجاح!")
+                    import time; time.sleep(1.5)
+                    if "all_offers" in st.session_state: del st.session_state["all_offers"] # لإجبار التحديث
+                    st.rerun()
                         
     # ==========================================
     # 📄 عرض بطاقات العروض مع ترقيم الصفحات
