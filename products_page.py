@@ -1027,8 +1027,13 @@ def render_products_page():
         # ✅ تطبيق فلتر المجموعات المميزة
         if f_feat_group != "الكل":
             if p_id_str not in st.session_state.get("featured_product_groups", {}).get(f_feat_group, []): continue
-        # ✅ تطبيق فلتر الرصيد الجديد
-        stock_qty = p.get('quantity', 0)
+        # ✅ تطبيق فلتر الرصيد الجديد (مع حماية ضد القيم الفارغة None)
+        stock_qty_raw = p.get('quantity')
+        try:
+            stock_qty = float(stock_qty_raw) if stock_qty_raw is not None else 0.0
+        except (ValueError, TypeError):
+            stock_qty = 0.0
+            
         if f_stock == "له رصيد" and stock_qty <= 0: continue
         if f_stock == "نفد" and stock_qty > 0: continue
             
