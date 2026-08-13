@@ -292,17 +292,40 @@ st.markdown("""
 </div>
 """, unsafe_allow_html=True)
 
-# ✅ جلب معرف التطبيق المحفوظ ليعرض في الأعلى
-saved_app_id = st.session_state.get("saved_app_id", "لم يحدد بعد")
+# ✅ تثبيت معرف التطبيق
+FIXED_APP_ID = "277610741"
+
+# ✅ جلب بيانات الاشتراك تلقائياً للمتجر الحالي وحفظها في الذاكرة (بدون تدخل يدوي)
+if "app_subscription_data" not in st.session_state:
+    headers_sub = {"Authorization": f"Bearer {st.session_state.get('access_token')}"}
+    # جلب الاشتراكات الخاصة بهذا المتجر (عبر التوكن الخاص به)
+    res_sub = safe_api_request("GET", f"https://api.salla.dev/admin/v2/apps/{FIXED_APP_ID}/subscriptions", headers_sub)
+    if res_sub and res_sub.get("data") and len(res_sub["data"]) > 0:
+        st.session_state["app_subscription_data"] = res_sub["data"][0] # حفظ أول اشتراك فعال
+    else:
+        st.session_state["app_subscription_data"] = None
+
+# استخراج رقم الاشتراك والباقة والرصيد لعرضها بذكاء
+current_sub = st.session_state.get("app_subscription_data")
+sub_id_display = current_sub.get("id") if current_sub else "غير متوفر"
+plan_name_display = current_sub.get("plan_name") if current_sub else "لا توجد باقة"
+balance_display = current_sub.get("subscription_balance", 0) if current_sub else 0
 
 st.sidebar.markdown(f"""
 <div style="background: linear-gradient(135deg, #0F1C2E, #1a365d); padding: 20px 15px; border-radius: 12px; border: 1px solid #334155; margin-bottom: 25px; box-shadow: 0 4px 10px rgba(0,0,0,0.2); position: relative; overflow: hidden;">
     <div style="position: absolute; top: 0; right: 0; background: linear-gradient(90deg, #F59E0B, #D97706); color: #FFF; padding: 4px 12px; border-bottom-left-radius: 12px; font-weight: bold; font-size: 12px; box-shadow: -2px 2px 8px rgba(0,0,0,0.3); z-index: 10;">
-        🆔 App ID: {saved_app_id}
+        🆔 App ID: {FIXED_APP_ID}
     </div>
     <div style="text-align: center; margin-bottom: 12px; margin-top: 15px;">
         <div style="font-size: 32px; margin-bottom: 5px;">🏪</div>
         <h3 style="color: #FFFFFF; margin: 0; font-size: 18px;">{st.session_state.get('store_name', 'متجرك')}</h3>
+        
+        <!-- ✅ عرض رقم الاشتراك واسم الباقة تلقائياً للتاجر -->
+        <div style="margin-top: 12px; background: rgba(0, 235, 207, 0.1); border: 1px solid rgba(0, 235, 207, 0.3); border-radius: 8px; padding: 8px; font-size: 13px;">
+            <div style="margin-bottom: 4px;"><span style="color: #94A3B8;">💳 رقم الاشتراك:</span> <b style="color: #00EBCF;">{sub_id_display}</b></div>
+            <div><span style="color: #94A3B8;">🏷️ الباقة:</span> <b style="color: #FBBF24;">{plan_name_display}</b></div>
+        </div>
+        
     </div>
     <div style="background: rgba(0,0,0,0.2); border-radius: 8px; padding: 10px;">
         <div style="display: flex; align-items: center; justify-content: center; font-size: 14px; margin-bottom: 8px; gap: 8px;">
@@ -316,95 +339,93 @@ st.sidebar.markdown(f"""
 """, unsafe_allow_html=True)
 
 # ==========================================
-# ✅ أزرار إدارة اشتراكات التطبيق (عرضية واحترافية)
+# ✅ أزرار إدارة اشتراكات التطبيق والإعدادات
 # ==========================================
 
 with st.sidebar.popover("📋 تفاصيل واشتراكات التطبيق", use_container_width=True):
-    st.markdown("<b style='color:#0f1c2e;'>🔍 استعلام عن الاشتراك</b>", unsafe_allow_html=True)
-    # ✅ بمجرد إدخال المعرف هنا سيتم حفظه ليظهر في الشارة العلوية
-    app_id_val = st.text_input("معرف التطبيق (App ID):", value=st.session_state.get("saved_app_id", ""), key="app_id_input")
-        
-    if st.button("استعلام", key="btn_sub_info", use_container_width=True, type="primary"):
-        if not app_id_val:
-            st.warning("الرجاء إدخال معرف التطبيق")
-        else:
-            headers = {"Authorization": f"Bearer {st.session_state.get('access_token')}"}
-            with st.spinner("⏳"):
-                res = safe_api_request("GET", f"https://api.salla.dev/admin/v2/apps/{app_id_val}/subscriptions", headers)
-                if res and res.get("data"):
-                    st.success("✅ جلب البيانات بنجاح!")
-                    subs = res["data"]
-                    for sub in subs:
-                        app_name = sub.get("app_name", "غير معروف")
-                        plan_name = sub.get("plan_name", "غير معروف")
-                        plan_type = sub.get("plan_type", "")
-                        price = sub.get("price", "0")
-                        s_date = sub.get("start_date") or "غير محدد"
-                        e_date = sub.get("end_date") or "غير محدد"
-                        balance = sub.get("subscription_balance")
-                        balance_text = str(balance) if balance is not None else "لا يوجد (غير مطبق)"
-                        
-                        type_ar = {"once": "مرة واحدة", "recurring": "متكرر (دوري)", "on_demand": "حسب الاستهلاك", "free": "مجاني"}.get(plan_type, plan_type)
-                        st.markdown(f"""
-                        <div style="background: #f8fafc; border: 1px solid #cbd5e1; border-radius: 8px; padding: 15px; margin-top: 10px; text-align: right;">
-                            <h4 style="color: #0f1c2e; margin-top: 0; margin-bottom: 10px;">📱 {app_name}</h4>
-                            <p style="margin: 5px 0; font-size: 14px;"><b>الباقة:</b> {plan_name} <span style="color: #64748b; font-size: 12px;">({type_ar})</span></p>
-                            <p style="margin: 5px 0; font-size: 14px;"><b>السعر:</b> <span style="color: #059669; font-weight: bold;">{price} ر.س</span></p>
-                            <p style="margin: 5px 0; font-size: 14px;"><b>رصيد الاستهلاك:</b> <span style="color: #ea580c;">{balance_text}</span></p>
-                            <hr style="margin: 10px 0; border-top: 1px dashed #cbd5e1;">
-                            <p style="margin: 5px 0; font-size: 12px; color: #64748b;">📅 البداية: {s_date} | الانتهاء: {e_date}</p>
-                        </div>
-                        """, unsafe_allow_html=True)
-                else:
-                    st.error("❌ فشل أو لا يوجد اشتراك لهذا التطبيق")
+    st.markdown("<b style='color:#0f1c2e;'>🔍 استعلام وتحديث بيانات الاشتراك</b>", unsafe_allow_html=True)
+    if st.button("تحديث وعرض التفاصيل", key="btn_sub_info", use_container_width=True, type="primary"):
+        headers = {"Authorization": f"Bearer {st.session_state.get('access_token')}"}
+        with st.spinner("⏳"):
+            res = safe_api_request("GET", f"https://api.salla.dev/admin/v2/apps/{FIXED_APP_ID}/subscriptions", headers)
+            if res and res.get("data"):
+                st.success("✅ جلب البيانات بنجاح!")
+                st.session_state["app_subscription_data"] = res["data"][0] # تحديث الذاكرة
+                subs = res["data"]
+                for sub in subs:
+                    app_name = sub.get("app_name", "غير معروف")
+                    plan_name = sub.get("plan_name", "غير معروف")
+                    plan_type = sub.get("plan_type", "")
+                    price = sub.get("price", "0")
+                    s_date = sub.get("start_date") or "غير محدد"
+                    e_date = sub.get("end_date") or "غير محدد"
+                    balance = sub.get("subscription_balance")
+                    balance_text = str(balance) if balance is not None else "لا يوجد (غير مطبق)"
+                    
+                    type_ar = {"once": "مرة واحدة", "recurring": "متكرر (دوري)", "on_demand": "حسب الاستهلاك", "free": "مجاني"}.get(plan_type, plan_type)
+                    st.markdown(f"""
+                    <div style="background: #f8fafc; border: 1px solid #cbd5e1; border-radius: 8px; padding: 15px; margin-top: 10px; text-align: right;">
+                        <h4 style="color: #0f1c2e; margin-top: 0; margin-bottom: 10px;">📱 {app_name}</h4>
+                        <p style="margin: 5px 0; font-size: 14px;"><b>الباقة:</b> {plan_name} <span style="color: #64748b; font-size: 12px;">({type_ar})</span></p>
+                        <p style="margin: 5px 0; font-size: 14px;"><b>السعر:</b> <span style="color: #059669; font-weight: bold;">{price} ر.س</span></p>
+                        <p style="margin: 5px 0; font-size: 14px;"><b>رصيد الاستهلاك:</b> <span style="color: #ea580c;">{balance_text}</span></p>
+                        <hr style="margin: 10px 0; border-top: 1px dashed #cbd5e1;">
+                        <p style="margin: 5px 0; font-size: 12px; color: #64748b;">📅 البداية: {s_date} | الانتهاء: {e_date}</p>
+                    </div>
+                    """, unsafe_allow_html=True)
+            else:
+                st.error("❌ فشل أو لا يوجد اشتراك لهذا التطبيق")
 
 with st.sidebar.popover("🔄 تجديد اشتراك التطبيق", use_container_width=True):
     st.markdown("<b style='color:#0f1c2e;'>🔄 تجديد اشتراك (تطبيق/إضافة)</b>", unsafe_allow_html=True)
-    sub_id_val = st.text_input("معرف الاشتراك:", key="sub_id_input")
-    if st.button("تجديد الآن", key="btn_sub_renew", use_container_width=True, type="primary"):
-        if not sub_id_val: st.warning("الرجاء إدخال معرف الاشتراك")
-        else:
+    if current_sub and current_sub.get("id"):
+        st.info(f"💡 سيتم تجديد الاشتراك رقم: **{current_sub.get('id')}** للباقة (**{current_sub.get('plan_name')}**) تلقائياً.")
+        if st.button("تجديد الآن", key="btn_sub_renew", use_container_width=True, type="primary"):
             headers = {"Authorization": f"Bearer {st.session_state.get('access_token')}"}
             with st.spinner("⏳"):
-                res = safe_api_request("POST", f"https://api.salla.dev/admin/v2/apps/subscriptions/{sub_id_val}/renew", headers, json={})
+                res = safe_api_request("POST", f"https://api.salla.dev/admin/v2/apps/subscriptions/{current_sub.get('id')}/renew", headers, json={})
                 if res: st.success("✅ تم التجديد بنجاح!")
                 else: st.error("❌ فشل التجديد")
+    else:
+        st.warning("⚠️ لا يوجد اشتراك ساري ليتم تجديده.")
 
 with st.sidebar.popover("💰 تحديث رصيد الاستهلاك", use_container_width=True):
     st.markdown("<b style='color:#0f1c2e;'>💰 تحديث رصيد الاستهلاك</b>", unsafe_allow_html=True)
-    st.info("💡 هذا الرصيد يُستخدم فقط للتطبيقات التي تعتمد على باقات الدفع حسب الاستهلاك (Pay As You Go).")
-    balance_val = st.number_input("الرصيد الجديد:", min_value=0, value=0, step=10, key="balance_input")
+    st.info("💡 هذا الرصيد يُستخدم للتطبيقات التي تعتمد على باقات الدفع حسب الاستهلاك (Pay As You Go).")
+    
+    # ✅ وضع الرصيد الحالي للتاجر كقيمة افتراضية (أو 0 إذا لم يوجد)
+    try: default_balance = int(float(balance_display))
+    except: default_balance = 0
+        
+    balance_val = st.number_input("الرصيد الجديد:", min_value=0, value=default_balance, step=10, key="balance_input")
+    
     if st.button("تحديث الرصيد", key="btn_sub_balance", use_container_width=True, type="primary"):
         headers = {"Authorization": f"Bearer {st.session_state.get('access_token')}"}
         with st.spinner("⏳"):
             res = safe_api_request("POST", "https://api.salla.dev/admin/v2/apps/balance", headers, json={"balance": int(balance_val)})
-            if res: st.success("✅ تم التحديث بنجاح!")
+            if res: 
+                st.success("✅ تم التحديث بنجاح!")
+                if current_sub: st.session_state["app_subscription_data"]["subscription_balance"] = int(balance_val)
+                import time; time.sleep(1); st.rerun()
             else: st.error("❌ فشل التحديث")
 
 with st.sidebar.popover("⚙️ إعدادات التطبيق (Settings)", use_container_width=True):
     st.markdown("<b style='color:#0f1c2e;'>⚙️ إدارة إعدادات التطبيق</b>", unsafe_allow_html=True)
     st.info("💡 يتم عرض الإعدادات كحقول ديناميكية ذكية لتسهيل التعديل. يجب حفظ التغييرات لاعتمادها في المتجر.")
-    
-    # ✅ نقل أولوية حفظ وتغيير الـ App ID إلى هذا الزر
-    app_id_set = st.text_input("معرف التطبيق (App ID):", value=st.session_state.get("saved_app_id", ""), key="app_id_settings")
 
     # 1. زر الاستعلام
     if st.button("🔍 عرض تفاصيل الإعدادات", key="btn_get_settings", use_container_width=True):
-        if not app_id_set:
-            st.warning("الرجاء إدخال معرف التطبيق")
-        else:
-            headers = {"Authorization": f"Bearer {st.session_state.get('access_token')}"}
-            with st.spinner("⏳"):
-                res = safe_api_request("GET", f"https://api.salla.dev/admin/v2/apps/{app_id_set}/settings", headers)
-                if res and res.get("data"):
-                    st.success("✅ تم جلب الإعدادات بنجاح!")
-                    # حفظ المعرف ليظهر في الشارة العلوية
-                    st.session_state["saved_app_id"] = app_id_set
-                    # حفظ البيانات كقاموس (Dictionary) وليس كنص JSON
-                    st.session_state["app_settings_data"] = res["data"].get("settings", {})
-                    st.rerun()
-                else:
-                    st.error("❌ فشل أو لا توجد إعدادات مهيأة")
+        headers = {"Authorization": f"Bearer {st.session_state.get('access_token')}"}
+        with st.spinner("⏳"):
+            res = safe_api_request("GET", f"https://api.salla.dev/admin/v2/apps/{FIXED_APP_ID}/settings", headers)
+            if res and res.get("data"):
+                st.success("✅ تم جلب الإعدادات بنجاح!")
+                st.session_state["app_settings_data"] = res["data"].get("settings", {})
+                st.rerun()
+            else:
+                st.error("❌ لا توجد إعدادات. (تأكد من إنشاء نموذج الإعدادات في بوابة مطوري سلة)")
+                if "app_settings_data" in st.session_state:
+                    del st.session_state["app_settings_data"]
 
     # 2. عرض الحقول بشكل ديناميكي وجمالي
     if "app_settings_data" in st.session_state:
@@ -415,11 +436,10 @@ with st.sidebar.popover("⚙️ إعدادات التطبيق (Settings)", use_c
         updated_settings = {}
 
         if not settings_data:
-            st.warning("لا توجد إعدادات محفوظة حالياً لهذا التطبيق.")
+            st.warning("لا توجد بيانات إعدادات محفوظة حالياً لهذا التطبيق.")
         else:
             with st.container(border=True):
                 for key, val in settings_data.items():
-                    # ✅ بناء حقول مخصصة وذكية بناءً على نوع البيانات
                     if isinstance(val, bool):
                         updated_settings[key] = st.toggle(f"🔘 {key}", value=val, key=f"set_bool_{key}")
                     elif isinstance(val, int) and not isinstance(val, bool):
@@ -427,25 +447,23 @@ with st.sidebar.popover("⚙️ إعدادات التطبيق (Settings)", use_c
                     elif isinstance(val, float):
                         updated_settings[key] = st.number_input(f"🔢 {key}", value=val, step=0.1, key=f"set_float_{key}")
                     else:
-                        # إخفاء القيم السرية (مثل كلمة المرور)
                         is_pwd = "password" in str(key).lower() or "secret" in str(key).lower()
                         updated_settings[key] = st.text_input(f"📝 {key}", value=str(val) if val is not None else "", type="password" if is_pwd else "default", key=f"set_str_{key}")
 
             st.markdown("<br>", unsafe_allow_html=True)
-            # 3. زر التحديث (Update App Settings)
+            # 3. زر التحديث
             if st.button("💾 تحديث الإعدادات للمتجر", key="btn_update_settings", use_container_width=True, type="primary"):
                 headers = {"Authorization": f"Bearer {st.session_state.get('access_token')}"}
                 with st.spinner("⏳ جاري الحفظ..."):
-                    res = safe_api_request("POST", f"https://api.salla.dev/admin/v2/apps/{app_id_set}/settings", headers, json=updated_settings)
+                    res = safe_api_request("POST", f"https://api.salla.dev/admin/v2/apps/{FIXED_APP_ID}/settings", headers, json=updated_settings)
                     if res:
                         st.success("✅ تم تحديث الإعدادات بنجاح!")
-                        # تحديث الذاكرة المحلية بالبيانات الجديدة
                         st.session_state["app_settings_data"] = updated_settings 
                         import time; time.sleep(1)
                         st.rerun()
                     else:
                         st.error("❌ فشل تحديث الإعدادات")
-                
+
 st.sidebar.markdown("<div style='margin-bottom: 15px;'></div>", unsafe_allow_html=True)
 # ==========================================
 
