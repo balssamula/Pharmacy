@@ -313,28 +313,25 @@ balance_display = current_sub.get("subscription_balance", 0) if current_sub else
 
 st.sidebar.markdown(f"""
 <div style="background: linear-gradient(135deg, #0F1C2E, #1a365d); padding: 20px 15px; border-radius: 12px; border: 1px solid #334155; margin-bottom: 25px; box-shadow: 0 4px 10px rgba(0,0,0,0.2); position: relative; overflow: hidden;">
-    <div style="position: absolute; top: 0; right: 0; background: linear-gradient(90deg, #F59E0B, #D97706); color: #FFF; padding: 4px 12px; border-bottom-left-radius: 12px; font-weight: bold; font-size: 12px; box-shadow: -2px 2px 8px rgba(0,0,0,0.3); z-index: 10;">
-        🆔 App ID: {FIXED_APP_ID}
-    </div>
-    <div style="text-align: center; margin-bottom: 12px; margin-top: 15px;">
-        <div style="font-size: 32px; margin-bottom: 5px;">🏪</div>
-        <h3 style="color: #FFFFFF; margin: 0; font-size: 18px;">{st.session_state.get('store_name', 'متجرك')}</h3>
-        
-        <!-- ✅ عرض رقم الاشتراك واسم الباقة تلقائياً للتاجر -->
-        <div style="margin-top: 12px; background: rgba(0, 235, 207, 0.1); border: 1px solid rgba(0, 235, 207, 0.3); border-radius: 8px; padding: 8px; font-size: 13px;">
-            <div style="margin-bottom: 4px;"><span style="color: #94A3B8;">💳 رقم الاشتراك:</span> <b style="color: #00EBCF;">{sub_id_display}</b></div>
-            <div><span style="color: #94A3B8;">🏷️ الباقة:</span> <b style="color: #FBBF24;">{plan_name_display}</b></div>
-        </div>
-        
-    </div>
-    <div style="background: rgba(0,0,0,0.2); border-radius: 8px; padding: 10px;">
-        <div style="display: flex; align-items: center; justify-content: center; font-size: 14px; margin-bottom: 8px; gap: 8px;">
-            <span class="blinking-dot"></span><span style="color: #10B981; font-weight: bold;">متصل ومزامن لحظياً</span>
-        </div>
-        <div style="text-align: center; font-size: 12px; color: #94A3B8; border-top: 1px dashed #334155; padding-top: 8px; margin-top: 5px;">
-            آخر دخول: <b style="color: #CBD5E1; direction: ltr; display: inline-block;">{st.session_state.get('last_sync_time', '')}</b>
-        </div>
-    </div>
+<div style="position: absolute; top: 0; right: 0; background: linear-gradient(90deg, #F59E0B, #D97706); color: #FFF; padding: 4px 12px; border-bottom-left-radius: 12px; font-weight: bold; font-size: 12px; box-shadow: -2px 2px 8px rgba(0,0,0,0.3); z-index: 10;">
+🆔 App ID: {FIXED_APP_ID}
+</div>
+<div style="text-align: center; margin-bottom: 12px; margin-top: 15px;">
+<div style="font-size: 32px; margin-bottom: 5px;">🏪</div>
+<h3 style="color: #FFFFFF; margin: 0; font-size: 18px;">{st.session_state.get('store_name', 'متجرك')}</h3>
+<div style="margin-top: 12px; background: rgba(0, 235, 207, 0.1); border: 1px solid rgba(0, 235, 207, 0.3); border-radius: 8px; padding: 8px; font-size: 13px;">
+<div style="margin-bottom: 4px;"><span style="color: #94A3B8;">💳 رقم الاشتراك:</span> <b style="color: #00EBCF;">{sub_id_display}</b></div>
+<div><span style="color: #94A3B8;">🏷️ الباقة:</span> <b style="color: #FBBF24;">{plan_name_display}</b></div>
+</div>
+</div>
+<div style="background: rgba(0,0,0,0.2); border-radius: 8px; padding: 10px;">
+<div style="display: flex; align-items: center; justify-content: center; font-size: 14px; margin-bottom: 8px; gap: 8px;">
+<span class="blinking-dot"></span><span style="color: #10B981; font-weight: bold;">متصل ومزامن لحظياً</span>
+</div>
+<div style="text-align: center; font-size: 12px; color: #94A3B8; border-top: 1px dashed #334155; padding-top: 8px; margin-top: 5px;">
+آخر دخول: <b style="color: #CBD5E1; direction: ltr; display: inline-block;">{st.session_state.get('last_sync_time', '')}</b>
+</div>
+</div>
 </div>
 """, unsafe_allow_html=True)
 
