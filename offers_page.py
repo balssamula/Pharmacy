@@ -885,7 +885,7 @@ def render_offers_page():
 
     st.divider()
 
-    # ==========================================
+# ==========================================
     # 🔍 الفلاتر الخاصة بالعروض
     # ==========================================
     with st.container(border=True):
@@ -898,14 +898,24 @@ def render_offers_page():
             if ed: avail_dates.add(ed.strftime('%Y-%m-%d'))
         date_options = ["الكل", "بدون تاريخ"] + sorted(list(avail_dates))
         
-        col_search, col_status = st.columns([2, 1])
+        # ✅ استخراج الماركات المتاحة من العروض المشمولة والمنتجات
+        avail_brands = set()
+        po_map = st.session_state.get("product_offers_map", {})
+        for p in st.session_state.get("all_products", []):
+            if po_map.get(str(p.get('id', ''))):
+                brand = p.get('brand')
+                if isinstance(brand, dict) and brand.get('name'):
+                    avail_brands.add(brand.get('name'))
+        brand_options = sorted(list(avail_brands))
+        
+        col_search, col_status, col_disc = st.columns([2, 1, 1])
         with col_search: search_offer = st.text_input("🔎 ابحث باسم العرض أو بالمعرف:", key="filter_search_input")
         with col_status: status_filter = st.selectbox("📌 حالة العرض:", ["الكل", "نشط", "غير نشط"], key="filter_status_select")
+        # ✅ فلتر ارتباط العرض بمنتجات مخفضة
+        with col_disc: disc_prod_filter = st.selectbox("💰 منتجات العرض:", ["الكل", "لها سعر مخفض", "سعرها ثابت"], key="filter_disc_prod")
     
         col_date, col_feat, col_over = st.columns(3)
-        # ✅ 1. قائمة منسدلة لتاريخ الانتهاء
         with col_date: filter_date_str = st.selectbox("📅 تاريخ الانتهاء:", date_options, key="filter_date_select")
-        # ✅ 2. فلتر العروض المميزة
         with col_feat: filter_featured = st.selectbox("⭐ العروض المميزة:", ["الكل"] + list(st.session_state.get("featured_offer_groups", {}).keys()), key="filter_featured")
         with col_over: filter_overlap = st.checkbox("🔄 فحص التداخل (منتجات مكررة)", key="f_overlap")
             
@@ -913,6 +923,9 @@ def render_offers_page():
         with col_f1: type_filter = st.selectbox("📊 نوع العرض:", ["الكل"] + list(OFFER_TYPES_MAP.values()), key="type_filter")
         with col_f2: channel_filter = st.selectbox("📺 قناة النشر:", ["الكل"] + list(CHANNELS_MAP.values()), key="channel_filter")
         with col_f3: applied_filter = st.selectbox("🎯 تطبيق على:", ["الكل"] + list(APPLIED_TO_MAP.values()), key="applied_filter")
+        
+        # ✅ فلتر الماركات المشمولة في العرض
+        filter_brands = st.multiselect("🏢 عروض تشمل منتجات للماركات:", options=brand_options, placeholder="اختر ماركة أو أكثر...", key="filter_brands")
 
     now_ksa = datetime.now() + timedelta(hours=3)
     overlapping_offer_ids = set()
@@ -937,8 +950,19 @@ def render_offers_page():
             else: st.warning(f"⚠️ تم العثور على {len(overlapping_offer_ids)} عرض متداخل.")
 
     filtered_offers = []
+    
+    # ✅ إنشاء قاموس عكسي (Offer ID -> List of Product Objects) لتسهيل الفلترة السريعة
+    offer_to_products = {}
+    for p in st.session_state.get("all_products", []):
+        p_id_str = str(p.get('id', ''))
+        for offer_info in po_map.get(p_id_str, []):
+            o_id_str = str(offer_info.get('id', ''))
+            if o_id_str not in offer_to_products:
+                offer_to_products[o_id_str] = []
+            offer_to_products[o_id_str].append(p)
+            
     for offer in raw_offers:
-        offer_id = offer.get('id', 'N/A')
+        offer_id = str(offer.get('id', 'N/A'))
         offer_name = offer.get('name', 'عرض بدون اسم')
         status = offer.get('status', 'inactive')
         start_date = safe_parse_date(offer.get('start_date'))
@@ -949,15 +973,14 @@ def render_offers_page():
             if search_offer.lower() not in offer_name.lower() and search_offer not in str(offer_id): continue
         if status_filter == "نشط" and status != "active": continue
         if status_filter == "غير نشط" and status == "active": continue
-        if filter_overlap and offer_id not in overlapping_offer_ids: continue
-        # ✅ تطبيق فلتر تاريخ الانتهاء المنسدل
+        if filter_overlap and int(offer_id) not in overlapping_offer_ids: continue
+        
         if filter_date_str != "الكل":
             if filter_date_str == "بدون تاريخ" and exp_date_str_val != "": continue
             elif filter_date_str != "بدون تاريخ" and exp_date_str_val != filter_date_str: continue
             
-        # ✅ تطبيق فلتر المجموعات المميزة
         if filter_featured != "الكل":
-            if offer_id not in st.session_state.get("featured_offer_groups", {}).get(filter_featured, []): continue
+            if int(offer_id) not in st.session_state.get("featured_offer_groups", {}).get(filter_featured, []): continue
         if type_filter != "الكل":
             offer_type_ar = OFFER_TYPES_MAP.get(offer.get('offer_type', ''), '')
             if offer_type_ar != type_filter: continue
@@ -967,6 +990,31 @@ def render_offers_page():
         if applied_filter != "الكل":
             applied_ar = APPLIED_TO_MAP.get(offer.get('applied_to', ''), '')
             if applied_ar != applied_filter: continue
+            
+        # ✅ تطبيق فلتر "منتجات العرض (مخفضة / ثابتة)"
+        if disc_prod_filter != "الكل":
+            has_discounted_product = False
+            for p in offer_to_products.get(offer_id, []):
+                pr = safe_float(p.get('price', 0))
+                reg = safe_float(p.get('regular_price', 0))
+                sal = safe_float(p.get('sale_price', 0))
+                if sal > 0 and sal < (reg if reg > 0 else pr):
+                    has_discounted_product = True
+                    break
+            
+            if disc_prod_filter == "لها سعر مخفض" and not has_discounted_product: continue
+            if disc_prod_filter == "سعرها ثابت" and has_discounted_product: continue
+            
+        # ✅ تطبيق فلتر "الماركات" (يقبل العرض إذا احتوى على منتج واحد على الأقل للماركة المحددة)
+        if filter_brands:
+            offer_brands = set()
+            for p in offer_to_products.get(offer_id, []):
+                brand = p.get('brand')
+                if isinstance(brand, dict) and brand.get('name'):
+                    offer_brands.add(brand.get('name'))
+                    
+            if not any(b in filter_brands for b in offer_brands):
+                continue
     
         filtered_offers.append(offer)
 
