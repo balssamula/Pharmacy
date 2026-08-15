@@ -225,70 +225,57 @@ if not st.session_state["is_admin_logged_in"]:
 
 # --- الشاشة الثانية: لوحة اختيار المتاجر ---
 if st.session_state["is_admin_logged_in"] and not st.session_state["logged_in"]:
-    col_t1, col_t2 = st.columns([4, 1])
-    with col_t1:
-        st.markdown("""
-        <div style="background: linear-gradient(135deg, #1E293B 0%, #0F1C2E 100%); padding: 25px; border-radius: 12px; color: white; text-align: center; margin-bottom: 30px; border-bottom: 4px solid #00EBCF;">
-            <h1 style="color: white; margin: 0;">🌐 لوحة التحكم المركزية للمتاجر المربوطة</h1>
-            <p style="color: #94A3B8; margin-top: 5px;">اختر المتجر الذي ترغب في إدارته من القائمة أدناه</p>
-        </div>
-        """, unsafe_allow_html=True)
-    with col_t2:
-        st.markdown("<br>", unsafe_allow_html=True)
-        if st.button("🔄 تحديث قائمة المتاجر", use_container_width=True, type="primary"):
-            st.rerun()
+    st.markdown("""
+    <div style="background: linear-gradient(135deg, #1E293B 0%, #0F1C2E 100%); padding: 25px; border-radius: 12px; color: white; text-align: center; margin-bottom: 30px; border-bottom: 4px solid #00EBCF;">
+        <h1 style="color: white; margin: 0;">🌐 لوحة التحكم المركزية للمتاجر المربوطة</h1>
+        <p style="color: #94A3B8; margin-top: 5px;">اختر المتجر الذي ترغب في إدارته من القائمة أدناه</p>
+    </div>
+    """, unsafe_allow_html=True)
     
-    # 1. قراءة المتاجر المربوطة من قاعدة بيانات salla_db -> جدول stores
-    connected_stores = []
-    try:
-        import pymysql
-        # ⚠️ استخدم st.secrets لحفظ بيانات الاتصال بقاعدة بياناتك بأمان في Streamlit Cloud
-        connection = pymysql.connect(
-            host=st.secrets.get("DB_HOST", "ضع IP الأوراكل هنا"),
-            user=st.secrets.get("DB_USER", "root"),
-            password=st.secrets.get("DB_PASSWORD", ""),
-            database="salla_db",
-            cursorclass=pymysql.cursors.DictCursor
-        )
-        with connection.cursor() as cursor:
-            # نقرأ الأعمدة من جدول stores الخاص بك
-            cursor.execute("SELECT merchant_id, store_name, access_token, updated_at FROM stores WHERE access_token IS NOT NULL")
-            connected_stores = cursor.fetchall()
-        connection.close()
-    except Exception as e:
-        st.error(f"⚠️ تعذر الاتصال بقاعدة البيانات. تأكد من إعدادات الاتصال في Streamlit Secrets. الخطأ: {e}")
+    # 1. قراءة المتاجر المربوطة من قاعدة البيانات (أو ملف JSON)
+    stores_db_path = "stores.json"
+    if os.path.exists(stores_db_path):
+        with open(stores_db_path, "r", encoding="utf-8") as f:
+            connected_stores = json.load(f)
+    else:
+        connected_stores = []
+        st.warning("⚠️ ملف قاعدة بيانات المتاجر (stores.json) غير موجود!")
 
     # 2. عرض المتاجر كبطاقات إدارية
     if connected_stores:
-        cols = st.columns(3) 
+        cols = st.columns(3) # عرض المتاجر في 3 أعمدة
         for idx, store in enumerate(connected_stores):
             with cols[idx % 3]:
                 with st.container(border=True):
-                    update_time = store.get('updated_at', '')
-                    if hasattr(update_time, 'strftime'):
-                        update_time = update_time.strftime("%Y-%m-%d %H:%M")
-                        
                     st.markdown(f"""
                     <h3 style='color:#00EBCF; margin-bottom:5px; text-align:center;'>🏪 {store.get('store_name')}</h3>
                     <div style='text-align:center; font-size:13px; color:#94A3B8; margin-bottom:15px;'>
                         <b>رقم التاجر:</b> {store.get('merchant_id')}<br>
-                        <b>آخر تحديث للربط:</b> {update_time}
+                        <b>تاريخ الربط:</b> {store.get('installed_at')}
                     </div>
                     """, unsafe_allow_html=True)
                     
+                    # زر تسجيل الدخول التلقائي لهذا المتجر بالذات
                     if st.button(f"🔑 إدارة هذا المتجر", key=f"login_store_{store.get('merchant_id')}", use_container_width=True, type="primary"):
+                        # تعيين التوكن في الجلسة المخفية
                         token = store.get("access_token")
                         headers = {"Authorization": f"Bearer {token}"}
                         
+                        # 🚀 استدعاء المزامنة الحية المدمجة لتهيئة البيانات
                         perform_initial_sync_with_ui(headers)
                         
+                        # تفعيل حالة الدخول للانتقال للتطبيق
                         st.session_state["store_name"] = store.get('store_name')
                         st.session_state["logged_in"] = True
                         st.session_state["access_token"] = token
+                        ksa_time = datetime.now() + timedelta(hours=3)
+                        st.session_state["login_time"] = ksa_time.strftime("%Y-%m-%d %I:%M %p")
+                        
                         st.rerun()
     else:
-        st.warning("⚠️ لا توجد متاجر مربوطة حالياً. قم بتثبيت التطبيق أو اضغط على 'إعادة إرسال رمز الوصول' في سلة.")
+        st.info("لم يقم أي تاجر بتثبيت التطبيق حتى الآن.")
 
+    # زر تسجيل الخروج للمدير
     st.divider()
     if st.button("🚪 تسجيل الخروج من حساب المدير", type="secondary"):
         st.session_state["is_admin_logged_in"] = False
