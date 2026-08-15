@@ -885,7 +885,7 @@ def render_offers_page():
 
     st.divider()
 
-# ==========================================
+    # ==========================================
     # 🔍 الفلاتر الخاصة بالعروض
     # ==========================================
     with st.container(border=True):
@@ -908,24 +908,26 @@ def render_offers_page():
                     avail_brands.add(brand.get('name'))
         brand_options = sorted(list(avail_brands))
         
-        col_search, col_status, col_disc = st.columns([2, 1, 1])
+        col_search, col_status, col_brands = st.columns([2, 1, 1])
         with col_search: search_offer = st.text_input("🔎 ابحث باسم العرض أو بالمعرف:", key="filter_search_input")
         with col_status: status_filter = st.selectbox("📌 حالة العرض:", ["الكل", "نشط", "غير نشط"], key="filter_status_select")
-        # ✅ فلتر ارتباط العرض بمنتجات مخفضة
-        with col_disc: disc_prod_filter = st.selectbox("💰 منتجات العرض:", ["الكل", "لها سعر مخفض", "سعرها ثابت"], key="filter_disc_prod")
+        # ✅ فلتر الماركات المشمولة في العرض
+        with col_brands: brands_filter = st.multiselect("🏢 عروض تشمل منتجات للماركات:", options=brand_options, placeholder="اختر ماركة أو أكثر...", key="filter_brands")
     
         col_date, col_feat, col_over = st.columns(3)
         with col_date: filter_date_str = st.selectbox("📅 تاريخ الانتهاء:", date_options, key="filter_date_select")
         with col_feat: filter_featured = st.selectbox("⭐ العروض المميزة:", ["الكل"] + list(st.session_state.get("featured_offer_groups", {}).keys()), key="filter_featured")
-        with col_over: filter_overlap = st.checkbox("🔄 فحص التداخل (منتجات مكررة)", key="f_overlap")
+        with col_over: 
+            filter_overlap = st.checkbox("🔄 فحص التداخل (منتجات مكررة)", key="f_overlap")
+            filter_discounted_only = st.checkbox("💰 عروض بها منتجات مخفضة", key="f_disc_prod")
             
         col_f1, col_f2, col_f3 = st.columns(3)
         with col_f1: type_filter = st.selectbox("📊 نوع العرض:", ["الكل"] + list(OFFER_TYPES_MAP.values()), key="type_filter")
         with col_f2: channel_filter = st.selectbox("📺 قناة النشر:", ["الكل"] + list(CHANNELS_MAP.values()), key="channel_filter")
         with col_f3: applied_filter = st.selectbox("🎯 تطبيق على:", ["الكل"] + list(APPLIED_TO_MAP.values()), key="applied_filter")
         
-        # ✅ فلتر الماركات المشمولة في العرض
-        filter_brands = st.multiselect("🏢 عروض تشمل منتجات للماركات:", options=brand_options, placeholder="اختر ماركة أو أكثر...", key="filter_brands")
+        
+        
 
     now_ksa = datetime.now() + timedelta(hours=3)
     overlapping_offer_ids = set()
@@ -974,7 +976,18 @@ def render_offers_page():
         if status_filter == "نشط" and status != "active": continue
         if status_filter == "غير نشط" and status == "active": continue
         if filter_overlap and int(offer_id) not in overlapping_offer_ids: continue
-        
+
+        # ✅ تطبيق فلتر "الماركات" (يقبل العرض إذا احتوى على منتج واحد على الأقل للماركة المحددة)
+        if brands_filter:
+            offer_brands = set()
+            for p in offer_to_products.get(offer_id, []):
+                brand = p.get('brand')
+                if isinstance(brand, dict) and brand.get('name'):
+                    offer_brands.add(brand.get('name'))
+                    
+            if not any(b in brands_filter for b in offer_brands):
+                continue
+                
         if filter_date_str != "الكل":
             if filter_date_str == "بدون تاريخ" and exp_date_str_val != "": continue
             elif filter_date_str != "بدون تاريخ" and exp_date_str_val != filter_date_str: continue
@@ -991,8 +1004,8 @@ def render_offers_page():
             applied_ar = APPLIED_TO_MAP.get(offer.get('applied_to', ''), '')
             if applied_ar != applied_filter: continue
             
-        # ✅ تطبيق فلتر "منتجات العرض (مخفضة / ثابتة)"
-        if disc_prod_filter != "الكل":
+        # ✅ تطبيق فلتر "عروض بها منتجات مخفضة" (عبر الـ Checkbox)
+        if filter_discounted_only:
             has_discounted_product = False
             for p in offer_to_products.get(offer_id, []):
                 pr = safe_float(p.get('price', 0))
@@ -1002,19 +1015,8 @@ def render_offers_page():
                     has_discounted_product = True
                     break
             
-            if disc_prod_filter == "لها سعر مخفض" and not has_discounted_product: continue
-            if disc_prod_filter == "سعرها ثابت" and has_discounted_product: continue
-            
-        # ✅ تطبيق فلتر "الماركات" (يقبل العرض إذا احتوى على منتج واحد على الأقل للماركة المحددة)
-        if filter_brands:
-            offer_brands = set()
-            for p in offer_to_products.get(offer_id, []):
-                brand = p.get('brand')
-                if isinstance(brand, dict) and brand.get('name'):
-                    offer_brands.add(brand.get('name'))
-                    
-            if not any(b in filter_brands for b in offer_brands):
-                continue
+            # إذا كان الـ Checkbox مفعلاً والعرض لا يحتوي على منتجات مخفضة، نقوم بتخطيه
+            if not has_discounted_product: continue
     
         filtered_offers.append(offer)
 
