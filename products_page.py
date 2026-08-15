@@ -1238,6 +1238,11 @@ def render_products_page():
     # Pagination
     limit = 20
     pages = max(1, (len(filtered) + limit - 1) // limit)
+    
+    # ✅ الحماية الذكية: إعادة تعيين رقم الصفحة إذا تجاوزت عدد الصفحات المتاحة بعد الفلترة
+    if st.session_state["prod_page"] > pages:
+        st.session_state["prod_page"] = 1
+        
     start = (st.session_state["prod_page"] - 1) * limit
     
     cp, cc, cn = st.columns([1,2,1])
@@ -1505,21 +1510,28 @@ def render_group_product_section(p_id: str, p_name: str, idx: int, headers: Dict
         if not group_products:
             st.info("ℹ️ لا توجد منتجات في هذه المجموعة.")
         else:
-            # ✅ عرض إجمالي كمية المجموعة
-            total_qty = sum([gp.get('bundle_quantity', 1) / gp.get('stock_quantity', 0) for gp in group_products])
-            st.info(f"📊 إجمالي كمية المجموعة: {total_qty} وحدة")
+            # ✅ حساب إجمالي كمية المجموعة بأمان تام (تجنب القسمة على صفر)
+            total_qty = 0
+            for gp in group_products:
+                b_qty = gp.get('bundle_quantity', 1) or 1  # لو كانت 0 نستبدلها بـ 1 لمنع الخطأ
+                s_qty = gp.get('stock_quantity', 0) or 0
+                total_qty += int(s_qty / b_qty)
+                
+            st.info(f"📊 إجمالي كمية المجموعة المتوفرة: {total_qty} وحدة")
             
             for gp_idx, gp in enumerate(group_products):
                 gp_id = str(gp.get('id', 'N/A'))
                 gp_name_sub = gp.get('name', 'بدون اسم')
                 gp_sku = gp.get('sku', 'لا يوجد')
                 gp_price = gp.get('price', 0)
-                gp_bundle_qty = gp.get('bundle_quantity', 1)
-                gp_stock = gp.get('stock_quantity', 0)
+                
+                # ✅ حماية المتغيرات من القيم الصفرية
+                gp_bundle_qty = gp.get('bundle_quantity', 1) or 1
+                gp_stock = gp.get('stock_quantity', 0) or 0
                 gp_image = gp.get('image')
                 
-                # ✅ حساب الكمية الفعلية للمجموعة من هذا المنتج
-                group_qty = gp_stock / gp_bundle_qty
+                # ✅ حساب الكمية الفعلية للمجموعة من هذا المنتج بأمان
+                group_qty = int(gp_stock / gp_bundle_qty)
                 
                 st.markdown(f"""
                 <div style='background: #f8f9fa; border-radius: 10px; padding: 15px; margin-bottom: 12px; border-right: 4px solid #6C2BD9;'>
@@ -1539,7 +1551,7 @@ def render_group_product_section(p_id: str, p_name: str, idx: int, headers: Dict
                     </div>
                 </div>
                 """, unsafe_allow_html=True)
-                
+                                
                 c_q, c_act = st.columns(2)
                 with c_q:
                     new_q = st.number_input(
