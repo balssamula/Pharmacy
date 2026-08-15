@@ -839,19 +839,36 @@ def render_products_page():
                                 st.download_button("📥 تصدير (Excel)", data=export_featured_group_to_excel(group_products_data, po_map), file_name=f"Group_{g_name}.xlsx", use_container_width=True)
                                 
                                 with st.popover("📦 استعراض المحتوى", use_container_width=True):
+                                    st.markdown("**حدد المنتجات التي تريد إزالتها من المجموعة:**")
+                                    selected_to_remove = []
+                                    
+                                    # ✅ عرض المنتجات مع Checkbox + زر الإزالة الفردي
                                     for pid in list(g_ids):
                                         prod_info = next((p for p in group_products_data if str(p['id']) == pid), None)
                                         if prod_info:
-                                            cx1, cx2 = st.columns([5, 1])
-                                            with cx1: st.markdown(f"- `{prod_info.get('sku')}` | {prod_info.get('name')}")
-                                            with cx2:
-                                                if st.button("❌", key=f"rm_{pid}_{g_name}"):
+                                            cx_chk, cx_info, cx_btn = st.columns([0.8, 5, 1.2])
+                                            with cx_chk:
+                                                if st.checkbox("", key=f"chk_rm_{pid}_{g_name}", label_visibility="collapsed"):
+                                                    selected_to_remove.append(pid)
+                                            with cx_info: 
+                                                st.markdown(f"`{prod_info.get('sku')}` | {prod_info.get('name')}")
+                                            with cx_btn:
+                                                if st.button("❌", key=f"rm_{pid}_{g_name}", help="حذف هذا المنتج فقط"):
                                                     st.session_state["featured_product_groups"][g_name].remove(pid)
                                                     st.rerun()
+                                                    
+                                    # ✅ زر الحذف الجماعي للمنتجات المحددة عبر الـ Checkbox
+                                    if selected_to_remove:
+                                        if st.button(f"🗑️ إزالة المحددة ({len(selected_to_remove)})", key=f"rm_bulk_{g_name}", type="primary", use_container_width=True):
+                                            for pid in selected_to_remove:
+                                                st.session_state["featured_product_groups"][g_name].remove(pid)
+                                            st.rerun()
+                                            
                                     st.markdown("---")
+                                    st.markdown("**إضافة منتجات جديدة للمجموعة:**")
                                     add_opts = {f"📦 {p['name']} (SKU: {p.get('sku','')})": str(p['id']) for p in st.session_state.get("all_products", []) if str(p['id']) not in g_ids}
                                     to_add = st.multiselect("اختر لإضافة المزيد:", options=list(add_opts.keys()), key=f"add_ms_{g_name}", label_visibility="collapsed")
-                                    if st.button("➕ إضافة", key=f"add_btn_{g_name}"):
+                                    if st.button("➕ إضافة المحددة", key=f"add_btn_{g_name}"):
                                         if to_add:
                                             st.session_state["featured_product_groups"][g_name].extend([add_opts[k] for k in to_add])
                                             st.rerun()
@@ -1159,22 +1176,27 @@ def render_products_page():
                 
         with col_act3:
             with st.popover("⚙️ إجراءات المنتجات المفلترة", use_container_width=True):
-                st.markdown(f"<div style='text-align:center; margin-bottom:10px;'><b>تطبيق إجراء جماعي على ({len(filtered)}) منتج</b></div>", unsafe_allow_html=True)
+                st.markdown(f"<div style='text-align:center; margin-bottom:10px;'><b>تطبيق إجراءات على ({len(filtered)}) منتج</b></div>", unsafe_allow_html=True)
                 
-                # ✅ تحويل الراديو إلى تحديد متعدد (Multiselect) لدعم إجراءات متعددة معاً
-                bulk_actions = st.multiselect(
-                    "اختر الإجراءات المطلوب تنفيذها دفعة واحدة:", 
-                    [
-                        "⭐ إنشاء مجموعة مميزة جديدة",
-                        "👁️ إخفاء المنتجات (نقل للمسودة)", 
-                        "🛒 إظهار المنتجات (متاح للبيع)", 
-                        "🧹 مسح العناوين (الترويجية والفرعية)", 
-                        "🛑 إلغاء السعر المخفض ومسح تواريخ التخفيض", 
-                        "📅 تمديد تواريخ التخفيض",
-                        "🗑️ حذف المنتجات نهائياً"
-                    ],
-                    key="bulk_actions_multiselect"
-                )
+                bulk_actions = []
+                
+                # ✅ تقسيم الإجراءات لمجموعات منسقة مع Checkboxes
+                st.markdown("<b style='color:#00EBCF; font-size:14px;'>1️⃣ تنظيم وإدارة:</b>", unsafe_allow_html=True)
+                if st.checkbox("⭐ إنشاء مجموعة مميزة جديدة", key="ba_grp"): bulk_actions.append("⭐ إنشاء مجموعة مميزة جديدة")
+                
+                st.markdown("<b style='color:#00EBCF; font-size:14px;'>2️⃣ الظهور في المتجر:</b>", unsafe_allow_html=True)
+                if st.checkbox("👁️ إخفاء المنتجات (نقل للمسودة)", key="ba_hide"): bulk_actions.append("👁️ إخفاء المنتجات (نقل للمسودة)")
+                if st.checkbox("🛒 إظهار المنتجات (متاح للبيع)", key="ba_show"): bulk_actions.append("🛒 إظهار المنتجات (متاح للبيع)")
+                
+                st.markdown("<b style='color:#00EBCF; font-size:14px;'>3️⃣ العناوين والأسعار:</b>", unsafe_allow_html=True)
+                if st.checkbox("🧹 مسح العناوين (الترويجية والفرعية)", key="ba_clear_promo"): bulk_actions.append("🧹 مسح العناوين (الترويجية والفرعية)")
+                if st.checkbox("🛑 إلغاء السعر المخفض ومسح التواريخ", key="ba_clear_sale"): bulk_actions.append("🛑 إلغاء السعر المخفض ومسح تواريخ التخفيض")
+                if st.checkbox("📅 تمديد تواريخ التخفيض", key="ba_ext_date"): bulk_actions.append("📅 تمديد تواريخ التخفيض")
+                
+                st.markdown("<b style='color:#e74c3c; font-size:14px;'>4️⃣ الحذف النهائي:</b>", unsafe_allow_html=True)
+                if st.checkbox("🗑️ حذف المنتجات نهائياً", key="ba_del"): bulk_actions.append("🗑️ حذف المنتجات نهائياً")
+                
+                st.markdown("---")
                 
                 new_sale_end_str = None
                 if "📅 تمديد تواريخ التخفيض" in bulk_actions:
@@ -1199,7 +1221,6 @@ def render_products_page():
                 
                 if st.button("🚀 تنفيذ الإجراءات", type="primary", disabled=not confirm_bulk or not bulk_actions, use_container_width=True, key="execute_bulk_action"):
                     
-                    # 1️⃣ إنشاء المجموعة المميزة فوراً وبدون استدعاء API خارجي
                     if "⭐ إنشاء مجموعة مميزة جديدة" in bulk_actions:
                         if not new_group_name:
                             st.error("⚠️ الرجاء كتابة اسم للمجموعة المميزة.")
@@ -1211,7 +1232,6 @@ def render_products_page():
                             st.success(f"✅ تم إنشاء المجموعة المميزة '{new_group_name}' بـ {len(filtered)} منتج بنجاح!")
                             bulk_actions.remove("⭐ إنشاء مجموعة مميزة جديدة")
                     
-                    # 2️⃣ تنفيذ باقي الإجراءات عبر واجهة سلة (API)
                     if bulk_actions:
                         progress_bar = st.progress(0)
                         status_text = st.empty()
@@ -1219,35 +1239,24 @@ def render_products_page():
                         
                         for idx, p in enumerate(filtered):
                             p_id = p.get('id')
-                            status_text.info(f"⏳ جاري تنفيذ الإجراءات على المنتج {idx+1} من {total_prods}...")
+                            status_text.info(f"⏳ جاري التحديث: منتج {idx+1} من {total_prods}...")
                             
-                            if "👁️ إخفاء المنتجات (نقل للمسودة)" in bulk_actions:
-                                update_product_status(p_id, "hidden")
-                            elif "🛒 إظهار المنتجات (متاح للبيع)" in bulk_actions:
-                                update_product_status(p_id, "sale")
+                            if "👁️ إخفاء المنتجات (نقل للمسودة)" in bulk_actions: update_product_status(p_id, "hidden")
+                            elif "🛒 إظهار المنتجات (متاح للبيع)" in bulk_actions: update_product_status(p_id, "sale")
                                 
                             if "🧹 مسح العناوين (الترويجية والفرعية)" in bulk_actions:
                                 update_product_promotions_secure(p_id, "", "", headers)
-                                import time; time.sleep(0.2) # تجنب حظر API إذا اخترت أكثر من إجراء
+                                import time; time.sleep(0.2)
                                 
                             if "🛑 إلغاء السعر المخفض ومسح تواريخ التخفيض" in bulk_actions:
                                 base_price = get_flat_price(p.get('regular_price', 0)) or get_flat_price(p.get('price', 0))
-                                payload = {
-                                    "name": p.get('name'), 
-                                    "price": base_price, 
-                                    "status": p.get('status', 'sale'),
-                                    "sale_price": None,
-                                    "sale_start": None,
-                                    "sale_end": None
-                                }
+                                payload = {"name": p.get('name'), "price": base_price, "status": p.get('status', 'sale'), "sale_price": None, "sale_start": None, "sale_end": None}
                                 safe_api_request("PUT", f"https://api.salla.dev/admin/v2/products/{p_id}", headers, json=payload)
                             elif "📅 تمديد تواريخ التخفيض" in bulk_actions:
                                 sale_price = get_flat_price(p.get('sale_price', 0))
-                                if sale_price > 0:
-                                    update_product_sale_price(int(p_id), sale_price, sale_end=new_sale_end_str)
+                                if sale_price > 0: update_product_sale_price(int(p_id), sale_price, sale_end=new_sale_end_str)
                                     
-                            if "🗑️ حذف المنتجات نهائياً" in bulk_actions:
-                                delete_product(p_id)
+                            if "🗑️ حذف المنتجات نهائياً" in bulk_actions: delete_product(p_id)
                                 
                             progress_bar.progress((idx + 1) / total_prods)
                             import time; time.sleep(0.3)
@@ -1255,7 +1264,6 @@ def render_products_page():
                         status_text.success(f"✅ تم تنفيذ جميع الإجراءات بنجاح على {total_prods} منتج!")
                         import time; time.sleep(1)
                         st.session_state["all_products_fetched"] = False 
-                    
                     st.rerun()
 
     # Pagination
