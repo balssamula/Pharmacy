@@ -975,24 +975,49 @@ def render_products_page():
                         
     st.markdown("### 🔍 أدوات التصفية والبحث في المنتجات")
     
-    # ✅ استخراج تواريخ الانتهاء المتاحة للفلتر الجديد
+    # ✅ استخراج الماركات، التصنيفات، وتواريخ الانتهاء ديناميكياً من المنتجات المحملة
     available_dates = set()
+    available_brands = set()
+    available_categories = set()
+    
     for p in st.session_state.get("all_products", []):
+        # تواريخ الانتهاء
         s_end = p.get('sale_end')
-        if s_end:
-            available_dates.add(str(s_end).split(' ')[0])
-    date_options = ["الكل", "بدون تاريخ"] + sorted(list(available_dates))
+        if s_end: available_dates.add(str(s_end).split(' ')[0])
+        
+        # الماركات
+        brand = p.get('brand')
+        if isinstance(brand, dict) and brand.get('name'):
+            available_brands.add(brand.get('name'))
+            
+        # التصنيفات
+        cats = p.get('categories', [])
+        if isinstance(cats, list):
+            for c in cats:
+                if isinstance(c, dict) and c.get('name'):
+                    available_categories.add(c.get('name'))
 
+    date_options = ["الكل", "بدون تاريخ"] + sorted(list(available_dates))
+    brand_options = sorted(list(available_brands))
+    category_options = sorted(list(available_categories))
+
+    # ✅ الحاوية الأولى: فلاتر البحث، الماركة، والتصنيف
     with st.container(border=True):
-        col_search, col_date, col_feat = st.columns([2, 1, 1])
+        col_search, col_cat, col_brand = st.columns([2, 1.5, 1.5])
         with col_search:
             sq = st.text_input("ابحث باسم أو SKU:", placeholder="أدخل الكود للبحث...").lower()
+        with col_cat:
+            f_categories = st.multiselect("📁 التصنيفات:", options=category_options, placeholder="اختر تصنيفاً أو أكثر...")
+        with col_brand:
+            f_brands = st.multiselect("🏢 الماركات:", options=brand_options, placeholder="اختر ماركة أو أكثر...")
+            
+        col_date, col_feat = st.columns(2)
         with col_date:
             f_sale_end = st.selectbox("📅 انتهاء السعر المخفض:", options=date_options)
         with col_feat:
-            # ✅ قائمة المجموعات المميزة المنسدلة للفلترة السريعة
             f_feat_group = st.selectbox("⭐ مجموعة المنتجات:", ["الكل"] + list(st.session_state.get("featured_product_groups", {}).keys()), key="filter_prod_group")
     
+    # ✅ الحاوية الثانية: فلاتر الأزرار السريعة
     with st.container(border=True):
         col_f1, col_f2, col_f3, col_f4, col_f5, col_f6, col_f7 = st.columns(7)
         with col_f1:
@@ -1024,10 +1049,25 @@ def render_products_page():
     for p in st.session_state.get("all_products", []):
         p_id_str = str(p.get('id', '')).strip()
         
-        # ✅ تطبيق فلتر المجموعات المميزة
+        # ✅ 1. تطبيق فلتر التصنيفات (Category Filter) - يقبل إذا تطابق تصنيف واحد على الأقل
+        if f_categories:
+            p_cats = p.get('categories', [])
+            p_cat_names = [c.get('name') for c in p_cats if isinstance(c, dict)] if isinstance(p_cats, list) else []
+            if not any(cat in f_categories for cat in p_cat_names):
+                continue
+                
+        # ✅ 2. تطبيق فلتر الماركات (Brand Filter)
+        if f_brands:
+            brand = p.get('brand')
+            p_brand_name = brand.get('name') if isinstance(brand, dict) else None
+            if p_brand_name not in f_brands:
+                continue
+                
+        # ✅ 3. تطبيق فلتر المجموعات المميزة
         if f_feat_group != "الكل":
             if p_id_str not in st.session_state.get("featured_product_groups", {}).get(f_feat_group, []): continue
-        # ✅ تطبيق فلتر الرصيد الجديد (مع حماية ضد القيم الفارغة None)
+            
+        # ✅ تطبيق فلتر الرصيد (مع حماية ضد القيم الفارغة None)
         stock_qty_raw = p.get('quantity')
         try:
             stock_qty = float(stock_qty_raw) if stock_qty_raw is not None else 0.0
@@ -1058,7 +1098,6 @@ def render_products_page():
         if f_type == "عادية" and is_group: continue
         if f_type == "مجموعات" and not is_group: continue
         
-        p_id_str = str(p.get('id', '')).strip()
         is_in_offer = bool(po_map.get(p_id_str))
         if f_offer == "مشمول" and not is_in_offer: continue
         if f_offer == "غير مشمول" and is_in_offer: continue
