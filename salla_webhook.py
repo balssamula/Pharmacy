@@ -4,7 +4,7 @@ import pymysql
 app = Flask(__name__)
 
 # إعدادات الاتصال بقاعدة البيانات الخاصة بك
-DB_HOST = "offersapp.duckdns.org"
+DB_HOST = "127.0.0.1"
 DB_USER = "root"
 DB_PASSWORD = "@Balsam1990"
 DB_NAME = "salla_db"
