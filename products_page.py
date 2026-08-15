@@ -992,10 +992,12 @@ def render_products_page():
                         
     st.markdown("### 🔍 أدوات التصفية والبحث في المنتجات")
     
-    # ✅ استخراج الماركات، التصنيفات، وتواريخ الانتهاء ديناميكياً من المنتجات المحملة
+    # ✅ استخراج الماركات، التصنيفات، التواريخ، والعناوين ديناميكياً من المنتجات المحملة
     available_dates = set()
     available_brands = set()
     available_categories = set()
+    available_promo_titles = set()
+    available_subtitles = set()
     
     for p in st.session_state.get("all_products", []):
         # تواريخ الانتهاء
@@ -1013,12 +1015,21 @@ def render_products_page():
             for c in cats:
                 if isinstance(c, dict) and c.get('name'):
                     available_categories.add(c.get('name'))
+                    
+        # العناوين الترويجية والفرعية
+        promo_t = p.get('promotion_title') or (p.get('promotion', {}).get('title') if isinstance(p.get('promotion'), dict) else '')
+        if promo_t: available_promo_titles.add(str(promo_t).strip())
+        
+        sub_t = p.get('promotion_subtitle') or (p.get('promotion', {}).get('sub_title') if isinstance(p.get('promotion'), dict) else '')
+        if sub_t: available_subtitles.add(str(sub_t).strip())
 
     date_options = ["الكل", "بدون تاريخ"] + sorted(list(available_dates))
     brand_options = sorted(list(available_brands))
     category_options = sorted(list(available_categories))
+    promo_options = ["الكل", "بدون"] + sorted(list(available_promo_titles))
+    subtitle_options = ["الكل", "بدون"] + sorted(list(available_subtitles))
 
-    # ✅ الحاوية الأولى: فلاتر البحث، الماركة، والتصنيف
+    # ✅ الحاوية الأولى: فلاتر البحث الأساسية
     with st.container(border=True):
         col_search, col_cat, col_brand = st.columns([2, 1.5, 1.5])
         with col_search:
@@ -1028,11 +1039,17 @@ def render_products_page():
         with col_brand:
             f_brands = st.multiselect("🏢 الماركات:", options=brand_options, placeholder="اختر ماركة أو أكثر...")
             
-        col_date, col_feat = st.columns(2)
+        col_date, col_feat, col_promo, col_sub = st.columns([1, 1, 1.5, 1.5])
         with col_date:
-            f_sale_end = st.selectbox("📅 انتهاء السعر المخفض:", options=date_options)
+            f_sale_end = st.selectbox("📅 انتهاء التخفيض:", options=date_options)
         with col_feat:
             f_feat_group = st.selectbox("⭐ مجموعة المنتجات:", ["الكل"] + list(st.session_state.get("featured_product_groups", {}).keys()), key="filter_prod_group")
+        with col_promo:
+            # ✅ فلتر محتوى العنوان الترويجي
+            f_promo_title = st.selectbox("📢 محتوى الترويجي:", options=promo_options)
+        with col_sub:
+            # ✅ فلتر محتوى العنوان الفرعي
+            f_subtitle = st.selectbox("🏷️ محتوى الفرعي:", options=subtitle_options)
     
     # ✅ الحاوية الثانية: فلاتر الأزرار السريعة
     with st.container(border=True):
@@ -1045,7 +1062,7 @@ def render_products_page():
             f_img = st.radio("الصورة", ["الكل", "بصورة", "بدون"], horizontal=True, label_visibility="collapsed", key="f_img_radio")
         with col_f3:
             st.markdown("<div style='text-align:center; color:#00EBCF; font-weight:bold;'>📢 العناوين</div>", unsafe_allow_html=True)
-            f_promo = st.radio("العناوين الترويجية", ["الكل", "لها عنوان", "بدون"], horizontal=True, label_visibility="collapsed", key="f_promo_radio")
+            f_promo = st.radio("العناوين", ["الكل", "لها عنوان", "بدون"], horizontal=True, label_visibility="collapsed", key="f_promo_radio")
         with col_f4:
             st.markdown("<div style='text-align:center; color:#00EBCF; font-weight:bold;'>💰 السعر</div>", unsafe_allow_html=True)
             f_disc = st.radio("السعر", ["الكل", "مخفض", "ثابت"], horizontal=True, label_visibility="collapsed", key="f_disc_radio")
@@ -1066,31 +1083,26 @@ def render_products_page():
     for p in st.session_state.get("all_products", []):
         p_id_str = str(p.get('id', '')).strip()
         
-        # ✅ 1. تطبيق فلتر التصنيفات (Category Filter) - يقبل إذا تطابق تصنيف واحد على الأقل
+        # 1. تطبيق فلتر التصنيفات
         if f_categories:
             p_cats = p.get('categories', [])
             p_cat_names = [c.get('name') for c in p_cats if isinstance(c, dict)] if isinstance(p_cats, list) else []
-            if not any(cat in f_categories for cat in p_cat_names):
-                continue
+            if not any(cat in f_categories for cat in p_cat_names): continue
                 
-        # ✅ 2. تطبيق فلتر الماركات (Brand Filter)
+        # 2. تطبيق فلتر الماركات
         if f_brands:
             brand = p.get('brand')
             p_brand_name = brand.get('name') if isinstance(brand, dict) else None
-            if p_brand_name not in f_brands:
-                continue
+            if p_brand_name not in f_brands: continue
                 
-        # ✅ 3. تطبيق فلتر المجموعات المميزة
+        # 3. تطبيق فلتر المجموعات المميزة
         if f_feat_group != "الكل":
             if p_id_str not in st.session_state.get("featured_product_groups", {}).get(f_feat_group, []): continue
             
-        # ✅ تطبيق فلتر الرصيد (مع حماية ضد القيم الفارغة None)
+        # 4. تطبيق فلتر الرصيد
         stock_qty_raw = p.get('quantity')
-        try:
-            stock_qty = float(stock_qty_raw) if stock_qty_raw is not None else 0.0
-        except (ValueError, TypeError):
-            stock_qty = 0.0
-            
+        try: stock_qty = float(stock_qty_raw) if stock_qty_raw is not None else 0.0
+        except (ValueError, TypeError): stock_qty = 0.0
         if f_stock == "له رصيد" and stock_qty <= 0: continue
         if f_stock == "نفد" and stock_qty > 0: continue
             
@@ -1106,6 +1118,17 @@ def render_products_page():
         if f_promo == "لها عنوان" and not has_promo_text: continue
         if f_promo == "بدون" and has_promo_text: continue
         
+        # ✅ 5. تطبيق فلاتر محتوى العناوين الجديد
+        p_promo_val = str(p.get('promotion_title') or (p.get('promotion', {}).get('title') if isinstance(p.get('promotion'), dict) else '') or '').strip()
+        if f_promo_title != "الكل":
+            if f_promo_title == "بدون" and p_promo_val != "": continue
+            elif f_promo_title != "بدون" and p_promo_val != f_promo_title: continue
+            
+        p_sub_val = str(p.get('promotion_subtitle') or (p.get('promotion', {}).get('sub_title') if isinstance(p.get('promotion'), dict) else '') or '').strip()
+        if f_subtitle != "الكل":
+            if f_subtitle == "بدون" and p_sub_val != "": continue
+            elif f_subtitle != "بدون" and p_sub_val != f_subtitle: continue
+        
         pr = get_flat_price(p.get('price', 0)); reg = get_flat_price(p.get('regular_price', 0)); sal = get_flat_price(p.get('sale_price', 0))
         is_discounted = (sal > 0 and sal < (reg if reg > 0 else pr))
         if f_disc == "مخفض" and not is_discounted: continue
@@ -1119,7 +1142,7 @@ def render_products_page():
         if f_offer == "مشمول" and not is_in_offer: continue
         if f_offer == "غير مشمول" and is_in_offer: continue
         
-        # ✅ تطبيق فلتر تاريخ الانتهاء
+        # تطبيق فلتر تاريخ الانتهاء
         p_sale_end = str(p.get('sale_end', '')).split(' ')[0] if p.get('sale_end') else ""
         if f_sale_end != "الكل":
             if f_sale_end == "بدون تاريخ" and p_sale_end != "": continue
