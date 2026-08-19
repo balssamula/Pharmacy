@@ -1014,7 +1014,6 @@ def render_offers_page():
         st.download_button("📥 تنزيل قالب سلة الافتراضي للعروض", data=generate_salla_excel_template(), file_name="Salla_Offers_Template.xlsx", mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", use_container_width=True)
     with col_sync_details:
         if st.button("🔄 سحب التفاصيل الدقيقة (للتصدير)", use_container_width=True):
-            # ✅ تم إزالة الاستدعاء الداخلي لمنع خطأ بايثون
             with st.spinner("جاري سحب التفاصيل الكاملة لجميع العروض (يستغرق بضع ثوانٍ)..."):
                 progress_bar = st.progress(0)
                 status_text = st.empty()
@@ -1257,10 +1256,10 @@ def render_offers_page():
                             
                         # ✅ تحديث شريط التقدم وإضافة مهلة زمنية للحماية من حظر API سلة
                         progress_bar.progress((idx + 1) / total_offers)
-                        import time; time.sleep(0.3)
+                        time.sleep(0.3)
                         
                     status_text.success(f"✅ تم تنفيذ الإجراء على {success_c} عرض بنجاح!")
-                    import time; time.sleep(1.5)
+                    time.sleep(1.5)
                     if "all_offers" in st.session_state: del st.session_state["all_offers"] # لإجبار التحديث
                     st.rerun()
                         
