@@ -378,11 +378,14 @@ def render_create_offer_section(headers: Dict[str, str], section_key: str = "mai
                 else: st.error("❌ فشل إنشاء العرض")
 
 def get_advanced_export_excel(offers_list, all_products_list):
-    """دالة تصدير متقدمة ومخصصة لاستخراج الـ SKUs والخصومات بدقة"""
+    """دالة تصدير مطابقة لنموذج سلة مع التنسيقات وأعمدة SKU الإضافية"""
     import pandas as pd
     import io
+    import openpyxl
+    from openpyxl.worksheet.table import Table, TableStyleInfo
+    from openpyxl.styles import PatternFill, Font, Alignment, Border, Side
     
-    # إنشاء قاموس لربط ID بـ SKU من المنتجات المتوفرة في الذاكرة
+    # 1. إنشاء قاموس لربط ID بـ SKU من المنتجات المتوفرة
     id_to_sku = {}
     for p in all_products_list:
         pid = str(p.get('id', ''))
@@ -391,61 +394,98 @@ def get_advanced_export_excel(offers_list, all_products_list):
         
     rows = []
     for o in offers_list:
-        buy_ids = []
-        get_ids = []
+        buy_obj = o.get('buy', {}) or {}
+        get_obj = o.get('get', {}) or {}
         
-        # 1. استخراج منتجات الشراء (X)
-        for p in o.get('buy', {}).get('products', []):
+        # استخراج IDs الشراء
+        buy_ids = []
+        for p in buy_obj.get('products', []):
             pid = str(p.get('id', p) if isinstance(p, dict) else p)
             if pid.isdigit(): buy_ids.append(pid)
-            
-        # 2. استخراج منتجات العرض (Y)
-        for p in o.get('get', {}).get('products', []):
-            pid = str(p.get('id', p) if isinstance(p, dict) else p)
-            if pid.isdigit(): get_ids.append(pid)
-            
-        # 3. استخراج المنتجات المباشرة (للأنواع البسيطة)
-        for p in o.get('products', []):
+        for p in o.get('products', []): # للأنواع المباشرة
             pid = str(p.get('id', p) if isinstance(p, dict) else p)
             if pid.isdigit() and pid not in buy_ids: buy_ids.append(pid)
             
-        # 4. تحويل الـ IDs إلى SKUs بالاعتماد على القاموس
-        buy_skus = [id_to_sku.get(pid, 'غير معروف') for pid in buy_ids]
-        get_skus = [id_to_sku.get(pid, 'غير معروف') for pid in get_ids]
+        # استخراج IDs العرض
+        get_ids = []
+        for p in get_obj.get('products', []):
+            pid = str(p.get('id', p) if isinstance(p, dict) else p)
+            if pid.isdigit(): get_ids.append(pid)
+            
+        # تحويل IDs إلى SKUs
+        buy_skus = ",".join([id_to_sku.get(pid, 'غير_معروف') for pid in buy_ids])
+        get_skus = ",".join([id_to_sku.get(pid, 'غير_معروف') for pid in get_ids])
         
-        # 5. استخراج الخصومات بذكاء
-        disc_type = o.get('get', {}).get('discount_type', '')
-        disc_amt = o.get('get', {}).get('discount_amount', 0)
-        
-        if not disc_type:
+        # تحديد نوع الخصم وقيمته
+        disc_type_raw = get_obj.get('discount_type', '')
+        if not disc_type_raw:
             o_type = o.get('offer_type', '')
-            if o_type == 'percentage': disc_type = 'percentage'
-            elif o_type == 'fixed_amount': disc_type = 'fixed_amount'
-            else: disc_type = o_type
+            disc_type_raw = 'percentage' if o_type == 'percentage' else ('fixed_amount' if o_type == 'fixed_amount' else o_type)
             
-        if not disc_amt:
-            disc_amt = o.get('discount_amount', o.get('max_discount_amount', 0))
-            
-        status_ar = "نشط" if o.get('status') == 'active' else "غير نشط"
-        
+        disc_type_ar = "خصم بنسبة" if disc_type_raw == "percentage" else ("مبلغ ثابت" if disc_type_raw == "fixed_amount" else ("منتج مجاني" if disc_type_raw in ["free-product", "buy_x_get_y"] else disc_type_raw))
+        disc_amt = get_obj.get('discount_amount', o.get('max_discount_amount', o.get('discount_amount', 0)))
+
+        # بناء الصف بالترتيب القياسي لسلة + أعمدتك الجديدة
         rows.append({
+            "الإجراء": "تحديث",
             "معرف العرض": str(o.get('id', '')),
             "اسم العرض": str(o.get('name', '')),
-            "الحالة": status_ar,
-            "نوع العرض": str(o.get('offer_type', '')),
+            "نوع العرض": "اذا اشترى العميل X يحصل على Y" if o.get('offer_type') == 'buy_x_get_y' else str(o.get('offer_type', '')),
+            "المنصة": "متصفح وتطبيق المتجر",
+            "تطبيق على": "منتجات مختارة",
             "تاريخ البدء": str(o.get('start_date', '')),
             "تاريخ الانتهاء": str(o.get('expiry_date', '')),
+            "تطبيق مع كوبون": "نعم" if o.get('applied_with_coupon') else "لا",
+            "الحد الأقصى للخصم": float(o.get('max_discount_amount', 0) or 0),
+            "الحد الأدنى للشراء": float(o.get('min_purchase_amount', 0) or 0),
+            "الحد الأدنى للكمية": int(o.get('min_items_count', 0) or 0),
+            "مجموعات العملاء": "",
+            "نوع شراء X": "منتج",
+            "كمية شراء X": int(buy_obj.get('quantity', 1)),
             "عناصر شراء X (IDs)": ",".join(buy_ids),
-            "عناصر شراء X (SKUs)": ",".join(buy_skus),
+            "عناصر شراء X (SKUs)": buy_skus,  # ✅ العمود الجديد
+            "نوع عرض Y": "منتج",
+            "كمية عرض Y": int(get_obj.get('quantity', 1)),
             "عناصر عرض Y (IDs)": ",".join(get_ids),
-            "عناصر عرض Y (SKUs)": ",".join(get_skus),
-            "نوع الخصم": "نسبة مئوية" if disc_type == "percentage" else ("مبلغ ثابت" if disc_type == "fixed_amount" else ("منتج مجاني" if disc_type == "free-product" else disc_type)),
-            "قيمة/نسبة الخصم": disc_amt
+            "عناصر عرض Y (SKUs)": get_skus,  # ✅ العمود الجديد
+            "نوع الخصم": disc_type_ar,
+            "قيمة الخصم": float(disc_amt or 0),
+            "رسالة العرض": str(o.get('message', '')),
+            "حالة العرض": "نشط" if o.get('status') == 'active' else "غير نشط"
         })
         
     df = pd.DataFrame(rows)
     buf = io.BytesIO()
-    df.to_excel(buf, index=False)
+    
+    # 2. تطبيق تنسيقات Excel الأنيقة (نفس تنسيق سلة القديم)
+    wb = openpyxl.Workbook()
+    ws = wb.active
+    ws.title = "Salla Offers"
+    
+    headers = list(df.columns)
+    ws.append(headers)
+    for row in df.itertuples(index=False, name=None):
+        ws.append(row)
+        
+    # تنسيق رأس الجدول (Header)
+    header_fill = PatternFill(start_color="0F1C2E", end_color="0F1C2E", fill_type="solid")
+    header_font = Font(color="FFFFFF", bold=True, name="Segoe UI", size=11)
+    center_align = Alignment(horizontal="center", vertical="center", wrap_text=True)
+    thin_border = Border(left=Side(style='thin', color='DDDDDD'), right=Side(style='thin', color='DDDDDD'), top=Side(style='thin', color='DDDDDD'), bottom=Side(style='thin', color='DDDDDD'))
+    
+    for col in range(1, len(headers) + 1):
+        cell = ws.cell(row=1, column=col)
+        cell.fill = header_fill
+        cell.font = header_font
+        cell.alignment = center_align
+        cell.border = thin_border
+        # توسيع الأعمدة قليلاً
+        ws.column_dimensions[openpyxl.utils.get_column_letter(col)].width = 18
+
+    # إضافة الفلتر التلقائي (AutoFilter)
+    ws.auto_filter.ref = ws.dimensions
+    
+    wb.save(buf)
     return buf.getvalue()
     
 def render_offers_page():
@@ -934,12 +974,13 @@ def render_offers_page():
     # ==========================================
     # --- رفع واستيراد ملف العروض الجاهز للسلة ---
     # ==========================================
-    st.info("💡 **تنبيه هام قبل التصدير:** سلة تُرجع بيانات العروض مختصرة. لضمان ظهور (أرقام المنتجات، أكواد المنتجات ، ونسب الخصم) بشكل دقيق وكامل في ملف الإكسيل، يرجى الضغط على زر (سحب التفاصيل الدقيقة) أولاً.")
+    st.info("💡 **تنبيه هام قبل التصدير:** سلة تُرجع بيانات العروض مختصرة. لضمان ظهور (أرقام المنتجات، SKUs، ونسب الخصم) بشكل دقيق وكامل في ملف الإكسيل، يرجى الضغط على زر (سحب التفاصيل الدقيقة) أولاً.")
     col_dl, col_ex, col_sync_details = st.columns([1, 1, 1.2])
     with col_dl: 
         st.download_button("📥 تنزيل قالب سلة الافتراضي للعروض", data=generate_salla_excel_template(), file_name="Salla_Offers_Template.xlsx", mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", use_container_width=True)
     with col_sync_details:
         if st.button("🔄 سحب التفاصيل الدقيقة (للتصدير)", use_container_width=True):
+            import time # ✅ تم إضافة الاستدعاء هنا مباشرة لمنع خطأ UnboundLocalError
             with st.spinner("جاري سحب التفاصيل الكاملة لجميع العروض (يستغرق بضع ثوانٍ)..."):
                 progress_bar = st.progress(0)
                 status_text = st.empty()
