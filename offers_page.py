@@ -376,7 +376,78 @@ def render_create_offer_section(headers: Dict[str, str], section_key: str = "mai
                     st.success("✅ تم إنشاء العرض بنجاح!")
                     st.rerun()
                 else: st.error("❌ فشل إنشاء العرض")
-                    
+
+def get_advanced_export_excel(offers_list, all_products_list):
+    """دالة تصدير متقدمة ومخصصة لاستخراج الـ SKUs والخصومات بدقة"""
+    import pandas as pd
+    import io
+    
+    # إنشاء قاموس لربط ID بـ SKU من المنتجات المتوفرة في الذاكرة
+    id_to_sku = {}
+    for p in all_products_list:
+        pid = str(p.get('id', ''))
+        sku = str(p.get('sku', 'لا يوجد'))
+        if pid: id_to_sku[pid] = sku
+        
+    rows = []
+    for o in offers_list:
+        buy_ids = []
+        get_ids = []
+        
+        # 1. استخراج منتجات الشراء (X)
+        for p in o.get('buy', {}).get('products', []):
+            pid = str(p.get('id', p) if isinstance(p, dict) else p)
+            if pid.isdigit(): buy_ids.append(pid)
+            
+        # 2. استخراج منتجات العرض (Y)
+        for p in o.get('get', {}).get('products', []):
+            pid = str(p.get('id', p) if isinstance(p, dict) else p)
+            if pid.isdigit(): get_ids.append(pid)
+            
+        # 3. استخراج المنتجات المباشرة (للأنواع البسيطة)
+        for p in o.get('products', []):
+            pid = str(p.get('id', p) if isinstance(p, dict) else p)
+            if pid.isdigit() and pid not in buy_ids: buy_ids.append(pid)
+            
+        # 4. تحويل الـ IDs إلى SKUs بالاعتماد على القاموس
+        buy_skus = [id_to_sku.get(pid, 'غير معروف') for pid in buy_ids]
+        get_skus = [id_to_sku.get(pid, 'غير معروف') for pid in get_ids]
+        
+        # 5. استخراج الخصومات بذكاء
+        disc_type = o.get('get', {}).get('discount_type', '')
+        disc_amt = o.get('get', {}).get('discount_amount', 0)
+        
+        if not disc_type:
+            o_type = o.get('offer_type', '')
+            if o_type == 'percentage': disc_type = 'percentage'
+            elif o_type == 'fixed_amount': disc_type = 'fixed_amount'
+            else: disc_type = o_type
+            
+        if not disc_amt:
+            disc_amt = o.get('discount_amount', o.get('max_discount_amount', 0))
+            
+        status_ar = "نشط" if o.get('status') == 'active' else "غير نشط"
+        
+        rows.append({
+            "معرف العرض": str(o.get('id', '')),
+            "اسم العرض": str(o.get('name', '')),
+            "الحالة": status_ar,
+            "نوع العرض": str(o.get('offer_type', '')),
+            "تاريخ البدء": str(o.get('start_date', '')),
+            "تاريخ الانتهاء": str(o.get('expiry_date', '')),
+            "عناصر شراء X (IDs)": ",".join(buy_ids),
+            "عناصر شراء X (SKUs)": ",".join(buy_skus),
+            "عناصر عرض Y (IDs)": ",".join(get_ids),
+            "عناصر عرض Y (SKUs)": ",".join(get_skus),
+            "نوع الخصم": "نسبة مئوية" if disc_type == "percentage" else ("مبلغ ثابت" if disc_type == "fixed_amount" else ("منتج مجاني" if disc_type == "free-product" else disc_type)),
+            "قيمة/نسبة الخصم": disc_amt
+        })
+        
+    df = pd.DataFrame(rows)
+    buf = io.BytesIO()
+    df.to_excel(buf, index=False)
+    return buf.getvalue()
+    
 def render_offers_page():
     # ✅ تأسيس الذاكرة الجوهرية قبل تشغيل أي شيء في الصفحة
     if "featured_offer_groups" not in st.session_state:
@@ -863,12 +934,30 @@ def render_offers_page():
     # ==========================================
     # --- رفع واستيراد ملف العروض الجاهز للسلة ---
     # ==========================================
-    col_dl, col_ex = st.columns([1, 1])
+    st.info("💡 **تنبيه هام قبل التصدير:** سلة تُرجع بيانات العروض مختصرة. لضمان ظهور (أرقام المنتجات، SKUs، ونسب الخصم) بشكل دقيق وكامل في ملف الإكسيل، يرجى الضغط على زر (سحب التفاصيل الدقيقة) أولاً.")
+    col_dl, col_ex, col_sync_details = st.columns([1, 1, 1.2])
     with col_dl: 
         st.download_button("📥 تنزيل قالب سلة الافتراضي للعروض", data=generate_salla_excel_template(), file_name="Salla_Offers_Template.xlsx", mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", use_container_width=True)
+    with col_sync_details:
+        if st.button("🔄 سحب التفاصيل الدقيقة (للتصدير)", use_container_width=True):
+            with st.spinner("جاري سحب التفاصيل الكاملة لجميع العروض (يستغرق بضع ثوانٍ)..."):
+                progress_bar = st.progress(0)
+                status_text = st.empty()
+                total_o = len(st.session_state["all_offers"])
+                for i, o in enumerate(st.session_state["all_offers"]):
+                    status_text.info(f"📥 سحب بيانات العرض {i+1} من {total_o}...")
+                    det_res = safe_api_request("GET", f"{SALLA_API_URL}/{o['id']}", headers)
+                    if det_res and det_res.get("data"):
+                        st.session_state["all_offers"][i] = det_res["data"]
+                    progress_bar.progress((i + 1) / total_o)
+                    time.sleep(0.2) # حماية من حظر الـ API
+                status_text.success("✅ تم تحديث جميع تفاصيل العروض بنجاح! يمكنك التصدير الآن.")
+                time.sleep(1)
+                st.rerun()
     with col_ex:
         if raw_offers: 
-            st.download_button("📥 تصدير قائمة العروض الحالية", data=export_offers_to_excel(raw_offers), file_name=f"Offers_Export_{datetime.now().strftime('%Y%m%d')}.xlsx", mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", use_container_width=True, type="primary")
+            # ✅ استخدام دالة التصدير المتقدمة المخصصة
+            st.download_button("📥 تصدير قائمة العروض الحالية", data=get_advanced_export_excel(raw_offers, st.session_state.get('all_products', [])), file_name=f"Offers_Export_{datetime.now().strftime('%Y%m%d')}.xlsx", mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", use_container_width=True, type="primary")
 
     uploaded_file = st.file_uploader("📂 رفع ملف العروض الجاهز (XLSX) لرفعه للمتجر مباشرة:", type=["xlsx"])
     if uploaded_file:
@@ -882,8 +971,6 @@ def render_offers_page():
                 st.rerun()
         except Exception as e: 
             st.error(f"خطأ في القراءة: {str(e)}")
-
-    st.divider()
 
     # ==========================================
     # 🔍 الفلاتر الخاصة بالعروض
@@ -1030,8 +1117,8 @@ def render_offers_page():
     if filtered_offers:
         col_dl_filt, col_act_filt = st.columns(2)
         with col_dl_filt:
-            st.download_button("📥 تحميل العروض المفلترة", data=export_offers_to_excel(filtered_offers), file_name=f"filtered_offers_{datetime.now().strftime('%Y%m%d_%H%M%S')}.xlsx", mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", key="download_filtered_offers", type="primary", use_container_width=True)
-        
+            # ✅ استخدام دالة التصدير المتقدمة المخصصة هنا أيضاً
+            st.download_button("📥 تحميل العروض المفلترة (Excel)", data=get_advanced_export_excel(filtered_offers, st.session_state.get('all_products', [])), file_name=f"filtered_offers_{datetime.now().strftime('%Y%m%d_%H%M%S')}.xlsx", mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", key="download_filtered_offers", type="primary", use_container_width=True)
         with col_act_filt:
             with st.popover("⚙️ إجراءات العروض المفلترة", use_container_width=True):
                 st.markdown(f"<div style='text-align:center; margin-bottom:10px;'><b>تطبيق إجراء جماعي على ({len(filtered_offers)}) عرض</b></div>", unsafe_allow_html=True)
