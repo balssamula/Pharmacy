@@ -1197,7 +1197,9 @@ def render_offers_page():
             with st.popover("⚙️ إجراءات العروض المفلترة", use_container_width=True):
                 st.markdown(f"<div style='text-align:center; margin-bottom:10px;'><b>تطبيق إجراء جماعي على ({len(filtered_offers)}) عرض</b></div>", unsafe_allow_html=True)
                 
+                # ✅ 1. إضافة الخيار الجديد لقائمة الراديو
                 bulk_action = st.radio("اختر الإجراء المطلوب تنفيذه دفعة واحدة:", [
+                    "🔄 تحديث بيانات العروض المفلترة",
                     "▶️ تفعيل العروض",
                     "📅 تمديد العروض",
                     "🛑 إيقاف ومسح العناوين الترويجية من المنتجات",
@@ -1214,6 +1216,8 @@ def render_offers_page():
                 if "حذف" in bulk_action:
                     st.error("🚨 سيتم الحذف نهائياً من المتجر!")
                     confirm_msg = "☑️ أوافق على الحذف"
+                elif "تحديث" in bulk_action:
+                    confirm_msg = "☑️ تأكيد سحب البيانات التفصيلية للعروض المحددة"
                 else:
                     confirm_msg = "☑️ تأكيد تنفيذ الإجراء المختار"
                     
@@ -1230,7 +1234,17 @@ def render_offers_page():
                         oid = off['id']
                         status_text.info(f"⏳ جاري تنفيذ الإجراء على العرض {idx+1} من {total_offers}...")
                         
-                        if "تفعيل" in bulk_action:
+                        # ✅ 2. منطق تنفيذ تحديث البيانات التفصيلية (دون استدعاء import time داخلياً)
+                        if "تحديث بيانات" in bulk_action:
+                            det_res = safe_api_request("GET", f"{SALLA_API_URL}/{oid}", headers)
+                            if det_res and det_res.get("data"):
+                                for i, o in enumerate(st.session_state["all_offers"]):
+                                    if str(o.get('id')) == str(oid): 
+                                        st.session_state["all_offers"][i] = det_res["data"]
+                                success_c += 1
+                        
+                        # باقي الإجراءات كما هي
+                        elif "تفعيل" in bulk_action:
                             if safe_api_request("PUT", f"{SALLA_API_URL}/{oid}/status", headers, json={"status": "active"}): success_c += 1
                         elif "تمديد" in bulk_action:
                             full = safe_api_request("GET", f"{SALLA_API_URL}/{oid}", headers)
@@ -1258,9 +1272,12 @@ def render_offers_page():
                         progress_bar.progress((idx + 1) / total_offers)
                         time.sleep(0.3)
                         
-                    status_text.success(f"✅ تم تنفيذ الإجراء على {success_c} عرض بنجاح!")
+                    status_text.success(f"✅ تم تنفيذ الإجراء بنجاح على {success_c} عرض!")
                     time.sleep(1.5)
-                    if "all_offers" in st.session_state: del st.session_state["all_offers"] # لإجبار التحديث
+                    
+                    if "حذف" in bulk_action or "تحديث" not in bulk_action:
+                        if "all_offers" in st.session_state: del st.session_state["all_offers"] # إجبار التحديث السريع من الواجهة لباقي الإجراءات
+                    
                     st.rerun()
                         
     # ==========================================
