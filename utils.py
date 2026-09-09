@@ -4,6 +4,7 @@ import io
 import os
 import requests
 import json
+import threading
 import logging
 import re
 from datetime import datetime
@@ -12,6 +13,70 @@ from openpyxl.styles import PatternFill, Font, Alignment, Border, Side
 from openpyxl.worksheet.datavalidation import DataValidation
 from openpyxl.utils import get_column_letter
 
+SALLA_CLIENT_ID = "92c8725e-8d39-4516-bb00-3908fe5339b3"
+SALLA_CLIENT_SECRET = "e84d33ca4ecd7399a1a76292bae92bdd97a438d4c48caf935fa17a8f18ef1ad2"
+
+# قفل أمني لمنع الاستخدام المزدوج للتوكن (Race Condition) كما تشترط سلة
+token_refresh_lock = threading.Lock()
+
+def refresh_salla_token(merchant_id):
+    """دالة تقوم بتجديد الـ Access Token بصمت وتحديث ملف stores.json"""
+    STORES_FILE = 'stores.json'
+    
+    with token_refresh_lock:
+        if not os.path.exists(STORES_FILE):
+            return False
+            
+        with open(STORES_FILE, 'r', encoding='utf-8') as f:
+            stores = json.load(f)
+            
+        store_idx = next((i for i, s in enumerate(stores) if str(s.get('merchant_id')) == str(merchant_id)), None)
+        if store_idx is None:
+            return False
+            
+        current_refresh_token = stores[store_idx].get('refresh_token')
+        if not current_refresh_token:
+            return False
+
+        # تجهيز طلب التجديد حسب معايير سلة
+        token_url = "https://accounts.salla.sa/oauth2/token"
+        payload = {
+            "client_id": SALLA_CLIENT_ID,
+            "client_secret": SALLA_CLIENT_SECRET,
+            "grant_type": "refresh_token",
+            "refresh_token": current_refresh_token
+        }
+        headers = {
+            "Content-Type": "application/x-www-form-urlencoded"
+        }
+
+        try:
+            response = requests.post(token_url, data=payload, headers=headers)
+            if response.status_code == 200:
+                new_tokens = response.json()
+                
+                # 1. تحديث الرموز في المصفوفة
+                stores[store_idx]['access_token'] = new_tokens['access_token']
+                stores[store_idx]['refresh_token'] = new_tokens['refresh_token']
+                
+                # 2. حفظ التحديثات فوراً في ملف stores.json
+                with open(STORES_FILE, 'w', encoding='utf-8') as f:
+                    json.dump(stores, f, ensure_ascii=False, indent=4)
+                    
+                # 3. تحديث الذاكرة المؤقتة للتطبيق (Session State) ليعمل مباشرة
+                if 'access_token' in st.session_state:
+                    st.session_state['access_token'] = new_tokens['access_token']
+                if 'headers' in st.session_state:
+                    st.session_state['headers']['Authorization'] = f"Bearer {new_tokens['access_token']}"
+                    
+                return new_tokens['access_token']
+            else:
+                print(f"فشل تجديد التوكن: {response.text}")
+                return False
+        except Exception as e:
+            print(f"خطأ أثناء التجديد: {str(e)}")
+            return False
+            
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
@@ -96,22 +161,44 @@ def get_flat_price(price_field: Any) -> float:
         return safe_float(price_field.get('amount', 0.0))
     return safe_float(price_field)
 
-def safe_api_request(method: str, url: str, headers: Dict, **kwargs) -> Optional[Dict]:
+def safe_api_request(method, url, headers, json_data=None):
+    """دالة إرسال الطلبات مع ميزة التجديد التلقائي للتوكن (Auto-Retry)"""
     try:
-        if 'json' in kwargs:
-            headers = headers.copy()
-            headers['Content-Type'] = 'application/json; charset=utf-8'
+        response = requests.request(method, url, headers=headers, json=json_data)
+        
+        # 🔄 التقاط خطأ انتهاء صلاحية التوكن (401)
+        if response.status_code == 401:
+            # استخراج معرف التاجر الحالي من الذاكرة
+            current_merchant_id = st.session_state.get('merchant_id')
             
-        response = requests.request(method, url, headers=headers, timeout=30, **kwargs)
-        if response.status_code >= 400:
-            if response.status_code != 404:
-                try: error_detail = json.dumps(response.json(), ensure_ascii=False)
-                except: error_detail = response.text[:500]
-                st.error(f"⚠️ خطأ {response.status_code}: {error_detail}")
+            if current_merchant_id:
+                print("انتهت صلاحية التوكن. جاري التجديد التلقائي...")
+                new_token = refresh_salla_token(current_merchant_id)
+                
+                if new_token:
+                    # تحديث الهيدر بالتوكن الجديد
+                    headers['Authorization'] = f"Bearer {new_token}"
+                    
+                    # إعادة إرسال الطلب الذي فشل مسبقاً (Retry)
+                    retry_response = requests.request(method, url, headers=headers, json=json_data)
+                    if retry_response.status_code < 400:
+                        return retry_response.json()
+                    else:
+                        print(f"فشل الطلب بعد التجديد: {retry_response.text}")
+                        return None
+                else:
+                    st.error("⚠️ انتهت صلاحية الجلسة بالكامل. يرجى إعادة تسجيل الدخول للمتجر.")
+                    return None
+                    
+        # معالجة الردود العادية
+        if response.status_code < 400:
+            return response.json()
+        else:
+            print(f"API Error ({response.status_code}): {response.text}")
             return None
-        return response.json()
+            
     except Exception as e:
-        st.error(f"⚠️ خطأ في الاتصال: {str(e)}")
+        print(f"Request Exception: {str(e)}")
         return None
 
 def style_excel_file(ws, is_template=True, header_color="0F1C2E"):
