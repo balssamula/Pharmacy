@@ -45,7 +45,7 @@ def get_orders_list(from_date, to_date, headers, search_keyword=None, order_refs
     return orders
 
 def get_detailed_orders(orders_summary, headers):
-    """سحب التفاصيل، الفواتير، والشحنات للطلبات"""
+    """سحب التفاصيل الدقيقة للطلبات وجلب مكونات المنتجات المجمعة"""
     detailed_orders = []
     status_text = st.empty()
     progress_bar = st.progress(0)
@@ -59,38 +59,20 @@ def get_detailed_orders(orders_summary, headers):
         res_order = safe_api_request("GET", f"https://api.salla.dev/admin/v2/orders/{order_id}", headers)
         order_data = res_order.get("data", {}) if res_order else {}
         
-        # 2. سحب عناصر الطلب للخيارات
+        # 2. سحب عناصر الطلب للخيارات والأسعار الدقيقة
         items_res = safe_api_request("GET", f"https://api.salla.dev/admin/v2/orders/items?order_id={order_id}", headers)
         order_items = items_res.get("data", []) if items_res else []
         
-        # ✅ 3. استدعاء مسار الشحنات المستقل لجلب شركة الشحن
+        # 3. سحب مسار الشحنات المستقل لجلب شركة الشحن بدقة
         ship_res = safe_api_request("GET", f"https://api.salla.dev/admin/v2/shipments?order_id={order_id}", headers)
         if ship_res and ship_res.get("data"):
             order_data['shipments'] = ship_res["data"]
         
-        # 4. سحب الفاتورة للأسعار المحاسبية
-        items_data = []
-        res_inv_list = safe_api_request("GET", f"https://api.salla.dev/admin/v2/orders/invoices?order_id={order_id}", headers)
-        if res_inv_list and res_inv_list.get("data"):
-            invoice_id = res_inv_list["data"][0]["id"]
-            res_inv_det = safe_api_request("GET", f"https://api.salla.dev/admin/v2/orders/invoices/{invoice_id}", headers)
-            if res_inv_det and res_inv_det.get("data"):
-                items_data = res_inv_det["data"].get("items", [])
-                
-        if not items_data:
-            summary_items = o_sum.get('items', [])
-            for si in summary_items:
-                items_data.append({
-                    'item_id': si.get('id'), 'name': si.get('name', ''), 'quantity': si.get('quantity', 1), 
-                    'sku': 'غير متوفر', 'price': {'amount': 0}, 'tax': {'percent': 0}
-                })
+        # ✅ 4. الإصلاح الجذري: نعتمد على order_items مباشرة لأنها دقيقة وتحتوي على الضريبة والسعر والـ SKU
+        items_data = order_items.copy() if isinstance(order_items, list) else []
 
         for inv_item in items_data:
-            match_oi = next((oi for oi in order_items if str(oi.get('id')) == str(inv_item.get('item_id'))), None)
-            if match_oi:
-                inv_item['options'] = match_oi.get('options', [])
-            
-            pid = inv_item.get('product_id')
+            pid = inv_item.get('product_id') or (inv_item.get('product', {}).get('id'))
             if pid and str(pid).isdigit():
                 prod_info = next((p for p in st.session_state.get('all_products', []) if str(p.get('id')) == str(pid)), None)
                 if not prod_info:
@@ -115,15 +97,20 @@ def get_detailed_orders(orders_summary, headers):
 def process_financials(orders):
     """أداة المعالجة المحاسبية: تستخرج الصفوف والإحصائيات مقسمة لمنتجات وشحن"""
     detailed_rows = []
-    # تحديث هيكل الإحصائيات ليفصل مبيعات/ضرائب المنتجات عن الشحن
     taxable_stats = {'item_sales': 0.0, 'shipping_sales': 0.0, 'qty': 0, 'item_tax': 0.0, 'shipping_tax': 0.0}
     nontaxable_stats = {'item_sales': 0.0, 'shipping_sales': 0.0, 'qty': 0, 'item_tax': 0.0, 'shipping_tax': 0.0}
     
     for order in orders:
         subtotal = float(order.get('amounts', {}).get('sub_total', {}).get('amount', 0))
         shipping_cost = float(order.get('amounts', {}).get('shipping_cost', {}).get('amount', 0))
-        order_total_tax = float(order.get('amounts', {}).get('tax', {}).get('amount', {}).get('amount', 0))
         
+        # استخراج ضريبة الطلب الإجمالية بعناية
+        tax_obj = order.get('amounts', {}).get('tax', {})
+        if isinstance(tax_obj, dict) and isinstance(tax_obj.get('amount'), dict):
+            order_total_tax = float(tax_obj['amount'].get('amount', 0))
+        else:
+            order_total_tax = 0.0
+            
         discounts = order.get('amounts', {}).get('discounts', [])
         total_coupon = sum(float(d.get('discount', 0)) for d in discounts if d.get('type') != 'special_offer' and 'عرض' not in str(d.get('title', '')))
         all_special_offers = [d for d in discounts if d.get('type') == 'special_offer' or 'عرض' in str(d.get('title', ''))]
@@ -140,19 +127,31 @@ def process_financials(orders):
 
         order_branches = order.get('order_branches', [])
         branch = order_branches[0].get('name', 'الفرع الرئيسي') if order_branches else 'غير متوفر'
+        
         shipments = order.get('shipments', [])
-        shipping_company = shipments[0].get('courier_name', '') if shipments else order.get('shipping', {}).get('company', 'غير متوفر')
+        shipping_company = 'غير متوفر'
+        if shipments:
+            shipping_company = shipments[0].get('courier_name', '') or shipments[0].get('courier_id', 'متوفر (بدون اسم)')
+        elif order.get('shipping', {}).get('company'):
+            shipping_company = order.get('shipping', {}).get('company')
 
-        order_items_tax_sum = 0.0 # تجميع ضرائب المنتجات لمعرفة ضريبة الشحن لاحقاً
+        order_items_tax_sum = 0.0 
         items = order.get('items', [])
         
         for item in items:
             sku = str(item.get('sku', 'غير متوفر')).strip()
             main_qty = int(item.get('quantity', 1))
             
-            price_without_tax = float(item.get('amounts', {}).get('price_without_tax', {}).get('amount') or item.get('price', {}).get('amount', 0))
+            # ✅ التحديث: دعم قراءة السعر والضريبة بأمان من مسار Items
+            price_without_tax = 0.0
+            if item.get('amounts') and item['amounts'].get('price_without_tax'):
+                price_without_tax = float(item['amounts']['price_without_tax'].get('amount', 0))
+            elif item.get('price'):
+                price_without_tax = float(item['price'].get('amount', 0))
+                
             tax_node = item.get('amounts', {}).get('tax', {}) if 'amounts' in item else item.get('tax', {})
-            tax_percent = float(tax_node.get('percent', 15.0) if tax_node.get('percent') is not None else 15.0)
+            tax_percent_raw = tax_node.get('percent', 15.0)
+            tax_percent = float(tax_percent_raw) if tax_percent_raw is not None else 15.0
             
             item_subtotal = price_without_tax * main_qty
             
@@ -170,8 +169,7 @@ def process_financials(orders):
             calculated_tax = item_total_after_disc * (tax_percent / 100) if is_taxable else 0.0
             order_items_tax_sum += calculated_tax
             
-            # ✅ تحديث: صافي المبيعات أصبح يشمل الضريبة
-            item_net_sales = item_total_after_disc + calculated_tax 
+            item_net_sales = item_total_after_disc + calculated_tax # ✅ صافي المبيعات أصبح شامل الضريبة هنا
             
             sub_items_extracted = []
             if item.get('grouped_items'):
@@ -234,10 +232,10 @@ def process_financials(orders):
                     "الاجمالي بعد الخصم": round(item_total_after_disc / splits, 2),
                     "تكلفة الشحن": shipping_cost / splits,
                     "الضريبة": round(calculated_tax / splits, 2),
-                    "صافي المبيعات": round(item_net_sales / splits, 2) # ✅ شامل الضريبة
+                    "صافي المبيعات": round(item_net_sales / splits, 2)
                 })
         
-        # ✅ استخراج وتوزيع إحصائيات الشحن (بعد انتهاء منتجات الطلب)
+        # ✅ استخراج وتوزيع إحصائيات الشحن بذكاء (الآن دقيقة 100%)
         shipping_tax = max(0.0, order_total_tax - order_items_tax_sum)
         if order_total_tax > 0 or shipping_tax > 0:
             taxable_stats['shipping_sales'] += shipping_cost
@@ -275,8 +273,13 @@ def generate_short_export(orders):
         
         order_branches = order.get('order_branches', [])
         branch = order_branches[0].get('name', 'الفرع الرئيسي') if order_branches else 'غير متوفر'
+        
         shipments = order.get('shipments', [])
-        shipping_company = shipments[0].get('courier_name', '') if shipments else order.get('shipping', {}).get('company', 'غير متوفر')
+        shipping_company = 'غير متوفر'
+        if shipments:
+            shipping_company = shipments[0].get('courier_name', '') or shipments[0].get('courier_id', 'متوفر (بدون اسم)')
+        elif order.get('shipping', {}).get('company'):
+            shipping_company = order.get('shipping', {}).get('company')
 
         rows.append({
             "الفرع": branch,
@@ -340,7 +343,6 @@ def generate_detailed_export(detailed_rows, taxable_stats, nontaxable_stats):
     ws.title = "التصدير التفصيلي"
     ws.sheet_view.rightToLeft = True
     
-    # ✅ تحديث إحصائيات الإكسيل لتشمل مبيعات وضرائب الشحن
     ws.merge_cells('A1:G1')
     ws['A1'] = "📊 إحصائيات المبيعات التفصيلية (بإحتساب الأصناف الفرعية)"
     ws['A1'].font = Font(bold=True, size=13, color="FFFFFF")
@@ -432,9 +434,8 @@ def render_orders_page():
         detailed_rows, t_stats, nt_stats = process_financials(orders_data)
         
         st.markdown("---")
-        st.markdown("### 📊 إحصائيات المنتجات المباعة في هذه الفترة")
+        st.markdown("### 📊 إحصائيات المبيعات التفصيلية")
         
-        # ✅ الإحصائيات مفصلة للمنتجات والشحن
         t_total_sales = t_stats['item_sales'] + t_stats['shipping_sales']
         t_total_tax = t_stats['item_tax'] + t_stats['shipping_tax']
         nt_total_sales = nt_stats['item_sales'] + nt_stats['shipping_sales']
@@ -464,6 +465,7 @@ def render_orders_page():
 </div>
 """
         st.markdown(stats_html, unsafe_allow_html=True)
+
                 
         st.markdown("---")
         st.markdown("### 📥 خيارات التصدير")
@@ -489,20 +491,20 @@ def render_orders_page():
             o_date = str(o.get('date', {}).get('date', ''))[:16]
             status_name = o.get('status', {}).get('name', 'غير محدد')
             
-            # ✅ جلب شركة الشحن من المصفوفة الجديدة التي سحبناها
             shipments = o.get('shipments', [])
             shipping_company = 'غير متوفر'
             if shipments:
                 shipping_company = shipments[0].get('courier_name', '') or shipments[0].get('courier_id', 'متوفر (بدون اسم)')
             elif o.get('shipping', {}).get('company'):
                 shipping_company = o.get('shipping', {}).get('company')
+                
             order_branches = o.get('order_branches', [])
             branch = order_branches[0].get('name', 'الفرع الرئيسي') if order_branches else 'غير متوفر'
             utm_source = o.get('source_details', {}).get('utm_source', '') or o.get('campaign', {}).get('source', 'مباشر')
             
             subtotal = float(o.get('amounts', {}).get('sub_total', {}).get('amount', 0))
             tax = float(o.get('amounts', {}).get('tax', {}).get('amount', {}).get('amount', 0))
-            shipping_cost = float(o.get('amounts', {}).get('shipping_cost', {}).get('amount', 0)) # ✅ إضافة تكلفة الشحن
+            shipping_cost = float(o.get('amounts', {}).get('shipping_cost', {}).get('amount', 0))
             discounts = o.get('amounts', {}).get('discounts', [])
             total_discount = sum(float(d.get('discount', 0)) for d in discounts)
             o_total = float(o.get('amounts', {}).get('total', {}).get('amount', 0))
@@ -510,7 +512,6 @@ def render_orders_page():
             border_color = "#2ecc71" if "تنفيذ" in status_name or "توصيل" in status_name else ("#e74c3c" if "لغي" in status_name else "#f39c12")
             
             with col:
-                # ✅ إضافة الشحن في تذييل الكارت
                 card_html = f"""
 <div style="background: linear-gradient(145deg, #1e293b, #0f172a); border-radius: 12px; padding: 16px; margin-bottom: 16px; border: 1px solid #334155; border-right: 5px solid {border_color}; position: relative; box-shadow: 0 4px 15px rgba(0,0,0,0.2);">
 <div style="display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid rgba(255,255,255,0.05); padding-bottom: 12px; margin-bottom: 12px;">
