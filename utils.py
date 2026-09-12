@@ -161,10 +161,11 @@ def get_flat_price(price_field: Any) -> float:
         return safe_float(price_field.get('amount', 0.0))
     return safe_float(price_field)
 
-def safe_api_request(method, url, headers, json_data=None):
-    """دالة إرسال الطلبات مع ميزة التجديد التلقائي للتوكن (Auto-Retry)"""
+def safe_api_request(method, url, headers, json=None, **kwargs):
+    """دالة إرسال الطلبات مع ميزة التجديد التلقائي للتوكن (Auto-Retry) وتوافقية المتغيرات"""
     try:
-        response = requests.request(method, url, headers=headers, json=json_data)
+        # لاحظ هنا استخدمنا json=json لدعم كافة طلبات التطبيق
+        response = requests.request(method, url, headers=headers, json=json, **kwargs)
         
         # 🔄 التقاط خطأ انتهاء صلاحية التوكن (401)
         if response.status_code == 401:
@@ -180,7 +181,7 @@ def safe_api_request(method, url, headers, json_data=None):
                     headers['Authorization'] = f"Bearer {new_token}"
                     
                     # إعادة إرسال الطلب الذي فشل مسبقاً (Retry)
-                    retry_response = requests.request(method, url, headers=headers, json=json_data)
+                    retry_response = requests.request(method, url, headers=headers, json=json, **kwargs)
                     if retry_response.status_code < 400:
                         return retry_response.json()
                     else:
