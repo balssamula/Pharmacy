@@ -13,7 +13,6 @@ def get_orders_list(from_date, to_date, headers, search_keyword=None, order_refs
     status_text = st.empty()
     progress_bar = st.progress(0)
     
-    # ✅ حالة 1: السحب بناءً على ملف أرقام الطلبات المرفوع
     if order_refs_list and len(order_refs_list) > 0:
         total = len(order_refs_list)
         for idx, ref in enumerate(order_refs_list):
@@ -21,13 +20,10 @@ def get_orders_list(from_date, to_date, headers, search_keyword=None, order_refs
             url = f"https://api.salla.dev/admin/v2/orders?keyword={ref}"
             res = safe_api_request("GET", url, headers)
             if res and res.get("data"):
-                # قد يرجع عدة نتائج، نأخذ المطابق تماماً
                 matched = [o for o in res["data"] if str(o.get('reference_id')) == str(ref)]
                 orders.extend(matched if matched else res["data"])
             progress_bar.progress((idx + 1) / total)
             time.sleep(0.15)
-            
-    # ✅ حالة 2: السحب بالتواريخ أو كلمة البحث
     else:
         page = 1
         total_pages = 1
@@ -49,7 +45,7 @@ def get_orders_list(from_date, to_date, headers, search_keyword=None, order_refs
     return orders
 
 def get_detailed_orders(orders_summary, headers):
-    """سحب التفاصيل الدقيقة والفواتير للطلبات"""
+    """سحب التفاصيل الدقيقة والفواتير للطلبات مع استخراج مكونات المنتجات المجمعة"""
     detailed_orders = []
     status_text = st.empty()
     progress_bar = st.progress(0)
@@ -78,12 +74,19 @@ def get_detailed_orders(orders_summary, headers):
                     'price': {'amount': 0}, 'tax': {'percent': 0}, 'options': si.get('options', [])
                 })
         else:
-            # دمج الخيارات (Options) من الطلب الأصلي إلى الفاتورة إن وُجدت
+            # ✅ دمج الخيارات والمنتجات الفرعية (Group Products) من الطلب الأصلي إلى الفاتورة
             orig_items = order_data.get('items', [])
             for inv_item in items_data:
                 match_orig = next((oi for oi in orig_items if str(oi.get('sku')) == str(inv_item.get('sku'))), None)
-                if match_orig: inv_item['options'] = match_orig.get('options', [])
-                
+                if match_orig: 
+                    inv_item['options'] = match_orig.get('options', [])
+                    prod_info = match_orig.get('product', {})
+                    if isinstance(prod_info, dict) and prod_info.get('type') == 'group_products':
+                        if prod_info.get('grouped_items'):
+                            inv_item['grouped_items'] = prod_info.get('grouped_items')
+                        elif prod_info.get('consisted_products'):
+                            inv_item['consisted_products'] = prod_info.get('consisted_products')
+                            
         order_data['items'] = items_data
         detailed_orders.append(order_data)
         progress_bar.progress((i + 1) / total)
@@ -93,9 +96,134 @@ def get_detailed_orders(orders_summary, headers):
     progress_bar.empty()
     return detailed_orders
 
+def process_financials(orders):
+    """أداة المعالجة المحاسبية: تستخرج الصفوف التفصيلية والإحصائيات وتوزع الخصومات"""
+    detailed_rows = []
+    taxable_stats = {'sales': 0.0, 'qty': 0, 'tax': 0.0}
+    nontaxable_stats = {'sales': 0.0, 'qty': 0, 'tax': 0.0}
+    
+    for order in orders:
+        subtotal = float(order.get('amounts', {}).get('sub_total', {}).get('amount', 0))
+        shipping_cost = float(order.get('amounts', {}).get('shipping_cost', {}).get('amount', 0))
+        discounts = order.get('amounts', {}).get('discounts', [])
+        
+        total_coupon = sum(float(d.get('discount', 0)) for d in discounts if d.get('type') != 'special_offer' and 'عرض' not in str(d.get('title', '')))
+        all_special_offers = [d for d in discounts if d.get('type') == 'special_offer' or 'عرض' in str(d.get('title', ''))]
+        
+        order_skus = [str(item.get('sku', '')).strip() for item in order.get('items', [])]
+        specific_offers = []
+        general_offers_total = 0.0
+        
+        for sp in all_special_offers:
+            sp_title = str(sp.get('title', ''))
+            matched = any(sku and sku in sp_title for sku in order_skus)
+            if matched:
+                specific_offers.append(sp)
+            else:
+                general_offers_total += float(sp.get('discount', 0))
+
+        order_branches = order.get('order_branches', [])
+        branch = order_branches[0].get('name', 'الفرع الرئيسي') if order_branches else 'غير متوفر'
+        shipments = order.get('shipments', [])
+        shipping_company = shipments[0].get('courier_name', '') if shipments else order.get('shipping', {}).get('company', 'غير متوفر')
+
+        items = order.get('items', [])
+        for item in items:
+            sku = str(item.get('sku', 'غير متوفر')).strip()
+            main_qty = int(item.get('quantity', 1))
+            
+            price_without_tax = float(item.get('amounts', {}).get('price_without_tax', {}).get('amount') or item.get('price', {}).get('amount', 0))
+            tax_node = item.get('amounts', {}).get('tax', {}) if 'amounts' in item else item.get('tax', {})
+            tax_percent = float(tax_node.get('percent', 15.0) if tax_node.get('percent') is not None else 15.0)
+            
+            item_subtotal = price_without_tax * main_qty
+            
+            ratio = (item_subtotal / subtotal) if subtotal > 0 else 0
+            item_coupon_share = ratio * total_coupon
+            item_general_special_share = ratio * general_offers_total
+            
+            item_specific_special_share = sum(float(sp.get('discount', 0)) for sp in specific_offers if sku != 'غير متوفر' and sku in str(sp.get('title', '')))
+            total_special_share = item_general_special_share + item_specific_special_share
+            
+            item_total_after_disc = item_subtotal - item_coupon_share - total_special_share
+            if item_total_after_disc < 0: item_total_after_disc = 0
+            
+            is_taxable = tax_percent > 0
+            calculated_tax = item_total_after_disc * (tax_percent / 100) if is_taxable else 0.0
+            
+            # ✅ استخراج الأصناف الفرعية (Options / Grouped Bundles)
+            sub_items_extracted = []
+            
+            # 1. تفكيك مجموعة المنتجات (Bundle)
+            if item.get('grouped_items'):
+                for gi in item.get('grouped_items'):
+                    sub_prod = gi.get('product', {}) if isinstance(gi.get('product'), dict) else {}
+                    sub_name = sub_prod.get('name', 'بدون اسم')
+                    sub_sku = sub_prod.get('sku', '')
+                    sub_qty = int(gi.get('quantity', 1)) * main_qty
+                    sub_label = f"{sub_name} (SKU: {sub_sku})" if sub_sku else sub_name
+                    sub_items_extracted.append({"name": sub_label, "qty": sub_qty})
+            elif item.get('consisted_products'):
+                for cp in item.get('consisted_products'):
+                    sub_name = cp.get('name', 'بدون اسم')
+                    sub_sku = cp.get('sku', '')
+                    sub_qty = int(cp.get('quantity_in_group', 1)) * main_qty
+                    sub_label = f"{sub_name} (SKU: {sub_sku})" if sub_sku else sub_name
+                    sub_items_extracted.append({"name": sub_label, "qty": sub_qty})
+            
+            # 2. تفكيك الخيارات (Options)
+            for opt in item.get('options', []):
+                opt_name = opt.get('name', '')
+                val = opt.get('value')
+                if isinstance(val, list):
+                    for v in val: sub_items_extracted.append({"name": f"{opt_name}: {v.get('name', '')}", "qty": main_qty})
+                elif isinstance(val, dict):
+                    sub_items_extracted.append({"name": f"{opt_name}: {val.get('name', '')}", "qty": main_qty})
+                else:
+                    sub_items_extracted.append({"name": f"{opt_name}: {val}", "qty": main_qty})
+            
+            if not sub_items_extracted:
+                sub_items_extracted = [{"name": "بدون", "qty": main_qty}]
+                
+            # تحديث الإحصائيات (تعتمد على كمية المنتج الفرعي إذا وجد)
+            qty_for_stats = sum(si['qty'] for si in sub_items_extracted) if sub_items_extracted[0]['name'] != "بدون" else main_qty
+            if is_taxable:
+                taxable_stats['sales'] += item_total_after_disc
+                taxable_stats['qty'] += qty_for_stats
+                taxable_stats['tax'] += calculated_tax
+            else:
+                nontaxable_stats['sales'] += item_total_after_disc
+                nontaxable_stats['qty'] += qty_for_stats
+                nontaxable_stats['tax'] += 0.0
+            
+            splits = len(sub_items_extracted)
+            for sub in sub_items_extracted:
+                detailed_rows.append({
+                    "الفرع": branch,
+                    "تاريخ الطلب": str(order.get('date', {}).get('date', ''))[:10],
+                    "رقم الطلب": order.get('reference_id', ''),
+                    "حالة الطلب": order.get('status', {}).get('name', ''),
+                    "اسم العميل": f"{order.get('customer', {}).get('first_name', '')} {order.get('customer', {}).get('last_name', '')}".strip(),
+                    "المدينة": order.get('customer', {}).get('city', ''),
+                    "شركة الشحن": shipping_company,
+                    "رقم الصنف (SKU)": sku,
+                    "اسم الصنف": item.get('name', ''),
+                    "الأصناف الفرعية": sub['name'],
+                    "خاضع للضريبة": "نعم" if is_taxable else "لا",
+                    "الكمية": sub['qty'],
+                    "سعر الصنف (بدون ضريبة)": price_without_tax / splits,
+                    "قيمة خصم الكوبون": round(item_coupon_share / splits, 2),
+                    "قيمة خصم العرض الخاص": round(total_special_share / splits, 2),
+                    "الاجمالي بعد الخصم": round(item_total_after_disc / splits, 2),
+                    "تكلفة الشحن": shipping_cost / splits,
+                    "الضريبة": round(calculated_tax / splits, 2),
+                    "صافي المبيعات": round(item_total_after_disc / splits, 2)
+                })
+                
+    return detailed_rows, taxable_stats, nontaxable_stats
 
 def generate_short_export(orders):
-    """بناء التصدير المختصر الاحترافي"""
+    """بناء التصدير المختصر"""
     rows = []
     columns_list = [
         "الفرع", "تاريخ الطلب", "رقم الطلب", "حالة الطلب", "اسم العميل",
@@ -119,6 +247,8 @@ def generate_short_export(orders):
         total_after_disc = subtotal - total_discount
         order_branches = order.get('order_branches', [])
         branch = order_branches[0].get('name', 'الفرع الرئيسي') if order_branches else 'غير متوفر'
+        shipments = order.get('shipments', [])
+        shipping_company = shipments[0].get('courier_name', '') if shipments else order.get('shipping', {}).get('company', 'غير متوفر')
 
         rows.append({
             "الفرع": branch,
@@ -129,9 +259,9 @@ def generate_short_export(orders):
             "رقم الجوال": f"{order.get('customer', {}).get('mobile_code', '')}{order.get('customer', {}).get('mobile', '')}",
             "بريد العميل": order.get('customer', {}).get('email', ''),
             "المدينة": order.get('customer', {}).get('city', ''),
-            "شركة الشحن": 'غير متوفر',
+            "شركة الشحن": shipping_company,
             "طريقة الدفع": order.get('payment_method', ''),
-            "utm_source": order.get('source_details', {}).get('utm_source', '') or order.get('campaign', {}).get('source', ''),
+            "utm_source": order.get('source_details', {}).get('utm_source', '') or order.get('campaign', {}).get('source', 'مباشر'),
             "مجموع السلة": subtotal,
             "الخصم الإجمالي": total_discount,
             "قيمة خصم الكوبون": coupon_disc,
@@ -167,123 +297,14 @@ def generate_short_export(orders):
     wb.save(buf)
     return buf.getvalue()
 
-
-def generate_detailed_export(orders):
-    """بناء التصدير التفصيلي مع الأصناف الفرعية وتوزيع الخصومات الذكي"""
-    detailed_rows = []
-    taxable_stats = {'sales': 0.0, 'qty': 0, 'tax': 0.0}
-    nontaxable_stats = {'sales': 0.0, 'qty': 0, 'tax': 0.0}
-    
+def generate_detailed_export(detailed_rows, taxable_stats, nontaxable_stats):
+    """بناء إكسيل التصدير التفصيلي باستقبال البيانات المعالجة مباشرة"""
     columns_list = [
         "الفرع", "تاريخ الطلب", "رقم الطلب", "حالة الطلب", "اسم العميل",
         "المدينة", "شركة الشحن", "رقم الصنف (SKU)", "اسم الصنف", "الأصناف الفرعية", "خاضع للضريبة",
         "الكمية", "سعر الصنف (بدون ضريبة)", "قيمة خصم الكوبون", "قيمة خصم العرض الخاص",
         "الاجمالي بعد الخصم", "تكلفة الشحن", "الضريبة", "صافي المبيعات"
     ]
-    
-    for order in orders:
-        subtotal = float(order.get('amounts', {}).get('sub_total', {}).get('amount', 0))
-        shipping_cost = float(order.get('amounts', {}).get('shipping_cost', {}).get('amount', 0))
-        discounts = order.get('amounts', {}).get('discounts', [])
-        
-        # تصنيف الخصومات
-        total_coupon = sum(float(d.get('discount', 0)) for d in discounts if d.get('type') != 'special_offer' and 'عرض' not in str(d.get('title', '')))
-        all_special_offers = [d for d in discounts if d.get('type') == 'special_offer' or 'عرض' in str(d.get('title', ''))]
-        
-        # ✅ فصل العروض الخاصة (المطابقة لـ SKU مقابل العروض العامة للطلب)
-        order_skus = [str(item.get('sku', '')).strip() for item in order.get('items', [])]
-        specific_offers = []
-        general_offers_total = 0.0
-        
-        for sp in all_special_offers:
-            sp_title = str(sp.get('title', ''))
-            matched = any(sku and sku in sp_title for sku in order_skus)
-            if matched:
-                specific_offers.append(sp)
-            else:
-                general_offers_total += float(sp.get('discount', 0))
-
-        order_branches = order.get('order_branches', [])
-        branch = order_branches[0].get('name', 'الفرع الرئيسي') if order_branches else 'غير متوفر'
-
-        items = order.get('items', [])
-        for item in items:
-            sku = str(item.get('sku', 'غير متوفر')).strip()
-            main_qty = int(item.get('quantity', 1))
-            
-            price_without_tax = float(item.get('amounts', {}).get('price_without_tax', {}).get('amount') or item.get('price', {}).get('amount', 0))
-            tax_node = item.get('amounts', {}).get('tax', {}) if 'amounts' in item else item.get('tax', {})
-            tax_percent = float(tax_node.get('percent', 15.0) if tax_node.get('percent') is not None else 15.0)
-            
-            item_subtotal = price_without_tax * main_qty
-            
-            # ✅ 1. توزيع الكوبون والعروض العامة (التي لا تحمل SKU) بشكل تناسبي
-            ratio = (item_subtotal / subtotal) if subtotal > 0 else 0
-            item_coupon_share = ratio * total_coupon
-            item_general_special_share = ratio * general_offers_total
-            
-            # ✅ 2. خصم العروض المخصصة لـ SKU
-            item_specific_special_share = sum(float(sp.get('discount', 0)) for sp in specific_offers if sku != 'غير متوفر' and sku in str(sp.get('title', '')))
-            
-            total_special_share = item_general_special_share + item_specific_special_share
-            
-            item_total_after_disc = item_subtotal - item_coupon_share - total_special_share
-            if item_total_after_disc < 0: item_total_after_disc = 0
-            
-            is_taxable = tax_percent > 0
-            calculated_tax = item_total_after_disc * (tax_percent / 100) if is_taxable else 0.0
-            
-            # ✅ استخراج الأصناف الفرعية (Options / Bundles)
-            sub_items_extracted = []
-            for opt in item.get('options', []):
-                opt_name = opt.get('name', '')
-                val = opt.get('value')
-                if isinstance(val, list):
-                    for v in val: sub_items_extracted.append({"name": f"{opt_name}: {v.get('name', '')}", "qty": main_qty})
-                elif isinstance(val, dict):
-                    sub_items_extracted.append({"name": f"{opt_name}: {val.get('name', '')}", "qty": main_qty})
-                else:
-                    sub_items_extracted.append({"name": f"{opt_name}: {val}", "qty": main_qty})
-            
-            if not sub_items_extracted:
-                sub_items_extracted = [{"name": "بدون", "qty": main_qty}]
-                
-            # تحديث الإحصائيات (كمية الفرعي تطغى على الرئيسي)
-            qty_for_stats = sum(si['qty'] for si in sub_items_extracted) if sub_items_extracted[0]['name'] != "بدون" else main_qty
-            if is_taxable:
-                taxable_stats['sales'] += item_total_after_disc
-                taxable_stats['qty'] += qty_for_stats
-                taxable_stats['tax'] += calculated_tax
-            else:
-                nontaxable_stats['sales'] += item_total_after_disc
-                nontaxable_stats['qty'] += qty_for_stats
-                nontaxable_stats['tax'] += 0.0
-            
-            # ✅ كتابة الأسطر (تقسيم الأموال على عدد المكونات الفرعية لضمان الدقة المحاسبية للإكسيل)
-            splits = len(sub_items_extracted)
-            for sub in sub_items_extracted:
-                detailed_rows.append({
-                    "الفرع": branch,
-                    "تاريخ الطلب": str(order.get('date', {}).get('date', ''))[:10],
-                    "رقم الطلب": order.get('reference_id', ''),
-                    "حالة الطلب": order.get('status', {}).get('name', ''),
-                    "اسم العميل": f"{order.get('customer', {}).get('first_name', '')} {order.get('customer', {}).get('last_name', '')}".strip(),
-                    "المدينة": order.get('customer', {}).get('city', ''),
-                    "شركة الشحن": 'غير متوفر',
-                    "رقم الصنف (SKU)": sku,
-                    "اسم الصنف": item.get('name', ''),
-                    "الأصناف الفرعية": sub['name'],
-                    "خاضع للضريبة": "نعم" if is_taxable else "لا",
-                    "الكمية": sub['qty'],
-                    "سعر الصنف (بدون ضريبة)": price_without_tax / splits,
-                    "قيمة خصم الكوبون": round(item_coupon_share / splits, 2),
-                    "قيمة خصم العرض الخاص": round(total_special_share / splits, 2),
-                    "الاجمالي بعد الخصم": round(item_total_after_disc / splits, 2),
-                    "تكلفة الشحن": shipping_cost / splits,
-                    "الضريبة": round(calculated_tax / splits, 2),
-                    "صافي المبيعات": round(item_total_after_disc / splits, 2)
-                })
-
     df = pd.DataFrame(detailed_rows, columns=columns_list)
     buf = io.BytesIO()
     wb = openpyxl.Workbook()
@@ -323,7 +344,6 @@ def generate_detailed_export(orders):
     wb.save(buf)
     return buf.getvalue()
 
-
 def render_orders_page():
     st.markdown("""
     <div style="background: linear-gradient(135deg, #0F1C2E 0%, #8E44AD 100%); padding: 15px 25px; border-radius: 12px; color: white; margin-bottom: 20px; box-shadow: 0 4px 6px rgba(0,0,0,0.1);">
@@ -337,7 +357,6 @@ def render_orders_page():
     with st.container(border=True):
         st.markdown("#### 🔍 أدوات البحث واستخراج الطلبات")
         
-        # رفع ملف أرقام الطلبات
         uploaded_orders_file = st.file_uploader("📂 رفع ملف أرقام الطلبات (اختياري - Excel/CSV):", type=["xlsx", "csv"], help="ضع أرقام الطلبات في العمود الأول للملف.")
         order_refs_from_file = []
         if uploaded_orders_file:
@@ -371,6 +390,26 @@ def render_orders_page():
 
     if st.session_state.get('detailed_fetched_orders'):
         orders_data = st.session_state['detailed_fetched_orders']
+        
+        # ✅ معالجة الحسابات الإحصائية مرة واحدة وعرضها بأسلوب احترافي
+        detailed_rows, t_stats, nt_stats = process_financials(orders_data)
+        
+        st.markdown("---")
+        st.markdown("### 📊 إحصائيات المنتجات المباعة في هذه الفترة")
+        st.markdown(f"""
+        <div style='display:flex; gap:15px; margin-bottom: 25px; flex-wrap: wrap;'>
+            <div style='flex:1; min-width: 250px; background:linear-gradient(135deg, #16a085, #1abc9c); padding:20px; border-radius:12px; color:white; text-align:center; box-shadow: 0 4px 10px rgba(0,0,0,0.15);'>
+                <h4 style='margin:0; font-size:16px; color:#e0f7fa;'>✅ مبيعات خاضعة للضريبة</h4>
+                <h2 style='margin:10px 0; font-size:28px;'>{round(t_stats['sales'], 2):,} <span style='font-size:16px;'>SAR</span></h2>
+                <div style='font-size:14px; background:rgba(0,0,0,0.2); padding:5px; border-radius:8px;'>الكمية المباعة: <b>{t_stats['qty']}</b> | إجمالي الضريبة: <b>{round(t_stats['tax'], 2):,}</b> SAR</div>
+            </div>
+            <div style='flex:1; min-width: 250px; background:linear-gradient(135deg, #34495e, #2c3e50); padding:20px; border-radius:12px; color:white; text-align:center; box-shadow: 0 4px 10px rgba(0,0,0,0.15);'>
+                <h4 style='margin:0; font-size:16px; color:#ecf0f1;'>🚫 مبيعات غير خاضعة للضريبة</h4>
+                <h2 style='margin:10px 0; font-size:28px;'>{round(nt_stats['sales'], 2):,} <span style='font-size:16px;'>SAR</span></h2>
+                <div style='font-size:14px; background:rgba(0,0,0,0.2); padding:5px; border-radius:8px;'>الكمية المباعة: <b>{nt_stats['qty']}</b></div>
+            </div>
+        </div>
+        """, unsafe_allow_html=True)
 
         st.markdown("---")
         st.markdown("### 📥 خيارات التصدير")
@@ -381,40 +420,66 @@ def render_orders_page():
             st.download_button(label="📥 تحميل تصدير إكسيل المختصر", data=excel_short, file_name=f"Orders_Short_{datetime.now().strftime('%Y%m%d')}.xlsx", mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", use_container_width=True, type="primary")
             
         with col_detailed:
-            excel_detailed = generate_detailed_export(orders_data)
+            excel_detailed = generate_detailed_export(detailed_rows, t_stats, nt_stats)
             st.download_button(label="📥 تحميل تصدير إكسيل التفصيلي (شامل الفرعيات)", data=excel_detailed, file_name=f"Orders_Detailed_{datetime.now().strftime('%Y%m%d')}.xlsx", mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", use_container_width=True, type="primary")
             
         st.markdown("---")
-        st.markdown(f"### 📋 استعراض الطلبات المسحوبة ({len(orders_data)})")
+        st.markdown(f"### 📋 ملخص الطلبات المسحوبة ({len(orders_data)})")
         
-        # ✅ عرض الطلبات في كروت إبداعية
+        # ✅ عرض الطلبات في كروت إبداعية واحترافية
         cols = st.columns(2)
         for i, o in enumerate(orders_data):
             col = cols[i % 2]
+            
             c_name = f"{o.get('customer', {}).get('first_name', '')} {o.get('customer', {}).get('last_name', '')}".strip()
+            city = o.get('customer', {}).get('city', 'غير محدد')
             o_date = str(o.get('date', {}).get('date', ''))[:16]
-            o_total = o.get('amounts', {}).get('total', {}).get('amount', 0)
             status_name = o.get('status', {}).get('name', 'غير محدد')
             
-            # تحديد لون الكارت بناء على الحالة
+            shipments = o.get('shipments', [])
+            shipping_company = shipments[0].get('courier_name', '') if shipments else o.get('shipping', {}).get('company', 'غير متوفر')
+            order_branches = o.get('order_branches', [])
+            branch = order_branches[0].get('name', 'الفرع الرئيسي') if order_branches else 'غير متوفر'
+            utm_source = o.get('source_details', {}).get('utm_source', '') or o.get('campaign', {}).get('source', 'مباشر')
+            
+            subtotal = float(o.get('amounts', {}).get('sub_total', {}).get('amount', 0))
+            tax = float(o.get('amounts', {}).get('tax', {}).get('amount', {}).get('amount', 0))
+            discounts = o.get('amounts', {}).get('discounts', [])
+            total_discount = sum(float(d.get('discount', 0)) for d in discounts)
+            o_total = o.get('amounts', {}).get('total', {}).get('amount', 0)
+            
             border_color = "#2ecc71" if "تنفيذ" in status_name or "توصيل" in status_name else ("#e74c3c" if "لغي" in status_name else "#f39c12")
             
             with col:
                 st.markdown(f"""
-                <div style='background: #1a2639; border-radius: 10px; padding: 15px; margin-bottom: 15px; border-right: 4px solid {border_color}; box-shadow: 0 4px 6px rgba(0,0,0,0.1);'>
-                    <div style='display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid #2d3a4a; padding-bottom: 10px; margin-bottom: 10px;'>
-                        <span style='color: #00EBCF; font-size: 16px; font-weight: bold;'>📦 طلب #{o.get('reference_id')}</span>
-                        <span style='background: rgba(255,255,255,0.1); padding: 4px 10px; border-radius: 12px; font-size: 12px; color: {border_color};'>{status_name}</span>
+                <div style='background: linear-gradient(145deg, #1e293b, #0f172a); border-radius: 12px; padding: 16px; margin-bottom: 16px; border: 1px solid #334155; border-right: 5px solid {border_color}; position: relative; box-shadow: 0 4px 15px rgba(0,0,0,0.2);'>
+                    <div style='display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid rgba(255,255,255,0.05); padding-bottom: 12px; margin-bottom: 12px;'>
+                        <div>
+                            <span style='color: #38bdf8; font-size: 18px; font-weight: 800; letter-spacing: 0.5px;'>#{o.get('reference_id')}</span>
+                            <span style='color: #94a3b8; font-size: 12px; margin-right: 8px;'>📅 {o_date}</span>
+                        </div>
+                        <span style='background: {border_color}22; border: 1px solid {border_color}55; color: {border_color}; padding: 4px 12px; border-radius: 20px; font-size: 12px; font-weight: bold;'>{status_name}</span>
                     </div>
-                    <div style='font-size: 14px; color: #cbd5e1; line-height: 1.8;'>
-                        👤 <b>العميل:</b> {c_name}<br>
-                        📅 <b>التاريخ:</b> {o_date}<br>
-                        💰 <b>الإجمالي:</b> <span style='color:#f1c40f; font-weight:bold;'>{o_total} SAR</span><br>
-                        💳 <b>الدفع:</b> {o.get('payment_method', 'غير محدد')}
+                    
+                    <div style='display: flex; flex-wrap: wrap; gap: 10px; font-size: 13px; color: #cbd5e1; margin-bottom: 12px;'>
+                        <div style='flex: 1; min-width: 120px;'>
+                            <div style='margin-bottom: 6px;'>👤 <b style='color:#fff;'>العميل:</b> {c_name}</div>
+                            <div style='margin-bottom: 6px;'>📍 <b style='color:#fff;'>المدينة:</b> {city}</div>
+                            <div>🏢 <b style='color:#fff;'>الفرع:</b> {branch}</div>
+                        </div>
+                        <div style='flex: 1; min-width: 120px;'>
+                            <div style='margin-bottom: 6px;'>💳 <b style='color:#fff;'>الدفع:</b> {o.get('payment_method', 'غير محدد')}</div>
+                            <div style='margin-bottom: 6px;'>🔗 <b style='color:#fff;'>المصدر:</b> {utm_source}</div>
+                            <div>🚚 <b style='color:#fff;'>الشحن:</b> {shipping_company}</div>
+                        </div>
+                    </div>
+
+                    <div style='background: rgba(0,0,0,0.2); border-radius: 8px; padding: 10px; display: flex; justify-content: space-around; text-align: center; border: 1px solid rgba(255,255,255,0.05);'>
+                        <div><span style='display:block; font-size:11px; color:#94a3b8;'>مجموع السلة</span><b style='color:#fff; font-size:14px;'>{subtotal}</b></div>
+                        <div><span style='display:block; font-size:11px; color:#94a3b8;'>الخصومات</span><b style='color:#ef4444; font-size:14px;'>{total_discount}</b></div>
+                        <div><span style='display:block; font-size:11px; color:#94a3b8;'>الضريبة</span><b style='color:#eab308; font-size:14px;'>{tax}</b></div>
+                        <div><span style='display:block; font-size:11px; color:#94a3b8;'>الإجمالي النهائي</span><b style='color:#22c55e; font-size:15px;'>{o_total}</b></div>
                     </div>
                 </div>
                 """, unsafe_allow_html=True)
-                with st.expander("🛒 عرض المنتجات"):
-                    for item in o.get('items', []):
-                        st.markdown(f"- `{item.get('sku', 'بدون SKU')}` | {item.get('name')} (الكمية: **{item.get('quantity', 1)}**)")               
-
+                
