@@ -7,57 +7,58 @@ import openpyxl
 from openpyxl.styles import PatternFill, Font, Alignment, Border, Side
 from utils import get_headers, safe_api_request, SALLA_API_URL
 
-def get_orders_list(from_date, to_date, headers):
-    """سحب قائمة الطلبات المبدئية من سلة"""
-    orders = []
-    page = 1
-    total_pages = 1
-    status_text = st.empty()
-    progress_bar = st.progress(0)
-    
-    while page <= total_pages:
-        status_text.info(f"📥 جاري حصر الطلبات (صفحة {page} من {total_pages if page > 1 else '...'})...")
-        url = f"https://api.salla.dev/admin/v2/orders?from_date={from_date}&to_date={to_date}&per_page=50&page={page}"
-        res = safe_api_request("GET", url, headers)
-        
-        if not res or not res.get("data"): break
-        if page == 1: total_pages = res.get("pagination", {}).get("totalPages", 1)
-        
-        orders.extend(res["data"])
-        progress_bar.progress(min(page / total_pages, 1.0))
-        page += 1
-        
-    progress_bar.empty()
-    status_text.empty()
-    return orders
-
 def get_detailed_orders(orders_summary, headers):
-    """سحب التفاصيل الدقيقة لكل طلب لاستخراج الـ SKUs والضرائب الدقيقة"""
+    """سحب التفاصيل الدقيقة للطلب، ثم سحب فاتورته للحصول على المنتجات (SKU والأسعار)"""
     detailed_orders = []
     status_text = st.empty()
     progress_bar = st.progress(0)
     total = len(orders_summary)
     
     for i, o_sum in enumerate(orders_summary):
-        status_text.info(f"🔍 جاري سحب التفاصيل الدقيقة للطلب {o_sum.get('reference_id')} ({i+1} من {total})...")
+        status_text.info(f"🔍 جاري سحب التفاصيل والفواتير للطلب {o_sum.get('reference_id')} ({i+1} من {total})...")
         order_id = o_sum.get("id")
         
-        res = safe_api_request("GET", f"https://api.salla.dev/admin/v2/orders/{order_id}", headers)
-        if res and res.get("data"):
-            detailed_orders.append(res["data"])
+        # 1. سحب تفاصيل الطلب (للعميل، العناوين، الفروع، المبالغ الإجمالية)
+        res_order = safe_api_request("GET", f"https://api.salla.dev/admin/v2/orders/{order_id}", headers)
+        order_data = res_order.get("data", {}) if res_order else {}
+        
+        # 2. سحب الفاتورة المرتبطة بالطلب (لاستخراج المنتجات الدقيقة بالـ SKU والضريبة)
+        items_data = []
+        res_inv_list = safe_api_request("GET", f"https://api.salla.dev/admin/v2/orders/invoices?order_id={order_id}", headers)
+        
+        if res_inv_list and res_inv_list.get("data"):
+            invoice_id = res_inv_list["data"][0]["id"]
+            res_inv_det = safe_api_request("GET", f"https://api.salla.dev/admin/v2/orders/invoices/{invoice_id}", headers)
+            if res_inv_det and res_inv_det.get("data"):
+                items_data = res_inv_det["data"].get("items", [])
+                
+        # 3. دمج المنتجات بداخل الطلب ليتمكن التصدير من قراءتها
+        if not items_data:
+            # إذا لم تصدر فاتورة، نعتمد على المنتجات المبدئية من الملخص لتجنب الأخطاء
+            summary_items = o_sum.get('items', [])
+            for si in summary_items:
+                items_data.append({
+                    'name': si.get('name', ''),
+                    'quantity': si.get('quantity', 1),
+                    'sku': 'غير متوفر',
+                    'price': {'amount': 0},
+                    'tax': {'percent': 0}
+                })
+                
+        order_data['items'] = items_data
+        detailed_orders.append(order_data)
             
         progress_bar.progress((i + 1) / total)
-        time.sleep(0.15) # حماية من حظر سلة
+        time.sleep(0.3) # حماية مضاعفة من حظر سلة بسبب الاستعلام المزدوج
         
-    status_text.success(f"✅ تم سحب التفاصيل الدقيقة لـ {total} طلب بنجاح!")
+    status_text.success(f"✅ تم سحب التفاصيل والفواتير لـ {total} طلب بنجاح!")
     progress_bar.empty()
     return detailed_orders
+
 
 def generate_short_export(orders):
     """بناء التصدير المختصر الاحترافي"""
     rows = []
-    
-    # ✅ تحديد الأعمدة بشكل صريح لمنع خطأ (Invalid column index 0)
     columns_list = [
         "الفرع", "تاريخ الطلب", "رقم الطلب", "حالة الطلب", "اسم العميل",
         "رقم الجوال", "بريد العميل", "المدينة", "شركة الشحن", "طريقة الدفع",
@@ -69,7 +70,6 @@ def generate_short_export(orders):
     for order in orders:
         discounts = order.get('amounts', {}).get('discounts', [])
         
-        # توزيع الخصومات (كوبون vs عرض خاص)
         coupon_disc = sum(float(d.get('discount', 0)) for d in discounts if d.get('type') != 'special_offer' and 'عرض' not in str(d.get('title', '')))
         special_disc = sum(float(d.get('discount', 0)) for d in discounts if d.get('type') == 'special_offer' or 'عرض' in str(d.get('title', '')))
         total_discount = coupon_disc + special_disc
@@ -80,16 +80,12 @@ def generate_short_export(orders):
         refund = float(order.get('payment_actions', {}).get('refund_action', {}).get('refund_amount', {}).get('amount', 0))
         
         total_after_disc = subtotal - total_discount
-        net_sales = total_after_disc # صافي المبيعات بدون الشحن والضريبة
+        net_sales = total_after_disc
         
-        shipments = order.get('shipments', [])
-        shipping_company = shipments[0].get('courier_name', '') if shipments else order.get('shipping', {}).get('company', '')
-        
-        branch = ""
-        if shipments and shipments[0].get('ship_from', {}).get('name'):
-            branch = shipments[0].get('ship_from', {}).get('name')
-        elif order.get('shipping', {}).get('shipper', {}).get('company_name'):
-            branch = order.get('shipping', {}).get('shipper', {}).get('company_name')
+        # ✅ قراءة الفروع من الحقل البديل الجديد
+        order_branches = order.get('order_branches', [])
+        branch = order_branches[0].get('name', 'الفرع الرئيسي') if order_branches else 'غير متوفر'
+        shipping_company = 'غير متوفر'
 
         rows.append({
             "الفرع": branch,
@@ -114,7 +110,7 @@ def generate_short_export(orders):
             "المبلغ المسترجع": refund
         })
         
-    df = pd.DataFrame(rows, columns=columns_list) # ✅ التعديل هنا
+    df = pd.DataFrame(rows, columns=columns_list)
     buf = io.BytesIO()
     
     wb = openpyxl.Workbook()
@@ -127,7 +123,6 @@ def generate_short_export(orders):
     for row in df.itertuples(index=False, name=None):
         ws.append(row)
         
-    # تنسيق رأس الجدول
     header_fill = PatternFill(start_color="1E293B", end_color="1E293B", fill_type="solid")
     header_font = Font(color="00EBCF", bold=True, size=12)
     center_align = Alignment(horizontal="center", vertical="center")
@@ -143,13 +138,13 @@ def generate_short_export(orders):
     wb.save(buf)
     return buf.getvalue()
 
+
 def generate_detailed_export(orders):
     """بناء التصدير التفصيلي الاحترافي مع المعادلات المحاسبية"""
     detailed_rows = []
     taxable_stats = {'sales': 0.0, 'qty': 0, 'tax': 0.0}
     nontaxable_stats = {'sales': 0.0, 'qty': 0, 'tax': 0.0}
     
-    # ✅ تحديد الأعمدة بشكل صريح لمنع خطأ (Invalid column index 0)
     columns_list = [
         "الفرع", "تاريخ الطلب", "رقم الطلب", "حالة الطلب", "اسم العميل",
         "المدينة", "شركة الشحن", "رقم الصنف (SKU)", "اسم الصنف", "خاضع للضريبة",
@@ -165,41 +160,40 @@ def generate_detailed_export(orders):
         total_coupon = sum(float(d.get('discount', 0)) for d in discounts if d.get('type') != 'special_offer' and 'عرض' not in str(d.get('title', '')))
         special_offers = [d for d in discounts if d.get('type') == 'special_offer' or 'عرض' in str(d.get('title', ''))]
         
-        shipments = order.get('shipments', [])
-        shipping_company = shipments[0].get('courier_name', '') if shipments else order.get('shipping', {}).get('company', '')
-        branch = ""
-        if shipments and shipments[0].get('ship_from', {}).get('name'):
-            branch = shipments[0].get('ship_from', {}).get('name')
-        elif order.get('shipping', {}).get('shipper', {}).get('company_name'):
-            branch = order.get('shipping', {}).get('shipper', {}).get('company_name')
+        # ✅ قراءة الفروع من الحقل البديل الجديد
+        order_branches = order.get('order_branches', [])
+        branch = order_branches[0].get('name', 'الفرع الرئيسي') if order_branches else 'غير متوفر'
+        shipping_company = 'غير متوفر'
 
         items = order.get('items', [])
         for item in items:
-            sku = str(item.get('sku', '')).strip()
+            sku = str(item.get('sku', 'غير متوفر')).strip()
             qty = int(item.get('quantity', 1))
+            
+            # ✅ استخراج السعر والضريبة بتوافقية تامة مع هيكل الفواتير الجديد
             price_without_tax = float(item.get('amounts', {}).get('price_without_tax', {}).get('amount') or item.get('price', {}).get('amount', 0))
+            
+            tax_node = item.get('amounts', {}).get('tax', {}) if 'amounts' in item else item.get('tax', {})
+            tax_percent_raw = tax_node.get('percent', 15.0)
+            tax_percent = float(tax_percent_raw) if tax_percent_raw is not None else 15.0
+            
             item_subtotal = price_without_tax * qty
             
-            # ✅ 1. توزيع خصم الكوبون تناسبياً
             item_coupon_share = (item_subtotal / subtotal) * total_coupon if subtotal > 0 else 0
             
-            # ✅ 2. فحص العروض الخاصة المطابقة لـ SKU
             item_special_share = 0
             for sp in special_offers:
                 sp_title = str(sp.get('title', ''))
                 sp_discount = float(sp.get('discount', 0))
-                if sku and sku in sp_title:
+                if sku != 'غير متوفر' and sku in sp_title:
                     item_special_share += sp_discount
                     
             item_total_after_disc = item_subtotal - item_coupon_share - item_special_share
             if item_total_after_disc < 0: item_total_after_disc = 0
             
-            # ✅ 3. حساب الضريبة
-            tax_percent = float(item.get('amounts', {}).get('tax', {}).get('percent', 15.0))
             is_taxable = tax_percent > 0
             calculated_tax = item_total_after_disc * (tax_percent / 100) if is_taxable else 0.0
             
-            # تحديث الإحصائيات
             if is_taxable:
                 taxable_stats['sales'] += item_total_after_disc
                 taxable_stats['qty'] += qty
@@ -230,7 +224,7 @@ def generate_detailed_export(orders):
                 "صافي المبيعات": round(item_total_after_disc, 2)
             })
 
-    df = pd.DataFrame(detailed_rows, columns=columns_list) # ✅ التعديل هنا
+    df = pd.DataFrame(detailed_rows, columns=columns_list)
     buf = io.BytesIO()
     
     wb = openpyxl.Workbook()
@@ -276,6 +270,36 @@ def generate_detailed_export(orders):
     wb.save(buf)
     return buf.getvalue()
 
+def get_orders_list(from_date, to_date, headers, search_keyword=None):
+    """سحب قائمة الطلبات المبدئية من سلة مع إمكانية البحث"""
+    orders = []
+    page = 1
+    total_pages = 1
+    status_text = st.empty()
+    progress_bar = st.progress(0)
+    
+    while page <= total_pages:
+        status_text.info(f"📥 جاري حصر الطلبات (صفحة {page} من {total_pages if page > 1 else '...'})...")
+        
+        # بناء الرابط الأساسي مع التواريخ
+        url = f"https://api.salla.dev/admin/v2/orders?from_date={from_date}&to_date={to_date}&per_page=50&page={page}"
+        
+        # إضافة كلمة البحث إذا وجدت (البحث برقم الطلب أو الجوال)
+        if search_keyword:
+            url += f"&keyword={search_keyword}"
+            
+        res = safe_api_request("GET", url, headers)
+        
+        if not res or not res.get("data"): break
+        if page == 1: total_pages = res.get("pagination", {}).get("totalPages", 1)
+        
+        orders.extend(res["data"])
+        progress_bar.progress(min(page / total_pages, 1.0))
+        page += 1
+        
+    progress_bar.empty()
+    status_text.empty()
+    return orders
 
 def render_orders_page():
     st.markdown("""
@@ -288,7 +312,11 @@ def render_orders_page():
     if not headers: return
     
     with st.container(border=True):
-        st.markdown("#### 📅 حدد فترة استخراج الطلبات")
+        st.markdown("#### 📅 أدوات البحث واستخراج الطلبات")
+        
+        # ✅ إضافة حقل البحث الجديد
+        search_query = st.text_input("🔎 ابحث برقم الطلب أو رقم جوال العميل (اختياري):", placeholder="مثال: 41027662 أو 966500000000")
+        
         col1, col2, col3 = st.columns([2, 2, 1])
         with col1:
             from_date = st.date_input("من تاريخ:", value=datetime.now().date() - timedelta(days=7))
@@ -299,21 +327,42 @@ def render_orders_page():
             if st.button("🚀 سحب الطلبات", use_container_width=True, type="primary"):
                 st.session_state['from_date_orders'] = from_date.strftime('%Y-%m-%d')
                 st.session_state['to_date_orders'] = to_date.strftime('%Y-%m-%d')
+                st.session_state['search_keyword'] = search_query.strip() if search_query else None
                 
                 with st.spinner("جاري سحب ملخص الطلبات..."):
-                    orders_summary = get_orders_list(st.session_state['from_date_orders'], st.session_state['to_date_orders'], headers)
+                    orders_summary = get_orders_list(
+                        st.session_state['from_date_orders'], 
+                        st.session_state['to_date_orders'], 
+                        headers,
+                        search_keyword=st.session_state['search_keyword']
+                    )
                     
                 if not orders_summary:
-                    st.warning("⚠️ لا توجد طلبات في هذه الفترة.")
+                    st.warning("⚠️ لا توجد طلبات في هذه الفترة أو تطابق كلمة البحث.")
                     st.session_state['detailed_fetched_orders'] = []
                 else:
-                    st.success(f"تم العثور على {len(orders_summary)} طلب. جاري جلب التفاصيل الدقيقة (SKU)...")
+                    st.success(f"تم العثور على {len(orders_summary)} طلب. جاري جلب التفاصيل الدقيقة والفواتير...")
                     detailed_orders = get_detailed_orders(orders_summary, headers)
                     st.session_state['detailed_fetched_orders'] = detailed_orders
 
     # قسم التصدير يظهر فقط إذا تم السحب بنجاح
     if st.session_state.get('detailed_fetched_orders'):
         orders_data = st.session_state['detailed_fetched_orders']
+        
+        # ✅ إضافة قائمة عرض سريعة (Data Preview) للطلبات المسحوبة
+        with st.expander(f"👀 استعراض سريع للطلبات المسحوبة ({len(orders_data)} طلب)", expanded=False):
+            preview_rows = []
+            for o in orders_data:
+                preview_rows.append({
+                    "رقم الطلب": o.get('reference_id'),
+                    "العميل": f"{o.get('customer', {}).get('first_name', '')} {o.get('customer', {}).get('last_name', '')}".strip(),
+                    "الجوال": f"{o.get('customer', {}).get('mobile_code', '')}{o.get('customer', {}).get('mobile', '')}",
+                    "الحالة": o.get('status', {}).get('name'),
+                    "الإجمالي": o.get('amounts', {}).get('total', {}).get('amount')
+                })
+            if preview_rows:
+                st.dataframe(pd.DataFrame(preview_rows), use_container_width=True)
+                
         st.markdown("---")
         st.markdown("### 📥 خيارات التصدير")
         
