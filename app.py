@@ -5,6 +5,7 @@ import os
 import base64
 import time
 from datetime import datetime, timedelta
+from orders_page import render_orders_page
 from utils import get_headers, safe_api_request, get_branches_list
 import logging
 logging.getLogger('streamlit').setLevel(logging.ERROR)
@@ -464,7 +465,7 @@ with st.sidebar.popover("⚙️ إعدادات التطبيق (Settings)", use_c
 st.sidebar.markdown("<div style='margin-bottom: 15px;'></div>", unsafe_allow_html=True)
 # ==========================================
 
-page = st.sidebar.radio("القائمة الرئيسية", ["مركز إدارة المنتجات", "لوحة إدارة العروض الخاصة الحالية", "مركز إدارة العملاء والمجموعات"], label_visibility="collapsed")
+page = st.sidebar.radio("القائمة الرئيسية", ["مركز إدارة المنتجات", "لوحة إدارة العروض الخاصة الحالية", "تفاصيل طلبات المتجر", "مركز إدارة العملاء والمجموعات"], label_visibility="collapsed")
 st.sidebar.divider()
 
 if st.sidebar.button("🔄 إعادة مزامنة البيانات", type="primary", use_container_width=True):
@@ -483,4 +484,5 @@ if st.sidebar.button("🚪 تسجيل الخروج", use_container_width=True, t
 
 if page == "مركز إدارة المنتجات": render_products_page()
 elif page == "لوحة إدارة العروض الخاصة الحالية": render_offers_page()
+elif page == "تفاصيل طلبات المتجر": render_orders_page()
 elif page == "مركز إدارة العملاء والمجموعات": render_customers_page()
