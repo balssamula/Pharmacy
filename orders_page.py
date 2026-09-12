@@ -56,6 +56,16 @@ def get_detailed_orders(orders_summary, headers):
 def generate_short_export(orders):
     """بناء التصدير المختصر الاحترافي"""
     rows = []
+    
+    # ✅ تحديد الأعمدة بشكل صريح لمنع خطأ (Invalid column index 0)
+    columns_list = [
+        "الفرع", "تاريخ الطلب", "رقم الطلب", "حالة الطلب", "اسم العميل",
+        "رقم الجوال", "بريد العميل", "المدينة", "شركة الشحن", "طريقة الدفع",
+        "utm_source", "مجموع السلة", "الخصم الإجمالي", "قيمة خصم الكوبون",
+        "قيمة خصم العروض الخاصة", "الاجمالي بعد الخصم", "تكلفة الشحن",
+        "الضريبة", "صافي المبيعات", "المبلغ المسترجع"
+    ]
+    
     for order in orders:
         discounts = order.get('amounts', {}).get('discounts', [])
         
@@ -104,7 +114,7 @@ def generate_short_export(orders):
             "المبلغ المسترجع": refund
         })
         
-    df = pd.DataFrame(rows)
+    df = pd.DataFrame(rows, columns=columns_list) # ✅ التعديل هنا
     buf = io.BytesIO()
     
     wb = openpyxl.Workbook()
@@ -129,7 +139,7 @@ def generate_short_export(orders):
         cell.alignment = center_align
         ws.column_dimensions[openpyxl.utils.get_column_letter(col)].width = 18
         
-    ws.auto_filter.ref = ws.dimensions
+    ws.auto_filter.ref = f"A1:{openpyxl.utils.get_column_letter(len(headers))}{ws.max_row}"
     wb.save(buf)
     return buf.getvalue()
 
@@ -138,6 +148,14 @@ def generate_detailed_export(orders):
     detailed_rows = []
     taxable_stats = {'sales': 0.0, 'qty': 0, 'tax': 0.0}
     nontaxable_stats = {'sales': 0.0, 'qty': 0, 'tax': 0.0}
+    
+    # ✅ تحديد الأعمدة بشكل صريح لمنع خطأ (Invalid column index 0)
+    columns_list = [
+        "الفرع", "تاريخ الطلب", "رقم الطلب", "حالة الطلب", "اسم العميل",
+        "المدينة", "شركة الشحن", "رقم الصنف (SKU)", "اسم الصنف", "خاضع للضريبة",
+        "الكمية", "سعر الصنف (بدون ضريبة)", "قيمة خصم الكوبون", "قيمة خصم العرض الخاص",
+        "الاجمالي بعد الخصم", "تكلفة الشحن", "الضريبة", "صافي المبيعات"
+    ]
     
     for order in orders:
         subtotal = float(order.get('amounts', {}).get('sub_total', {}).get('amount', 0))
@@ -212,7 +230,7 @@ def generate_detailed_export(orders):
                 "صافي المبيعات": round(item_total_after_disc, 2)
             })
 
-    df = pd.DataFrame(detailed_rows)
+    df = pd.DataFrame(detailed_rows, columns=columns_list) # ✅ التعديل هنا
     buf = io.BytesIO()
     
     wb = openpyxl.Workbook()
