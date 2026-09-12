@@ -1509,7 +1509,11 @@ def render_offers_page():
                     
                 ed_discount_type_ar = st.selectbox("نوع الخصم Y:", ["منتج مجاني", "خصم بنسبة"], index=1 if get_obj.get('discount_type', 'free-product') == 'percentage' else 0, key=f"ed_dt_ar_{offer_id}_{idx}")
                 if ed_discount_type_ar == "خصم بنسبة":
-                    ed_disc_amt = st.number_input("نسبة الخصم Y (%):", min_value=1.0, max_value=100.0, value=safe_float(get_obj.get('discount_amount', 50.0)), key=f"ed_da_{offer_id}_{idx}")
+                    # ✅ حماية ذكية: ضمان أن القيمة تقع دائماً بين 0.0 و 100.0 لتجنب أي أعطال
+                    raw_val = safe_float(get_obj.get('discount_amount', 50.0))
+                    safe_val = float(max(0.0, min(100.0, raw_val)))
+                    
+                    ed_disc_amt = st.number_input("نسبة الخصم Y (%):", min_value=0.0, max_value=100.0, value=safe_val, key=f"ed_da_{offer_id}_{idx}")
                     ed_disc_type = "percentage"
                 else:
                     ed_disc_amt = 0.0; ed_disc_type = "free-product"
