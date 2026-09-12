@@ -452,34 +452,36 @@ def render_orders_page():
             
             with col:
                 st.markdown(f"""
-                <div style='background: linear-gradient(145deg, #1e293b, #0f172a); border-radius: 12px; padding: 16px; margin-bottom: 16px; border: 1px solid #334155; border-right: 5px solid {border_color}; position: relative; box-shadow: 0 4px 15px rgba(0,0,0,0.2);'>
-                    <div style='display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid rgba(255,255,255,0.05); padding-bottom: 12px; margin-bottom: 12px;'>
-                        <div>
-                            <span style='color: #38bdf8; font-size: 18px; font-weight: 800; letter-spacing: 0.5px;'>#{o.get('reference_id')}</span>
-                            <span style='color: #94a3b8; font-size: 12px; margin-right: 8px;'>📅 {o_date}</span>
-                        </div>
-                        <span style='background: {border_color}22; border: 1px solid {border_color}55; color: {border_color}; padding: 4px 12px; border-radius: 20px; font-size: 12px; font-weight: bold;'>{status_name}</span>
-                    </div>
-                    
-                    <div style='display: flex; flex-wrap: wrap; gap: 10px; font-size: 13px; color: #cbd5e1; margin-bottom: 12px;'>
-                        <div style='flex: 1; min-width: 120px;'>
-                            <div style='margin-bottom: 6px;'>👤 <b style='color:#fff;'>العميل:</b> {c_name}</div>
-                            <div style='margin-bottom: 6px;'>📍 <b style='color:#fff;'>المدينة:</b> {city}</div>
-                            <div>🏢 <b style='color:#fff;'>الفرع:</b> {branch}</div>
-                        </div>
-                        <div style='flex: 1; min-width: 120px;'>
-                            <div style='margin-bottom: 6px;'>💳 <b style='color:#fff;'>الدفع:</b> {o.get('payment_method', 'غير محدد')}</div>
-                            <div style='margin-bottom: 6px;'>🔗 <b style='color:#fff;'>المصدر:</b> {utm_source}</div>
-                            <div>🚚 <b style='color:#fff;'>الشحن:</b> {shipping_company}</div>
-                        </div>
-                    </div>
-
-                    <div style='background: rgba(0,0,0,0.2); border-radius: 8px; padding: 10px; display: flex; justify-content: space-around; text-align: center; border: 1px solid rgba(255,255,255,0.05);'>
-                        <div><span style='display:block; font-size:11px; color:#94a3b8;'>مجموع السلة</span><b style='color:#fff; font-size:14px;'>{subtotal}</b></div>
-                        <div><span style='display:block; font-size:11px; color:#94a3b8;'>الخصومات</span><b style='color:#ef4444; font-size:14px;'>{total_discount}</b></div>
-                        <div><span style='display:block; font-size:11px; color:#94a3b8;'>الضريبة</span><b style='color:#eab308; font-size:14px;'>{tax}</b></div>
-                        <div><span style='display:block; font-size:11px; color:#94a3b8;'>الإجمالي النهائي</span><b style='color:#22c55e; font-size:15px;'>{o_total}</b></div>
-                    </div>
-                </div>
-                """, unsafe_allow_html=True)
+<div style='background: linear-gradient(145deg, #1e293b, #0f172a); border-radius: 12px; padding: 16px; margin-bottom: 16px; border: 1px solid #334155; border-right: 5px solid {border_color}; position: relative; box-shadow: 0 4px 15px rgba(0,0,0,0.2);'>
+    <div style='display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid rgba(255,255,255,0.05); padding-bottom: 12px; margin-bottom: 12px;'>
+        <div>
+            <span style='color: #38bdf8; font-size: 18px; font-weight: 800; letter-spacing: 0.5px;'>#{o.get('reference_id')}</span>
+            <span style='color: #94a3b8; font-size: 12px; margin-right: 8px;'>📅 {o_date}</span>
+        </div>
+        <span style='background: {border_color}22; border: 1px solid {border_color}55; color: {border_color}; padding: 4px 12px; border-radius: 20px; font-size: 12px; font-weight: bold;'>{status_name}</span>
+    </div>
+    <div style='display: flex; flex-wrap: wrap; gap: 10px; font-size: 13px; color: #cbd5e1; margin-bottom: 12px;'>
+        <div style='flex: 1; min-width: 120px;'>
+            <div style='margin-bottom: 6px;'>👤 <b style='color:#fff;'>العميل:</b> {c_name}</div>
+            <div style='margin-bottom: 6px;'>📍 <b style='color:#fff;'>المدينة:</b> {city}</div>
+            <div>🏢 <b style='color:#fff;'>الفرع:</b> {branch}</div>
+        </div>
+        <div style='flex: 1; min-width: 120px;'>
+            <div style='margin-bottom: 6px;'>💳 <b style='color:#fff;'>الدفع:</b> {o.get('payment_method', 'غير محدد')}</div>
+            <div style='margin-bottom: 6px;'>🔗 <b style='color:#fff;'>المصدر:</b> {utm_source}</div>
+            <div>🚚 <b style='color:#fff;'>الشحن:</b> {shipping_company}</div>
+        </div>
+    </div>
+    <div style='background: rgba(0,0,0,0.2); border-radius: 8px; padding: 10px; display: flex; justify-content: space-around; text-align: center; border: 1px solid rgba(255,255,255,0.05);'>
+        <div><span style='display:block; font-size:11px; color:#94a3b8;'>مجموع السلة</span><b style='color:#fff; font-size:14px;'>{round(subtotal, 2):,}</b></div>
+        <div><span style='display:block; font-size:11px; color:#94a3b8;'>الخصومات</span><b style='color:#ef4444; font-size:14px;'>{round(total_discount, 2):,}</b></div>
+        <div><span style='display:block; font-size:11px; color:#94a3b8;'>الضريبة</span><b style='color:#eab308; font-size:14px;'>{round(tax, 2):,}</b></div>
+        <div><span style='display:block; font-size:11px; color:#94a3b8;'>الإجمالي النهائي</span><b style='color:#22c55e; font-size:15px;'>{round(o_total, 2):,}</b></div>
+    </div>
+</div>
+""", unsafe_allow_html=True)
+                
+                with st.expander("🛒 عرض المنتجات"):
+                    for item in o.get('items', []):
+                        st.markdown(f"- `{item.get('sku', 'بدون SKU')}` | {item.get('name')} (الكمية: **{item.get('quantity', 1)}**)")
                 
