@@ -45,22 +45,30 @@ def get_orders_list(from_date, to_date, headers, search_keyword=None, order_refs
     return orders
 
 def get_detailed_orders(orders_summary, headers):
-    """سحب التفاصيل الدقيقة للطلبات وجلب مكونات المنتجات المجمعة"""
+    """سحب التفاصيل، الفواتير، والشحنات للطلبات"""
     detailed_orders = []
     status_text = st.empty()
     progress_bar = st.progress(0)
     total = len(orders_summary)
     
     for i, o_sum in enumerate(orders_summary):
-        status_text.info(f"🔍 جاري سحب التفاصيل والفواتير للطلب {o_sum.get('reference_id')} ({i+1} من {total})...")
+        status_text.info(f"🔍 جاري سحب التفاصيل للطلب {o_sum.get('reference_id')} ({i+1} من {total})...")
         order_id = o_sum.get("id")
         
+        # 1. سحب بيانات الطلب العامة
         res_order = safe_api_request("GET", f"https://api.salla.dev/admin/v2/orders/{order_id}", headers)
         order_data = res_order.get("data", {}) if res_order else {}
         
+        # 2. سحب عناصر الطلب للخيارات
         items_res = safe_api_request("GET", f"https://api.salla.dev/admin/v2/orders/items?order_id={order_id}", headers)
         order_items = items_res.get("data", []) if items_res else []
         
+        # ✅ 3. استدعاء مسار الشحنات المستقل لجلب شركة الشحن
+        ship_res = safe_api_request("GET", f"https://api.salla.dev/admin/v2/shipments?order_id={order_id}", headers)
+        if ship_res and ship_res.get("data"):
+            order_data['shipments'] = ship_res["data"]
+        
+        # 4. سحب الفاتورة للأسعار المحاسبية
         items_data = []
         res_inv_list = safe_api_request("GET", f"https://api.salla.dev/admin/v2/orders/invoices?order_id={order_id}", headers)
         if res_inv_list and res_inv_list.get("data"):
@@ -100,7 +108,7 @@ def get_detailed_orders(orders_summary, headers):
         progress_bar.progress((i + 1) / total)
         time.sleep(0.3)
         
-    status_text.success(f"✅ تم سحب التفاصيل والمكونات الفرعية لـ {total} طلب بنجاح!")
+    status_text.success(f"✅ تم سحب التفاصيل الكاملة لـ {total} طلب بنجاح!")
     progress_bar.empty()
     return detailed_orders
 
@@ -481,8 +489,13 @@ def render_orders_page():
             o_date = str(o.get('date', {}).get('date', ''))[:16]
             status_name = o.get('status', {}).get('name', 'غير محدد')
             
+            # ✅ جلب شركة الشحن من المصفوفة الجديدة التي سحبناها
             shipments = o.get('shipments', [])
-            shipping_company = shipments[0].get('courier_name', '') if shipments else o.get('shipping', {}).get('company', 'غير متوفر')
+            shipping_company = 'غير متوفر'
+            if shipments:
+                shipping_company = shipments[0].get('courier_name', '') or shipments[0].get('courier_id', 'متوفر (بدون اسم)')
+            elif o.get('shipping', {}).get('company'):
+                shipping_company = o.get('shipping', {}).get('company')
             order_branches = o.get('order_branches', [])
             branch = order_branches[0].get('name', 'الفرع الرئيسي') if order_branches else 'غير متوفر'
             utm_source = o.get('source_details', {}).get('utm_source', '') or o.get('campaign', {}).get('source', 'مباشر')
