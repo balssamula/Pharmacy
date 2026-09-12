@@ -45,7 +45,7 @@ def get_orders_list(from_date, to_date, headers, search_keyword=None, order_refs
     return orders
 
 def get_detailed_orders(orders_summary, headers):
-    """سحب التفاصيل الدقيقة للطلبات وجلب مكونات المنتجات المجمعة (Group Products) من مصدرها"""
+    """سحب التفاصيل الدقيقة للطلبات وجلب مكونات المنتجات المجمعة"""
     detailed_orders = []
     status_text = st.empty()
     progress_bar = st.progress(0)
@@ -55,15 +55,12 @@ def get_detailed_orders(orders_summary, headers):
         status_text.info(f"🔍 جاري سحب التفاصيل والفواتير للطلب {o_sum.get('reference_id')} ({i+1} من {total})...")
         order_id = o_sum.get("id")
         
-        # 1. سحب بيانات الطلب العامة
         res_order = safe_api_request("GET", f"https://api.salla.dev/admin/v2/orders/{order_id}", headers)
         order_data = res_order.get("data", {}) if res_order else {}
         
-        # 2. سحب عناصر الطلب لاستخراج الخيارات (Options)
         items_res = safe_api_request("GET", f"https://api.salla.dev/admin/v2/orders/items?order_id={order_id}", headers)
         order_items = items_res.get("data", []) if items_res else []
         
-        # 3. سحب الفاتورة للأسعار المحاسبية الدقيقة والضرائب
         items_data = []
         res_inv_list = safe_api_request("GET", f"https://api.salla.dev/admin/v2/orders/invoices?order_id={order_id}", headers)
         if res_inv_list and res_inv_list.get("data"):
@@ -80,14 +77,11 @@ def get_detailed_orders(orders_summary, headers):
                     'sku': 'غير متوفر', 'price': {'amount': 0}, 'tax': {'percent': 0}
                 })
 
-        # 4. دمج المنتجات وتفكيك المجموعات عبر Product API
         for inv_item in items_data:
-            # دمج خيارات المشتري
             match_oi = next((oi for oi in order_items if str(oi.get('id')) == str(inv_item.get('item_id'))), None)
             if match_oi:
                 inv_item['options'] = match_oi.get('options', [])
             
-            # جلب المنتجات الفرعية إذا كان الصنف مجموعة منتجات (Bundle)
             pid = inv_item.get('product_id')
             if pid and str(pid).isdigit():
                 prod_info = next((p for p in st.session_state.get('all_products', []) if str(p.get('id')) == str(pid)), None)
@@ -111,16 +105,18 @@ def get_detailed_orders(orders_summary, headers):
     return detailed_orders
 
 def process_financials(orders):
-    """أداة المعالجة المحاسبية: تستخرج الصفوف التفصيلية والإحصائيات وتوزع الخصومات"""
+    """أداة المعالجة المحاسبية: تستخرج الصفوف والإحصائيات مقسمة لمنتجات وشحن"""
     detailed_rows = []
-    taxable_stats = {'sales': 0.0, 'qty': 0, 'tax': 0.0}
-    nontaxable_stats = {'sales': 0.0, 'qty': 0, 'tax': 0.0}
+    # تحديث هيكل الإحصائيات ليفصل مبيعات/ضرائب المنتجات عن الشحن
+    taxable_stats = {'item_sales': 0.0, 'shipping_sales': 0.0, 'qty': 0, 'item_tax': 0.0, 'shipping_tax': 0.0}
+    nontaxable_stats = {'item_sales': 0.0, 'shipping_sales': 0.0, 'qty': 0, 'item_tax': 0.0, 'shipping_tax': 0.0}
     
     for order in orders:
         subtotal = float(order.get('amounts', {}).get('sub_total', {}).get('amount', 0))
         shipping_cost = float(order.get('amounts', {}).get('shipping_cost', {}).get('amount', 0))
-        discounts = order.get('amounts', {}).get('discounts', [])
+        order_total_tax = float(order.get('amounts', {}).get('tax', {}).get('amount', {}).get('amount', 0))
         
+        discounts = order.get('amounts', {}).get('discounts', [])
         total_coupon = sum(float(d.get('discount', 0)) for d in discounts if d.get('type') != 'special_offer' and 'عرض' not in str(d.get('title', '')))
         all_special_offers = [d for d in discounts if d.get('type') == 'special_offer' or 'عرض' in str(d.get('title', ''))]
         
@@ -131,17 +127,17 @@ def process_financials(orders):
         for sp in all_special_offers:
             sp_title = str(sp.get('title', ''))
             matched = any(sku and sku in sp_title for sku in order_skus)
-            if matched:
-                specific_offers.append(sp)
-            else:
-                general_offers_total += float(sp.get('discount', 0))
+            if matched: specific_offers.append(sp)
+            else: general_offers_total += float(sp.get('discount', 0))
 
         order_branches = order.get('order_branches', [])
         branch = order_branches[0].get('name', 'الفرع الرئيسي') if order_branches else 'غير متوفر'
         shipments = order.get('shipments', [])
         shipping_company = shipments[0].get('courier_name', '') if shipments else order.get('shipping', {}).get('company', 'غير متوفر')
 
+        order_items_tax_sum = 0.0 # تجميع ضرائب المنتجات لمعرفة ضريبة الشحن لاحقاً
         items = order.get('items', [])
+        
         for item in items:
             sku = str(item.get('sku', 'غير متوفر')).strip()
             main_qty = int(item.get('quantity', 1))
@@ -164,11 +160,12 @@ def process_financials(orders):
             
             is_taxable = tax_percent > 0
             calculated_tax = item_total_after_disc * (tax_percent / 100) if is_taxable else 0.0
+            order_items_tax_sum += calculated_tax
             
-            # ✅ استخراج الأصناف الفرعية (الخيارات أو مجموعة المنتجات)
+            # ✅ تحديث: صافي المبيعات أصبح يشمل الضريبة
+            item_net_sales = item_total_after_disc + calculated_tax 
+            
             sub_items_extracted = []
-            
-            # تفكيك الباقات
             if item.get('grouped_items'):
                 for gi in item.get('grouped_items'):
                     sub_prod = gi.get('product', {}) if isinstance(gi.get('product'), dict) else {}
@@ -185,7 +182,6 @@ def process_financials(orders):
                     sub_label = f"{sub_name} (SKU: {sub_sku})" if sub_sku else sub_name
                     sub_items_extracted.append({"name": sub_label, "qty": sub_qty})
             
-            # تفكيك الخيارات
             for opt in item.get('options', []):
                 opt_name = opt.get('name', '')
                 val = opt.get('value')
@@ -202,13 +198,12 @@ def process_financials(orders):
             qty_for_stats = sum(si['qty'] for si in sub_items_extracted) if sub_items_extracted[0]['name'] != "بدون" else main_qty
             
             if is_taxable:
-                taxable_stats['sales'] += item_total_after_disc
+                taxable_stats['item_sales'] += item_total_after_disc
                 taxable_stats['qty'] += qty_for_stats
-                taxable_stats['tax'] += calculated_tax
+                taxable_stats['item_tax'] += calculated_tax
             else:
-                nontaxable_stats['sales'] += item_total_after_disc
+                nontaxable_stats['item_sales'] += item_total_after_disc
                 nontaxable_stats['qty'] += qty_for_stats
-                nontaxable_stats['tax'] += 0.0
             
             splits = len(sub_items_extracted)
             for sub in sub_items_extracted:
@@ -231,8 +226,16 @@ def process_financials(orders):
                     "الاجمالي بعد الخصم": round(item_total_after_disc / splits, 2),
                     "تكلفة الشحن": shipping_cost / splits,
                     "الضريبة": round(calculated_tax / splits, 2),
-                    "صافي المبيعات": round(item_total_after_disc / splits, 2)
+                    "صافي المبيعات": round(item_net_sales / splits, 2) # ✅ شامل الضريبة
                 })
+        
+        # ✅ استخراج وتوزيع إحصائيات الشحن (بعد انتهاء منتجات الطلب)
+        shipping_tax = max(0.0, order_total_tax - order_items_tax_sum)
+        if order_total_tax > 0 or shipping_tax > 0:
+            taxable_stats['shipping_sales'] += shipping_cost
+            taxable_stats['shipping_tax'] += shipping_tax
+        else:
+            nontaxable_stats['shipping_sales'] += shipping_cost
                 
     return detailed_rows, taxable_stats, nontaxable_stats
 
@@ -259,6 +262,9 @@ def generate_short_export(orders):
         refund = float(order.get('payment_actions', {}).get('refund_action', {}).get('refund_amount', {}).get('amount', 0))
         
         total_after_disc = subtotal - total_discount
+        # ✅ صافي المبيعات شامل الضريبة (إجمالي المنتجات + الضريبة، بدون الشحن ليبقى في عموده)
+        net_sales_with_tax = total_after_disc + tax 
+        
         order_branches = order.get('order_branches', [])
         branch = order_branches[0].get('name', 'الفرع الرئيسي') if order_branches else 'غير متوفر'
         shipments = order.get('shipments', [])
@@ -283,7 +289,7 @@ def generate_short_export(orders):
             "الاجمالي بعد الخصم": total_after_disc,
             "تكلفة الشحن": shipping,
             "الضريبة": tax,
-            "صافي المبيعات": total_after_disc,
+            "صافي المبيعات": net_sales_with_tax,
             "المبلغ المسترجع": refund
         })
         
@@ -326,18 +332,28 @@ def generate_detailed_export(detailed_rows, taxable_stats, nontaxable_stats):
     ws.title = "التصدير التفصيلي"
     ws.sheet_view.rightToLeft = True
     
-    ws.merge_cells('A1:D1')
-    ws['A1'] = "📊 إحصائيات المنتجات (باحتساب الأصناف الفرعية)"
+    # ✅ تحديث إحصائيات الإكسيل لتشمل مبيعات وضرائب الشحن
+    ws.merge_cells('A1:G1')
+    ws['A1'] = "📊 إحصائيات المبيعات التفصيلية (بإحتساب الأصناف الفرعية)"
     ws['A1'].font = Font(bold=True, size=13, color="FFFFFF")
     ws['A1'].fill = PatternFill(start_color="8E44AD", end_color="8E44AD", fill_type="solid")
     ws['A1'].alignment = Alignment(horizontal="center", vertical="center")
     
-    stat_headers = ["النوع", "اجمالي قيمة المنتجات بعد الخصم", "الكمية المباعة", "قيمة الضريبة"]
+    stat_headers = ["النوع", "مبيعات المنتجات", "مبيعات الشحن", "إجمالي المبيعات", "الكمية المباعة", "ضريبة المنتجات", "ضريبة الشحن", "إجمالي الضريبة"]
     ws.append(stat_headers)
     for cell in ws[2]: cell.font = Font(bold=True); cell.fill = PatternFill(start_color="ECF0F1", fill_type="solid")
         
-    ws.append(["خاضعة للضريبة", round(taxable_stats['sales'], 2), taxable_stats['qty'], round(taxable_stats['tax'], 2)])
-    ws.append(["غير خاضعة للضريبة", round(nontaxable_stats['sales'], 2), nontaxable_stats['qty'], round(nontaxable_stats['tax'], 2)])
+    ws.append([
+        "خاضعة للضريبة", round(taxable_stats['item_sales'], 2), round(taxable_stats['shipping_sales'], 2), 
+        round(taxable_stats['item_sales'] + taxable_stats['shipping_sales'], 2), taxable_stats['qty'],
+        round(taxable_stats['item_tax'], 2), round(taxable_stats['shipping_tax'], 2), 
+        round(taxable_stats['item_tax'] + taxable_stats['shipping_tax'], 2)
+    ])
+    ws.append([
+        "غير خاضعة للضريبة", round(nontaxable_stats['item_sales'], 2), round(nontaxable_stats['shipping_sales'], 2), 
+        round(nontaxable_stats['item_sales'] + nontaxable_stats['shipping_sales'], 2), nontaxable_stats['qty'],
+        0.0, 0.0, 0.0
+    ])
     ws.append([])
     
     headers = list(df.columns)
@@ -410,23 +426,37 @@ def render_orders_page():
         st.markdown("---")
         st.markdown("### 📊 إحصائيات المنتجات المباعة في هذه الفترة")
         
-        # ✅ تنسيق HTML للإحصائيات بدون مسافات لتجنب الأخطاء
+        # ✅ الإحصائيات مفصلة للمنتجات والشحن
+        t_total_sales = t_stats['item_sales'] + t_stats['shipping_sales']
+        t_total_tax = t_stats['item_tax'] + t_stats['shipping_tax']
+        nt_total_sales = nt_stats['item_sales'] + nt_stats['shipping_sales']
+        
         stats_html = f"""
 <div style="display:flex; gap:15px; margin-bottom: 25px; flex-wrap: wrap;">
-<div style="flex:1; min-width: 250px; background:linear-gradient(135deg, #16a085, #1abc9c); padding:20px; border-radius:12px; color:white; text-align:center; box-shadow: 0 4px 10px rgba(0,0,0,0.15);">
+<div style="flex:1; min-width: 300px; background:linear-gradient(135deg, #16a085, #1abc9c); padding:20px; border-radius:12px; color:white; text-align:center; box-shadow: 0 4px 10px rgba(0,0,0,0.15);">
 <h4 style="margin:0; font-size:16px; color:#e0f7fa;">✅ مبيعات خاضعة للضريبة</h4>
-<h2 style="margin:10px 0; font-size:28px;">{round(t_stats['sales'], 2):,} <span style="font-size:16px;">SAR</span></h2>
-<div style="font-size:14px; background:rgba(0,0,0,0.2); padding:5px; border-radius:8px;">الكمية المباعة: <b>{t_stats['qty']}</b> | إجمالي الضريبة: <b>{round(t_stats['tax'], 2):,}</b> SAR</div>
+<h2 style="margin:10px 0; font-size:28px;">{round(t_total_sales, 2):,} <span style="font-size:16px;">SAR</span></h2>
+<div style="font-size:13px; background:rgba(0,0,0,0.15); padding:8px; border-radius:8px; margin-bottom:8px;">
+<b>تفصيل المبيعات:</b> المنتجات: {round(t_stats['item_sales'], 2):,} | الشحن: {round(t_stats['shipping_sales'], 2):,}
 </div>
-<div style="flex:1; min-width: 250px; background:linear-gradient(135deg, #34495e, #2c3e50); padding:20px; border-radius:12px; color:white; text-align:center; box-shadow: 0 4px 10px rgba(0,0,0,0.15);">
+<div style="font-size:13px; background:rgba(0,0,0,0.15); padding:8px; border-radius:8px;">
+<b>إجمالي الضريبة:</b> {round(t_total_tax, 2):,} SAR <br> (المنتجات: {round(t_stats['item_tax'], 2):,} | الشحن: {round(t_stats['shipping_tax'], 2):,})
+</div>
+</div>
+<div style="flex:1; min-width: 300px; background:linear-gradient(135deg, #34495e, #2c3e50); padding:20px; border-radius:12px; color:white; text-align:center; box-shadow: 0 4px 10px rgba(0,0,0,0.15);">
 <h4 style="margin:0; font-size:16px; color:#ecf0f1;">🚫 مبيعات غير خاضعة للضريبة</h4>
-<h2 style="margin:10px 0; font-size:28px;">{round(nt_stats['sales'], 2):,} <span style="font-size:16px;">SAR</span></h2>
-<div style="font-size:14px; background:rgba(0,0,0,0.2); padding:5px; border-radius:8px;">الكمية المباعة: <b>{nt_stats['qty']}</b></div>
+<h2 style="margin:10px 0; font-size:28px;">{round(nt_total_sales, 2):,} <span style="font-size:16px;">SAR</span></h2>
+<div style="font-size:13px; background:rgba(0,0,0,0.15); padding:8px; border-radius:8px; margin-bottom:8px;">
+<b>تفصيل المبيعات:</b> المنتجات: {round(nt_stats['item_sales'], 2):,} | الشحن: {round(nt_stats['shipping_sales'], 2):,}
+</div>
+<div style="font-size:13px; background:rgba(0,0,0,0.15); padding:8px; border-radius:8px;">
+<b>إجمالي الكمية المباعة:</b> {nt_stats['qty']} وحدة
+</div>
 </div>
 </div>
 """
         st.markdown(stats_html, unsafe_allow_html=True)
-
+                
         st.markdown("---")
         st.markdown("### 📥 خيارات التصدير")
         
@@ -459,6 +489,7 @@ def render_orders_page():
             
             subtotal = float(o.get('amounts', {}).get('sub_total', {}).get('amount', 0))
             tax = float(o.get('amounts', {}).get('tax', {}).get('amount', {}).get('amount', 0))
+            shipping_cost = float(o.get('amounts', {}).get('shipping_cost', {}).get('amount', 0)) # ✅ إضافة تكلفة الشحن
             discounts = o.get('amounts', {}).get('discounts', [])
             total_discount = sum(float(d.get('discount', 0)) for d in discounts)
             o_total = float(o.get('amounts', {}).get('total', {}).get('amount', 0))
@@ -466,7 +497,7 @@ def render_orders_page():
             border_color = "#2ecc71" if "تنفيذ" in status_name or "توصيل" in status_name else ("#e74c3c" if "لغي" in status_name else "#f39c12")
             
             with col:
-                # ✅ تنسيق الكروت بدون مسافات لمنع خطأ تحولها لأكواد
+                # ✅ إضافة الشحن في تذييل الكارت
                 card_html = f"""
 <div style="background: linear-gradient(145deg, #1e293b, #0f172a); border-radius: 12px; padding: 16px; margin-bottom: 16px; border: 1px solid #334155; border-right: 5px solid {border_color}; position: relative; box-shadow: 0 4px 15px rgba(0,0,0,0.2);">
 <div style="display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid rgba(255,255,255,0.05); padding-bottom: 12px; margin-bottom: 12px;">
@@ -491,6 +522,7 @@ def render_orders_page():
 <div style="background: rgba(0,0,0,0.2); border-radius: 8px; padding: 10px; display: flex; justify-content: space-around; text-align: center; border: 1px solid rgba(255,255,255,0.05);">
 <div><span style="display:block; font-size:11px; color:#94a3b8;">مجموع السلة</span><b style="color:#fff; font-size:14px;">{round(subtotal, 2):,}</b></div>
 <div><span style="display:block; font-size:11px; color:#94a3b8;">الخصومات</span><b style="color:#ef4444; font-size:14px;">{round(total_discount, 2):,}</b></div>
+<div><span style="display:block; font-size:11px; color:#94a3b8;">الشحن</span><b style="color:#38bdf8; font-size:14px;">{round(shipping_cost, 2):,}</b></div>
 <div><span style="display:block; font-size:11px; color:#94a3b8;">الضريبة</span><b style="color:#eab308; font-size:14px;">{round(tax, 2):,}</b></div>
 <div><span style="display:block; font-size:11px; color:#94a3b8;">الإجمالي النهائي</span><b style="color:#22c55e; font-size:15px;">{round(o_total, 2):,}</b></div>
 </div>
@@ -501,4 +533,3 @@ def render_orders_page():
                 with st.expander("🛒 عرض المنتجات"):
                     for item in o.get('items', []):
                         st.markdown(f"- `{item.get('sku', 'بدون SKU')}` | {item.get('name')} (الكمية: **{item.get('quantity', 1)}**)")
-                
