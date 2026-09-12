@@ -371,7 +371,19 @@ def render_orders_page():
 
     if st.session_state.get('detailed_fetched_orders'):
         orders_data = st.session_state['detailed_fetched_orders']
+
+        st.markdown("---")
+        st.markdown("### 📥 خيارات التصدير")
         
+        col_short, col_detailed = st.columns(2)
+        with col_short:
+            excel_short = generate_short_export(orders_data)
+            st.download_button(label="📥 تحميل تصدير إكسيل المختصر", data=excel_short, file_name=f"Orders_Short_{datetime.now().strftime('%Y%m%d')}.xlsx", mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", use_container_width=True, type="primary")
+            
+        with col_detailed:
+            excel_detailed = generate_detailed_export(orders_data)
+            st.download_button(label="📥 تحميل تصدير إكسيل التفصيلي (شامل الفرعيات)", data=excel_detailed, file_name=f"Orders_Detailed_{datetime.now().strftime('%Y%m%d')}.xlsx", mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", use_container_width=True, type="primary")
+            
         st.markdown("---")
         st.markdown(f"### 📋 استعراض الطلبات المسحوبة ({len(orders_data)})")
         
@@ -404,16 +416,5 @@ def render_orders_page():
                 """, unsafe_allow_html=True)
                 with st.expander("🛒 عرض المنتجات"):
                     for item in o.get('items', []):
-                        st.markdown(f"- `{item.get('sku', 'بدون SKU')}` | {item.get('name')} (الكمية: **{item.get('quantity', 1)}**)")
-                
-        st.markdown("---")
-        st.markdown("### 📥 خيارات التصدير")
-        
-        col_short, col_detailed = st.columns(2)
-        with col_short:
-            excel_short = generate_short_export(orders_data)
-            st.download_button(label="📥 تحميل تصدير إكسيل المختصر", data=excel_short, file_name=f"Orders_Short_{datetime.now().strftime('%Y%m%d')}.xlsx", mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", use_container_width=True, type="primary")
-            
-        with col_detailed:
-            excel_detailed = generate_detailed_export(orders_data)
-            st.download_button(label="📥 تحميل تصدير إكسيل التفصيلي (شامل الفرعيات)", data=excel_detailed, file_name=f"Orders_Detailed_{datetime.now().strftime('%Y%m%d')}.xlsx", mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", use_container_width=True, type="primary")
+                        st.markdown(f"- `{item.get('sku', 'بدون SKU')}` | {item.get('name')} (الكمية: **{item.get('quantity', 1)}**)")               
+
