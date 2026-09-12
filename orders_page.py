@@ -45,7 +45,7 @@ def get_orders_list(from_date, to_date, headers, search_keyword=None, order_refs
     return orders
 
 def get_detailed_orders(orders_summary, headers):
-    """سحب التفاصيل الدقيقة والفواتير للطلبات مع استخراج مكونات المنتجات المجمعة"""
+    """سحب التفاصيل الدقيقة للطلبات وجلب مكونات المنتجات المجمعة (Group Products) من مصدرها"""
     detailed_orders = []
     status_text = st.empty()
     progress_bar = st.progress(0)
@@ -55,9 +55,15 @@ def get_detailed_orders(orders_summary, headers):
         status_text.info(f"🔍 جاري سحب التفاصيل والفواتير للطلب {o_sum.get('reference_id')} ({i+1} من {total})...")
         order_id = o_sum.get("id")
         
+        # 1. سحب بيانات الطلب العامة
         res_order = safe_api_request("GET", f"https://api.salla.dev/admin/v2/orders/{order_id}", headers)
         order_data = res_order.get("data", {}) if res_order else {}
         
+        # 2. سحب عناصر الطلب لاستخراج الخيارات (Options)
+        items_res = safe_api_request("GET", f"https://api.salla.dev/admin/v2/orders/items?order_id={order_id}", headers)
+        order_items = items_res.get("data", []) if items_res else []
+        
+        # 3. سحب الفاتورة للأسعار المحاسبية الدقيقة والضرائب
         items_data = []
         res_inv_list = safe_api_request("GET", f"https://api.salla.dev/admin/v2/orders/invoices?order_id={order_id}", headers)
         if res_inv_list and res_inv_list.get("data"):
@@ -70,29 +76,37 @@ def get_detailed_orders(orders_summary, headers):
             summary_items = o_sum.get('items', [])
             for si in summary_items:
                 items_data.append({
-                    'name': si.get('name', ''), 'quantity': si.get('quantity', 1), 'sku': 'غير متوفر',
-                    'price': {'amount': 0}, 'tax': {'percent': 0}, 'options': si.get('options', [])
+                    'item_id': si.get('id'), 'name': si.get('name', ''), 'quantity': si.get('quantity', 1), 
+                    'sku': 'غير متوفر', 'price': {'amount': 0}, 'tax': {'percent': 0}
                 })
-        else:
-            # ✅ دمج الخيارات والمنتجات الفرعية (Group Products) من الطلب الأصلي إلى الفاتورة
-            orig_items = order_data.get('items', [])
-            for inv_item in items_data:
-                match_orig = next((oi for oi in orig_items if str(oi.get('sku')) == str(inv_item.get('sku'))), None)
-                if match_orig: 
-                    inv_item['options'] = match_orig.get('options', [])
-                    prod_info = match_orig.get('product', {})
-                    if isinstance(prod_info, dict) and prod_info.get('type') == 'group_products':
-                        if prod_info.get('grouped_items'):
-                            inv_item['grouped_items'] = prod_info.get('grouped_items')
-                        elif prod_info.get('consisted_products'):
-                            inv_item['consisted_products'] = prod_info.get('consisted_products')
-                            
+
+        # 4. دمج المنتجات وتفكيك المجموعات عبر Product API
+        for inv_item in items_data:
+            # دمج خيارات المشتري
+            match_oi = next((oi for oi in order_items if str(oi.get('id')) == str(inv_item.get('item_id'))), None)
+            if match_oi:
+                inv_item['options'] = match_oi.get('options', [])
+            
+            # جلب المنتجات الفرعية إذا كان الصنف مجموعة منتجات (Bundle)
+            pid = inv_item.get('product_id')
+            if pid and str(pid).isdigit():
+                prod_info = next((p for p in st.session_state.get('all_products', []) if str(p.get('id')) == str(pid)), None)
+                if not prod_info:
+                    p_res = safe_api_request("GET", f"https://api.salla.dev/admin/v2/products/{pid}", headers)
+                    prod_info = p_res.get("data", {}) if p_res else {}
+                    
+                if prod_info and prod_info.get('type') == 'group_products':
+                    if prod_info.get('grouped_items'):
+                        inv_item['grouped_items'] = prod_info.get('grouped_items')
+                    elif prod_info.get('consisted_products'):
+                        inv_item['consisted_products'] = prod_info.get('consisted_products')
+                        
         order_data['items'] = items_data
         detailed_orders.append(order_data)
         progress_bar.progress((i + 1) / total)
         time.sleep(0.3)
         
-    status_text.success(f"✅ تم سحب التفاصيل والفواتير لـ {total} طلب بنجاح!")
+    status_text.success(f"✅ تم سحب التفاصيل والمكونات الفرعية لـ {total} طلب بنجاح!")
     progress_bar.empty()
     return detailed_orders
 
@@ -151,10 +165,10 @@ def process_financials(orders):
             is_taxable = tax_percent > 0
             calculated_tax = item_total_after_disc * (tax_percent / 100) if is_taxable else 0.0
             
-            # ✅ استخراج الأصناف الفرعية (Options / Grouped Bundles)
+            # ✅ استخراج الأصناف الفرعية (الخيارات أو مجموعة المنتجات)
             sub_items_extracted = []
             
-            # 1. تفكيك مجموعة المنتجات (Bundle)
+            # تفكيك الباقات
             if item.get('grouped_items'):
                 for gi in item.get('grouped_items'):
                     sub_prod = gi.get('product', {}) if isinstance(gi.get('product'), dict) else {}
@@ -171,7 +185,7 @@ def process_financials(orders):
                     sub_label = f"{sub_name} (SKU: {sub_sku})" if sub_sku else sub_name
                     sub_items_extracted.append({"name": sub_label, "qty": sub_qty})
             
-            # 2. تفكيك الخيارات (Options)
+            # تفكيك الخيارات
             for opt in item.get('options', []):
                 opt_name = opt.get('name', '')
                 val = opt.get('value')
@@ -185,8 +199,8 @@ def process_financials(orders):
             if not sub_items_extracted:
                 sub_items_extracted = [{"name": "بدون", "qty": main_qty}]
                 
-            # تحديث الإحصائيات (تعتمد على كمية المنتج الفرعي إذا وجد)
             qty_for_stats = sum(si['qty'] for si in sub_items_extracted) if sub_items_extracted[0]['name'] != "بدون" else main_qty
+            
             if is_taxable:
                 taxable_stats['sales'] += item_total_after_disc
                 taxable_stats['qty'] += qty_for_stats
@@ -298,7 +312,7 @@ def generate_short_export(orders):
     return buf.getvalue()
 
 def generate_detailed_export(detailed_rows, taxable_stats, nontaxable_stats):
-    """بناء إكسيل التصدير التفصيلي باستقبال البيانات المعالجة مباشرة"""
+    """بناء إكسيل التصدير التفصيلي"""
     columns_list = [
         "الفرع", "تاريخ الطلب", "رقم الطلب", "حالة الطلب", "اسم العميل",
         "المدينة", "شركة الشحن", "رقم الصنف (SKU)", "اسم الصنف", "الأصناف الفرعية", "خاضع للضريبة",
@@ -391,25 +405,27 @@ def render_orders_page():
     if st.session_state.get('detailed_fetched_orders'):
         orders_data = st.session_state['detailed_fetched_orders']
         
-        # ✅ معالجة الحسابات الإحصائية مرة واحدة وعرضها بأسلوب احترافي
         detailed_rows, t_stats, nt_stats = process_financials(orders_data)
         
         st.markdown("---")
         st.markdown("### 📊 إحصائيات المنتجات المباعة في هذه الفترة")
-        st.markdown(f"""
-        <div style='display:flex; gap:15px; margin-bottom: 25px; flex-wrap: wrap;'>
-            <div style='flex:1; min-width: 250px; background:linear-gradient(135deg, #16a085, #1abc9c); padding:20px; border-radius:12px; color:white; text-align:center; box-shadow: 0 4px 10px rgba(0,0,0,0.15);'>
-                <h4 style='margin:0; font-size:16px; color:#e0f7fa;'>✅ مبيعات خاضعة للضريبة</h4>
-                <h2 style='margin:10px 0; font-size:28px;'>{round(t_stats['sales'], 2):,} <span style='font-size:16px;'>SAR</span></h2>
-                <div style='font-size:14px; background:rgba(0,0,0,0.2); padding:5px; border-radius:8px;'>الكمية المباعة: <b>{t_stats['qty']}</b> | إجمالي الضريبة: <b>{round(t_stats['tax'], 2):,}</b> SAR</div>
-            </div>
-            <div style='flex:1; min-width: 250px; background:linear-gradient(135deg, #34495e, #2c3e50); padding:20px; border-radius:12px; color:white; text-align:center; box-shadow: 0 4px 10px rgba(0,0,0,0.15);'>
-                <h4 style='margin:0; font-size:16px; color:#ecf0f1;'>🚫 مبيعات غير خاضعة للضريبة</h4>
-                <h2 style='margin:10px 0; font-size:28px;'>{round(nt_stats['sales'], 2):,} <span style='font-size:16px;'>SAR</span></h2>
-                <div style='font-size:14px; background:rgba(0,0,0,0.2); padding:5px; border-radius:8px;'>الكمية المباعة: <b>{nt_stats['qty']}</b></div>
-            </div>
-        </div>
-        """, unsafe_allow_html=True)
+        
+        # ✅ تنسيق HTML للإحصائيات بدون مسافات لتجنب الأخطاء
+        stats_html = f"""
+<div style="display:flex; gap:15px; margin-bottom: 25px; flex-wrap: wrap;">
+<div style="flex:1; min-width: 250px; background:linear-gradient(135deg, #16a085, #1abc9c); padding:20px; border-radius:12px; color:white; text-align:center; box-shadow: 0 4px 10px rgba(0,0,0,0.15);">
+<h4 style="margin:0; font-size:16px; color:#e0f7fa;">✅ مبيعات خاضعة للضريبة</h4>
+<h2 style="margin:10px 0; font-size:28px;">{round(t_stats['sales'], 2):,} <span style="font-size:16px;">SAR</span></h2>
+<div style="font-size:14px; background:rgba(0,0,0,0.2); padding:5px; border-radius:8px;">الكمية المباعة: <b>{t_stats['qty']}</b> | إجمالي الضريبة: <b>{round(t_stats['tax'], 2):,}</b> SAR</div>
+</div>
+<div style="flex:1; min-width: 250px; background:linear-gradient(135deg, #34495e, #2c3e50); padding:20px; border-radius:12px; color:white; text-align:center; box-shadow: 0 4px 10px rgba(0,0,0,0.15);">
+<h4 style="margin:0; font-size:16px; color:#ecf0f1;">🚫 مبيعات غير خاضعة للضريبة</h4>
+<h2 style="margin:10px 0; font-size:28px;">{round(nt_stats['sales'], 2):,} <span style="font-size:16px;">SAR</span></h2>
+<div style="font-size:14px; background:rgba(0,0,0,0.2); padding:5px; border-radius:8px;">الكمية المباعة: <b>{nt_stats['qty']}</b></div>
+</div>
+</div>
+"""
+        st.markdown(stats_html, unsafe_allow_html=True)
 
         st.markdown("---")
         st.markdown("### 📥 خيارات التصدير")
@@ -426,7 +442,6 @@ def render_orders_page():
         st.markdown("---")
         st.markdown(f"### 📋 ملخص الطلبات المسحوبة ({len(orders_data)})")
         
-        # ✅ عرض الطلبات في كروت إبداعية واحترافية
         cols = st.columns(2)
         for i, o in enumerate(orders_data):
             col = cols[i % 2]
@@ -446,40 +461,42 @@ def render_orders_page():
             tax = float(o.get('amounts', {}).get('tax', {}).get('amount', {}).get('amount', 0))
             discounts = o.get('amounts', {}).get('discounts', [])
             total_discount = sum(float(d.get('discount', 0)) for d in discounts)
-            o_total = o.get('amounts', {}).get('total', {}).get('amount', 0)
+            o_total = float(o.get('amounts', {}).get('total', {}).get('amount', 0))
             
             border_color = "#2ecc71" if "تنفيذ" in status_name or "توصيل" in status_name else ("#e74c3c" if "لغي" in status_name else "#f39c12")
             
             with col:
-                st.markdown(f"""
-<div style='background: linear-gradient(145deg, #1e293b, #0f172a); border-radius: 12px; padding: 16px; margin-bottom: 16px; border: 1px solid #334155; border-right: 5px solid {border_color}; position: relative; box-shadow: 0 4px 15px rgba(0,0,0,0.2);'>
-    <div style='display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid rgba(255,255,255,0.05); padding-bottom: 12px; margin-bottom: 12px;'>
-        <div>
-            <span style='color: #38bdf8; font-size: 18px; font-weight: 800; letter-spacing: 0.5px;'>#{o.get('reference_id')}</span>
-            <span style='color: #94a3b8; font-size: 12px; margin-right: 8px;'>📅 {o_date}</span>
-        </div>
-        <span style='background: {border_color}22; border: 1px solid {border_color}55; color: {border_color}; padding: 4px 12px; border-radius: 20px; font-size: 12px; font-weight: bold;'>{status_name}</span>
-    </div>
-    <div style='display: flex; flex-wrap: wrap; gap: 10px; font-size: 13px; color: #cbd5e1; margin-bottom: 12px;'>
-        <div style='flex: 1; min-width: 120px;'>
-            <div style='margin-bottom: 6px;'>👤 <b style='color:#fff;'>العميل:</b> {c_name}</div>
-            <div style='margin-bottom: 6px;'>📍 <b style='color:#fff;'>المدينة:</b> {city}</div>
-            <div>🏢 <b style='color:#fff;'>الفرع:</b> {branch}</div>
-        </div>
-        <div style='flex: 1; min-width: 120px;'>
-            <div style='margin-bottom: 6px;'>💳 <b style='color:#fff;'>الدفع:</b> {o.get('payment_method', 'غير محدد')}</div>
-            <div style='margin-bottom: 6px;'>🔗 <b style='color:#fff;'>المصدر:</b> {utm_source}</div>
-            <div>🚚 <b style='color:#fff;'>الشحن:</b> {shipping_company}</div>
-        </div>
-    </div>
-    <div style='background: rgba(0,0,0,0.2); border-radius: 8px; padding: 10px; display: flex; justify-content: space-around; text-align: center; border: 1px solid rgba(255,255,255,0.05);'>
-        <div><span style='display:block; font-size:11px; color:#94a3b8;'>مجموع السلة</span><b style='color:#fff; font-size:14px;'>{round(subtotal, 2):,}</b></div>
-        <div><span style='display:block; font-size:11px; color:#94a3b8;'>الخصومات</span><b style='color:#ef4444; font-size:14px;'>{round(total_discount, 2):,}</b></div>
-        <div><span style='display:block; font-size:11px; color:#94a3b8;'>الضريبة</span><b style='color:#eab308; font-size:14px;'>{round(tax, 2):,}</b></div>
-        <div><span style='display:block; font-size:11px; color:#94a3b8;'>الإجمالي النهائي</span><b style='color:#22c55e; font-size:15px;'>{round(o_total, 2):,}</b></div>
-    </div>
+                # ✅ تنسيق الكروت بدون مسافات لمنع خطأ تحولها لأكواد
+                card_html = f"""
+<div style="background: linear-gradient(145deg, #1e293b, #0f172a); border-radius: 12px; padding: 16px; margin-bottom: 16px; border: 1px solid #334155; border-right: 5px solid {border_color}; position: relative; box-shadow: 0 4px 15px rgba(0,0,0,0.2);">
+<div style="display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid rgba(255,255,255,0.05); padding-bottom: 12px; margin-bottom: 12px;">
+<div>
+<span style="color: #38bdf8; font-size: 18px; font-weight: 800; letter-spacing: 0.5px;">#{o.get('reference_id')}</span>
+<span style="color: #94a3b8; font-size: 12px; margin-right: 8px;">📅 {o_date}</span>
 </div>
-""", unsafe_allow_html=True)
+<span style="background: {border_color}22; border: 1px solid {border_color}55; color: {border_color}; padding: 4px 12px; border-radius: 20px; font-size: 12px; font-weight: bold;">{status_name}</span>
+</div>
+<div style="display: flex; flex-wrap: wrap; gap: 10px; font-size: 13px; color: #cbd5e1; margin-bottom: 12px;">
+<div style="flex: 1; min-width: 120px;">
+<div style="margin-bottom: 6px;">👤 <b style="color:#fff;">العميل:</b> {c_name}</div>
+<div style="margin-bottom: 6px;">📍 <b style="color:#fff;">المدينة:</b> {city}</div>
+<div>🏢 <b style="color:#fff;">الفرع:</b> {branch}</div>
+</div>
+<div style="flex: 1; min-width: 120px;">
+<div style="margin-bottom: 6px;">💳 <b style="color:#fff;">الدفع:</b> {o.get('payment_method', 'غير محدد')}</div>
+<div style="margin-bottom: 6px;">🔗 <b style="color:#fff;">المصدر:</b> {utm_source}</div>
+<div>🚚 <b style="color:#fff;">الشحن:</b> {shipping_company}</div>
+</div>
+</div>
+<div style="background: rgba(0,0,0,0.2); border-radius: 8px; padding: 10px; display: flex; justify-content: space-around; text-align: center; border: 1px solid rgba(255,255,255,0.05);">
+<div><span style="display:block; font-size:11px; color:#94a3b8;">مجموع السلة</span><b style="color:#fff; font-size:14px;">{round(subtotal, 2):,}</b></div>
+<div><span style="display:block; font-size:11px; color:#94a3b8;">الخصومات</span><b style="color:#ef4444; font-size:14px;">{round(total_discount, 2):,}</b></div>
+<div><span style="display:block; font-size:11px; color:#94a3b8;">الضريبة</span><b style="color:#eab308; font-size:14px;">{round(tax, 2):,}</b></div>
+<div><span style="display:block; font-size:11px; color:#94a3b8;">الإجمالي النهائي</span><b style="color:#22c55e; font-size:15px;">{round(o_total, 2):,}</b></div>
+</div>
+</div>
+"""
+                st.markdown(card_html, unsafe_allow_html=True)
                 
                 with st.expander("🛒 عرض المنتجات"):
                     for item in o.get('items', []):
