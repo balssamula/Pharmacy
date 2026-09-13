@@ -5,6 +5,7 @@ import time
 from datetime import datetime, timedelta
 import concurrent.futures
 import openpyxl
+import requests # ✅ استدعاء ضروري لعمليات الـ Threads المستقلة
 from openpyxl.styles import PatternFill, Font, Alignment, Border, Side
 from utils import get_headers, safe_api_request, SALLA_API_URL
 
@@ -12,17 +13,21 @@ if 'product_cache' not in st.session_state:
     st.session_state['product_cache'] = {}
 
 def fetch_with_retry(url, headers, max_retries=3):
-    """دالة ذكية تعالج خطأ 429 وتعيد المحاولة تلقائياً لتجنب الحظر"""
+    """دالة ذكية مستقلة تماماً عن Streamlit: صُممت خصيصاً للمسارات المتوازية لتمنع السقوط (0 طلب)"""
     for attempt in range(max_retries):
-        res = safe_api_request("GET", url, headers)
-        if res and isinstance(res, dict) and res.get("status") == 429:
-            time.sleep(1.5 * (attempt + 1))
-            continue
-        return res
+        try:
+            res = requests.get(url, headers=headers, timeout=20)
+            if res.status_code == 429: # إراحة السيرفر عند الضغط
+                time.sleep(1.5 * (attempt + 1))
+                continue
+            if res.status_code < 400:
+                return res.json()
+        except Exception:
+            time.sleep(1)
     return None
 
 def get_orders_list(from_date, to_date, headers, search_keyword=None, order_refs_list=None):
-    """سحب الطلبات (قائمة الحصر الأساسية): محمية 100% من السقوط أو الفقد"""
+    """سحب الطلبات (قائمة الحصر الأساسية)"""
     orders = []
     status_text = st.empty()
     progress_bar = st.progress(0)
@@ -49,7 +54,7 @@ def get_orders_list(from_date, to_date, headers, search_keyword=None, order_refs
             res = fetch_with_retry(url, headers)
             
             if res and isinstance(res, dict) and res.get("status") == 422:
-                st.warning("⚠️ عدد الطلبات كبير جداً ويتجاوز حد سلة (10,000). سيتم الاكتفاء بما تم سحبه.")
+                st.warning("⚠️ عدد الطلبات يتجاوز حد الاستعلام في سلة (10,000). سيتم الاكتفاء بما تم سحبه.")
                 break
                 
             if not res or not res.get("data"): break
@@ -66,27 +71,30 @@ def get_orders_list(from_date, to_date, headers, search_keyword=None, order_refs
     status_text.empty()
     return orders
 
-def fetch_single_order_details(order_id, headers):
-    """سحب تفاصيل طلب واحد بشكل دقيق ومضمون 100%"""
+def fetch_single_order_details(order_id, headers, local_cache, all_products_list):
+    """سحب تفاصيل طلب واحد (تعمل بأمان داخل الخيوط - Threads) دون الاقتراب من st.session_state"""
     res_order = fetch_with_retry(f"https://api.salla.dev/admin/v2/orders/{order_id}", headers)
     if not res_order or not res_order.get("data"):
         return None
         
     order_data = res_order.get("data", {})
     
-    # ✅ استرجاع المنتجات من مسار Items بشكل مباشر لضمان عدم ضياعها
+    # استرجاع المنتجات من مسار Items بشكل مباشر لضمان الأسعار والخيارات
     items_res = fetch_with_retry(f"https://api.salla.dev/admin/v2/orders/items?order_id={order_id}", headers)
     order_items = items_res.get("data", []) if items_res and items_res.get("data") else []
 
-    # ✅ معالجة المنتجات وتفكيك المجموعات (Group Products)
+    # معالجة المنتجات المجمعة Group Products
     for item in order_items:
         pid = item.get('product_id') or item.get('product', {}).get('id')
         if pid and str(pid).isdigit():
-            if pid not in st.session_state['product_cache']:
-                p_res = fetch_with_retry(f"https://api.salla.dev/admin/v2/products/{pid}", headers)
-                st.session_state['product_cache'][pid] = p_res.get("data", {}) if p_res else {}
+            prod_info = next((p for p in all_products_list if str(p.get('id')) == str(pid)), None)
             
-            prod_info = st.session_state['product_cache'].get(pid, {})
+            if not prod_info:
+                if pid not in local_cache:
+                    p_res = fetch_with_retry(f"https://api.salla.dev/admin/v2/products/{pid}", headers)
+                    local_cache[pid] = p_res.get("data", {}) if p_res else {}
+                prod_info = local_cache.get(pid, {})
+            
             if prod_info and prod_info.get('type') == 'group_products':
                 if prod_info.get('grouped_items'):
                     item['grouped_items'] = prod_info.get('grouped_items')
@@ -97,32 +105,37 @@ def fetch_single_order_details(order_id, headers):
     return order_data
 
 def get_detailed_orders(orders_summary, headers):
-    """⚡ سحب التفاصيل الدقيقة بأسلوب متوازي محمي"""
+    """⚡ سحب التفاصيل الدقيقة بأسلوب متوازي سريع ومحمي تماماً من أخطاء الذاكرة"""
     detailed_orders = []
     status_text = st.empty()
     progress_bar = st.progress(0)
     total = len(orders_summary)
     completed = 0
     
-    status_text.info(f"⚡ جاري سحب تفاصيل {total} طلب بنظام الطابور الذكي لتجنب حظر سلة...")
+    # ✅ نسخ المتغيرات لمنع الأخطاء في بيئة التشغيل المتوازي
+    local_cache = st.session_state.get('product_cache', {})
+    all_products_list = st.session_state.get('all_products', [])
+    
+    status_text.info(f"⚡ جاري سحب تفاصيل {total} طلب بنظام (Multithreading)...")
     
     with concurrent.futures.ThreadPoolExecutor(max_workers=4) as executor:
         future_to_order = {
-            executor.submit(fetch_single_order_details, o_sum.get("id"), headers): o_sum 
+            executor.submit(fetch_single_order_details, o_sum.get("id"), headers, local_cache, all_products_list): o_sum 
             for o_sum in orders_summary
         }
         
         for future in concurrent.futures.as_completed(future_to_order):
             completed += 1
-            if completed % 10 == 0 or completed == total:
+            if completed % 5 == 0 or completed == total:
                 progress_bar.progress(completed / total)
                 status_text.info(f"⏳ تم سحب تفاصيل {completed} من {total} طلب...")
             try:
                 data = future.result()
                 if data: detailed_orders.append(data)
-            except Exception:
+            except Exception as e:
                 pass
                 
+    st.session_state['product_cache'] = local_cache # حفظ الذاكرة المؤقتة بعد الانتهاء
     status_text.success(f"✅ اكتمل سحب تفاصيل {len(detailed_orders)} طلب بنجاح وأمان!")
     progress_bar.empty()
     return detailed_orders
@@ -272,7 +285,7 @@ def process_financials(orders):
                     "قيمة خصم الكوبون": round(item_coupon_share / splits, 2),
                     "قيمة خصم العرض الخاص": round(total_special_share / splits, 2),
                     "الاجمالي بعد الخصم": round(item_total_after_disc / splits, 2),
-                    "تكلفة الشحن": 0.0,
+                    "تحصيل قيمة شحن": 0.0,
                     "الضريبة": round(calculated_tax / splits, 2),
                     "صافي المبيعات": round(item_net_sales / splits, 2)
                 })
@@ -305,7 +318,7 @@ def process_financials(orders):
                 "قيمة خصم الكوبون": 0.0,
                 "قيمة خصم العرض الخاص": 0.0,
                 "الاجمالي بعد الخصم": shipping_cost,
-                "تكلفة الشحن": shipping_cost,
+                "تحصيل قيمة شحن": shipping_cost,
                 "الضريبة": round(shipping_tax, 2),
                 "صافي المبيعات": round(shipping_cost + shipping_tax, 2)
             })
@@ -361,7 +374,7 @@ def generate_short_export(orders):
             "قيمة خصم الكوبون": coupon_disc,
             "قيمة خصم العروض الخاصة": special_disc,
             "الاجمالي بعد الخصم": total_after_disc,
-            "تكلفة الشحن": shipping,
+            "تحصيل قيمة شحن": shipping,
             "الضريبة": tax,
             "صافي المبيعات": net_sales_with_tax,
             "المبلغ المسترجع": refund
@@ -397,7 +410,7 @@ def generate_detailed_export(detailed_rows, taxable_stats, nontaxable_stats):
         "الفرع", "تاريخ الطلب", "رقم الطلب", "حالة الطلب", "اسم العميل",
         "المدينة", "شركة الشحن", "رقم الصنف (SKU)", "اسم الصنف", "الأصناف الفرعية", "خاضع للضريبة",
         "الكمية", "سعر الصنف (بدون ضريبة)", "قيمة خصم الكوبون", "قيمة خصم العرض الخاص",
-        "الاجمالي بعد الخصم", "تكلفة الشحن", "الضريبة", "صافي المبيعات"
+        "الاجمالي بعد الخصم", "تحصيل قيمة شحن", "الضريبة", "صافي المبيعات"
     ]
     df = pd.DataFrame(detailed_rows, columns=columns_list)
     buf = io.BytesIO()
@@ -412,7 +425,7 @@ def generate_detailed_export(detailed_rows, taxable_stats, nontaxable_stats):
     ws['A1'].fill = PatternFill(start_color="8E44AD", end_color="8E44AD", fill_type="solid")
     ws['A1'].alignment = Alignment(horizontal="center", vertical="center")
     
-    stat_headers = ["النوع", "مبيعات المنتجات", "مبيعات الشحن", "إجمالي المبيعات", "الكمية المباعة", "ضريبة المنتجات", "ضريبة الشحن", "إجمالي الضريبة"]
+    stat_headers = ["النوع", "مبيعات المنتجات", "تحصيلات الشحن", "إجمالي المبيعات", "الكمية المباعة", "ضريبة المنتجات", "ضريبة الشحن", "إجمالي الضريبة"]
     ws.append(stat_headers)
     for cell in ws[2]: cell.font = Font(bold=True); cell.fill = PatternFill(start_color="ECF0F1", fill_type="solid")
         
@@ -495,7 +508,7 @@ def render_orders_page():
         orders_data = st.session_state['detailed_fetched_orders']
         
         detailed_rows, t_stats, nt_stats = process_financials(orders_data)
-        
+                
         st.markdown("---")
         st.markdown("### 📥 خيارات التصدير")
         
@@ -507,7 +520,7 @@ def render_orders_page():
         with col_detailed:
             excel_detailed = generate_detailed_export(detailed_rows, t_stats, nt_stats)
             st.download_button(label="📥 تحميل تصدير إكسيل التفصيلي (شامل الفرعيات)", data=excel_detailed, file_name=f"Orders_Detailed_{datetime.now().strftime('%Y%m%d')}.xlsx", mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", use_container_width=True, type="primary")
-
+            
         st.markdown("---")
         st.markdown("### 📊 إحصائيات المبيعات التفصيلية")
         
@@ -568,10 +581,9 @@ def render_orders_page():
             total_discount = sum(float(d.get('discount', 0)) for d in discounts)
             o_total = float(o.get('amounts', {}).get('total', {}).get('amount', 0))
             
-            border_color = "#2ecc71" if "تنفيذ" in status_name or "توصيل" in status_name else ("#e74c3c" if "لغي" in status_name else "#f39c12")
+            border_color = "#2ecc71" if "تنفيذ" in status_name or "توصيل" in status_name else ("#e74c3c" if "ملغي" in status_name else "#f39c12")
             
             with col:
-                # ✅ إضافة برواز أنيق (border) حول منطقة الملخص المالي
                 card_html = f"""
 <div style="background: linear-gradient(145deg, #1e293b, #0f172a); border-radius: 12px; padding: 16px; margin-bottom: 16px; border: 1px solid #334155; border-right: 5px solid {border_color}; position: relative; box-shadow: 0 4px 15px rgba(0,0,0,0.2);">
 <div style="display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid rgba(255,255,255,0.05); padding-bottom: 12px; margin-bottom: 12px;">
