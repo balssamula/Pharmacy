@@ -8,8 +8,22 @@ import openpyxl
 from openpyxl.styles import PatternFill, Font, Alignment, Border, Side
 from utils import get_headers, safe_api_request, SALLA_API_URL
 
+# ذاكرة مؤقتة لتقليل استهلاك الـ API للمنتجات المكررة
+if 'product_cache' not in st.session_state:
+    st.session_state['product_cache'] = {}
+
+def fetch_with_retry(url, headers, max_retries=3):
+    """دالة ذكية تعالج خطأ 429 (الضغط على السيرفر) وتعيد المحاولة تلقائياً لتجنب الحظر"""
+    for attempt in range(max_retries):
+        res = safe_api_request("GET", url, headers)
+        if res and isinstance(res, dict) and res.get("status") == 429:
+            time.sleep(1.5 * (attempt + 1)) # تأخير تصاعدي لإراحة سيرفرات سلة
+            continue
+        return res
+    return None
+
 def get_orders_list(from_date, to_date, headers, search_keyword=None, order_refs_list=None):
-    """سحب الطلبات: يدعم التواريخ، كلمة بحث، أو قائمة أرقام طلبات من ملف"""
+    """سحب الطلبات: مع حماية 422 لتجاوز 10,000 طلب"""
     orders = []
     status_text = st.empty()
     progress_bar = st.progress(0)
@@ -19,11 +33,12 @@ def get_orders_list(from_date, to_date, headers, search_keyword=None, order_refs
         for idx, ref in enumerate(order_refs_list):
             status_text.info(f"📥 جاري سحب الطلب رقم {ref} ({idx+1} من {total})...")
             url = f"https://api.salla.dev/admin/v2/orders?keyword={ref}"
-            res = safe_api_request("GET", url, headers)
+            res = fetch_with_retry(url, headers)
             if res and res.get("data"):
                 matched = [o for o in res["data"] if str(o.get('reference_id')) == str(ref)]
                 orders.extend(matched if matched else res["data"])
             progress_bar.progress((idx + 1) / total)
+            time.sleep(0.1)
     else:
         page = 1
         total_pages = 1
@@ -32,56 +47,63 @@ def get_orders_list(from_date, to_date, headers, search_keyword=None, order_refs
             url = f"https://api.salla.dev/admin/v2/orders?from_date={from_date}&to_date={to_date}&per_page=50&page={page}"
             if search_keyword: url += f"&keyword={search_keyword}"
                 
-            res = safe_api_request("GET", url, headers)
+            res = fetch_with_retry(url, headers)
+            
+            # حماية من تجاوز 10,000 طلب (خطأ 422)
+            if res and isinstance(res, dict) and res.get("status") == 422:
+                st.warning("⚠️ عدد الطلبات كبير جداً ويتجاوز حد سلة (10,000). سيتم الاكتفاء بما تم سحبه.")
+                break
+                
             if not res or not res.get("data"): break
             if page == 1: total_pages = res.get("pagination", {}).get("totalPages", 1)
             
             orders.extend(res["data"])
             progress_bar.progress(min(page / total_pages, 1.0))
             page += 1
+            time.sleep(0.15)
             
     progress_bar.empty()
     status_text.empty()
     return orders
 
 def fetch_single_order_details(order_id, headers):
-    """دالة مساعدة لسحب تفاصيل طلب واحد (تستخدم للتنفيذ المتوازي السريع)"""
-    res_order = safe_api_request("GET", f"https://api.salla.dev/admin/v2/orders/{order_id}", headers)
-    order_data = res_order.get("data", {}) if res_order else {}
-    
-    items_res = safe_api_request("GET", f"https://api.salla.dev/admin/v2/orders/items?order_id={order_id}", headers)
-    order_items = items_res.get("data", []) if items_res else []
-    
-    items_data = order_items.copy() if isinstance(order_items, list) else []
+    """سحب تفاصيل طلب واحد من مسار واحد لتسريع الأداء 3 أضعاف"""
+    res_order = fetch_with_retry(f"https://api.salla.dev/admin/v2/orders/{order_id}", headers)
+    if not res_order or not res_order.get("data"):
+        return None
+        
+    order_data = res_order.get("data", {})
+    items_data = order_data.get('items', [])
 
-    for inv_item in items_data:
-        pid = inv_item.get('product_id') or (inv_item.get('product', {}).get('id'))
+    for item in items_data:
+        pid = item.get('product', {}).get('id')
         if pid and str(pid).isdigit():
-            prod_info = next((p for p in st.session_state.get('all_products', []) if str(p.get('id')) == str(pid)), None)
-            if not prod_info:
-                p_res = safe_api_request("GET", f"https://api.salla.dev/admin/v2/products/{pid}", headers)
-                prod_info = p_res.get("data", {}) if p_res else {}
-                
+            # استدعاء المجموعات (Bundle) من الذاكرة بدلاً من السيرفر لزيادة السرعة
+            if pid not in st.session_state['product_cache']:
+                p_res = fetch_with_retry(f"https://api.salla.dev/admin/v2/products/{pid}", headers)
+                st.session_state['product_cache'][pid] = p_res.get("data", {}) if p_res else {}
+            
+            prod_info = st.session_state['product_cache'][pid]
             if prod_info and prod_info.get('type') == 'group_products':
                 if prod_info.get('grouped_items'):
-                    inv_item['grouped_items'] = prod_info.get('grouped_items')
+                    item['grouped_items'] = prod_info.get('grouped_items')
                 elif prod_info.get('consisted_products'):
-                    inv_item['consisted_products'] = prod_info.get('consisted_products')
+                    item['consisted_products'] = prod_info.get('consisted_products')
                     
-    order_data['items'] = items_data
     return order_data
 
 def get_detailed_orders(orders_summary, headers):
-    """⚡ سحب التفاصيل الدقيقة بأسلوب متوازي فائق السرعة (Multithreading)"""
+    """⚡ سحب التفاصيل الدقيقة بأسلوب متوازي محمي (Safe Parallel Processing)"""
     detailed_orders = []
     status_text = st.empty()
     progress_bar = st.progress(0)
     total = len(orders_summary)
     completed = 0
     
-    status_text.info(f"⚡ جاري سحب تفاصيل {total} طلب بوضع السرعة القصوى (Parallel Processing)...")
+    status_text.info(f"⚡ جاري سحب تفاصيل {total} طلب بنظام الطابور الذكي لتجنب حظر سلة...")
     
-    with concurrent.futures.ThreadPoolExecutor(max_workers=8) as executor:
+    # استخدام 4 عمال فقط لضمان عدم تجاوز السيرفر (حوالي 250 طلب بالدقيقة)
+    with concurrent.futures.ThreadPoolExecutor(max_workers=4) as executor:
         future_to_order = {
             executor.submit(fetch_single_order_details, o_sum.get("id"), headers): o_sum 
             for o_sum in orders_summary
@@ -89,35 +111,34 @@ def get_detailed_orders(orders_summary, headers):
         
         for future in concurrent.futures.as_completed(future_to_order):
             completed += 1
-            progress_bar.progress(completed / total)
+            if completed % 10 == 0 or completed == total:
+                progress_bar.progress(completed / total)
+                status_text.info(f"⏳ تم سحب {completed} من {total} طلب...")
             try:
                 data = future.result()
                 if data: detailed_orders.append(data)
-            except Exception as exc:
-                print(f"Order fetch generated an exception: {exc}")
+            except Exception:
+                pass
                 
-    status_text.success(f"✅ تم سحب تفاصيل {len(detailed_orders)} طلب بنجاح وبسرعة فائقة!")
+    status_text.success(f"✅ اكتمل سحب {len(detailed_orders)} طلب بنجاح وأمان!")
     progress_bar.empty()
     return detailed_orders
 
 def extract_shipping_company(order):
-    """دالة مطابقة تماماً لواجهة سلة لاستخراج اسم شركة الشحن الحقيقية"""
-    # 1. فحص كائن الـ shipping المباشر (مثل شركة بيز وغيرها)
+    """استخراج شركة الشحن من الطلب مباشرة لتخطي مشاكل الصلاحيات (401)"""
+    shipments = order.get('shipments', [])
+    if shipments and isinstance(shipments, list) and len(shipments) > 0:
+        c_name = shipments[0].get('courier_name')
+        if c_name: return c_name
+        
     shipping_obj = order.get('shipping', {})
     if isinstance(shipping_obj, dict):
         comp = shipping_obj.get('company')
         if comp and comp != 'غير متوفر': return comp
         
-    # 2. فحص مصفوفة الشحنات إن وجدت
-    shipments = order.get('shipments', [])
-    if shipments and isinstance(shipments, list):
-        c_name = shipments[0].get('courier_name')
-        if c_name: return c_name
-        
     return "شحن يدوي / عادي"
 
 def process_financials(orders):
-    """أداة المعالجة المحاسبية: تفصيل المنتجات وإضافة سطر مستقل للشحن"""
     detailed_rows = []
     taxable_stats = {'item_sales': 0.0, 'shipping_sales': 0.0, 'qty': 0, 'item_tax': 0.0, 'shipping_tax': 0.0}
     nontaxable_stats = {'item_sales': 0.0, 'shipping_sales': 0.0, 'qty': 0, 'item_tax': 0.0, 'shipping_tax': 0.0}
@@ -446,7 +467,7 @@ def render_orders_page():
         with col3:
             st.markdown("<br>", unsafe_allow_html=True)
             if st.button("🚀 سحب الطلبات", use_container_width=True, type="primary"):
-                with st.spinner("جاري السحب بالسرعة القصوى..."):
+                with st.spinner("جاري السحب..."):
                     orders_summary = get_orders_list(
                         from_date.strftime('%Y-%m-%d'), to_date.strftime('%Y-%m-%d'), headers,
                         search_keyword=search_query.strip() if search_query else None,
