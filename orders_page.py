@@ -48,7 +48,7 @@ def get_orders_list(from_date, to_date, headers, search_keyword=None, order_refs
         total_pages = 1
         while page <= total_pages:
             status_text.info(f"📥 جاري حصر الطلبات (صفحة {page} من {total_pages if page > 1 else '...'})...")
-            url = f"https://api.salla.dev/admin/v2/orders?from_date={from_date}&to_date={to_date}&per_page=50&page={page}"
+            url = f"https://api.salla.dev/admin/v2/orders?from_date={from_date}&to_date={to_date}&per_page=100&page={page}"
             if search_keyword: url += f"&keyword={search_keyword}"
                 
             res = fetch_with_retry(url, headers)
