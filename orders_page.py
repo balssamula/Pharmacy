@@ -45,7 +45,7 @@ def get_orders_list(from_date, to_date, headers, search_keyword=None, order_refs
     return orders
 
 def get_detailed_orders(orders_summary, headers):
-    """سحب التفاصيل الدقيقة للطلبات وجلب مكونات المنتجات المجمعة"""
+    """سحب التفاصيل الدقيقة للطلبات وجلب الشحنات والمكونات بدقة"""
     detailed_orders = []
     status_text = st.empty()
     progress_bar = st.progress(0)
@@ -63,12 +63,11 @@ def get_detailed_orders(orders_summary, headers):
         items_res = safe_api_request("GET", f"https://api.salla.dev/admin/v2/orders/items?order_id={order_id}", headers)
         order_items = items_res.get("data", []) if items_res else []
         
-        # 3. سحب مسار الشحنات المستقل لجلب شركة الشحن بدقة
+        # 3. سحب الشحنات المستقلة لجلب شركة الشحن بشكل مؤكد
         ship_res = safe_api_request("GET", f"https://api.salla.dev/admin/v2/shipments?order_id={order_id}", headers)
         if ship_res and ship_res.get("data"):
             order_data['shipments'] = ship_res["data"]
-        
-        # ✅ 4. الإصلاح الجذري: نعتمد على order_items مباشرة لأنها دقيقة وتحتوي على الضريبة والسعر والـ SKU
+            
         items_data = order_items.copy() if isinstance(order_items, list) else []
 
         for inv_item in items_data:
@@ -94,8 +93,23 @@ def get_detailed_orders(orders_summary, headers):
     progress_bar.empty()
     return detailed_orders
 
+def extract_shipping_company(order):
+    """دالة ذكية لاستخراج اسم شركة الشحن من أي مكان محتمل في بيانات الطلب"""
+    shipments = order.get('shipments', [])
+    if shipments:
+        c_name = shipments[0].get('courier_name')
+        if c_name: return c_name
+        
+    shipping_obj = order.get('shipping', {})
+    if isinstance(shipping_obj, dict):
+        comp = shipping_obj.get('company')
+        if comp: return comp
+        
+    source_details = order.get('source_details', {})
+    return "شحن يدوي / عادي"
+
 def process_financials(orders):
-    """أداة المعالجة المحاسبية: تستخرج الصفوف والإحصائيات مقسمة لمنتجات وشحن"""
+    """أداة المعالجة المحاسبية: تفصيل المنتجات وإضافة سطر مستقل للشحن في التصدير التفصيلي"""
     detailed_rows = []
     taxable_stats = {'item_sales': 0.0, 'shipping_sales': 0.0, 'qty': 0, 'item_tax': 0.0, 'shipping_tax': 0.0}
     nontaxable_stats = {'item_sales': 0.0, 'shipping_sales': 0.0, 'qty': 0, 'item_tax': 0.0, 'shipping_tax': 0.0}
@@ -104,7 +118,6 @@ def process_financials(orders):
         subtotal = float(order.get('amounts', {}).get('sub_total', {}).get('amount', 0))
         shipping_cost = float(order.get('amounts', {}).get('shipping_cost', {}).get('amount', 0))
         
-        # استخراج ضريبة الطلب الإجمالية بعناية
         tax_obj = order.get('amounts', {}).get('tax', {})
         if isinstance(tax_obj, dict) and isinstance(tax_obj.get('amount'), dict):
             order_total_tax = float(tax_obj['amount'].get('amount', 0))
@@ -127,13 +140,7 @@ def process_financials(orders):
 
         order_branches = order.get('order_branches', [])
         branch = order_branches[0].get('name', 'الفرع الرئيسي') if order_branches else 'غير متوفر'
-        
-        shipments = order.get('shipments', [])
-        shipping_company = 'غير متوفر'
-        if shipments:
-            shipping_company = shipments[0].get('courier_name', '') or shipments[0].get('courier_id', 'متوفر (بدون اسم)')
-        elif order.get('shipping', {}).get('company'):
-            shipping_company = order.get('shipping', {}).get('company')
+        shipping_company = extract_shipping_company(order)
 
         order_items_tax_sum = 0.0 
         items = order.get('items', [])
@@ -142,7 +149,6 @@ def process_financials(orders):
             sku = str(item.get('sku', 'غير متوفر')).strip()
             main_qty = int(item.get('quantity', 1))
             
-            # ✅ التحديث: دعم قراءة السعر والضريبة بأمان من مسار Items
             price_without_tax = 0.0
             if item.get('amounts') and item['amounts'].get('price_without_tax'):
                 price_without_tax = float(item['amounts']['price_without_tax'].get('amount', 0))
@@ -169,7 +175,7 @@ def process_financials(orders):
             calculated_tax = item_total_after_disc * (tax_percent / 100) if is_taxable else 0.0
             order_items_tax_sum += calculated_tax
             
-            item_net_sales = item_total_after_disc + calculated_tax # ✅ صافي المبيعات أصبح شامل الضريبة هنا
+            item_net_sales = item_total_after_disc + calculated_tax 
             
             sub_items_extracted = []
             if item.get('grouped_items'):
@@ -230,18 +236,44 @@ def process_financials(orders):
                     "قيمة خصم الكوبون": round(item_coupon_share / splits, 2),
                     "قيمة خصم العرض الخاص": round(total_special_share / splits, 2),
                     "الاجمالي بعد الخصم": round(item_total_after_disc / splits, 2),
-                    "تكلفة الشحن": shipping_cost / splits,
+                    "تكلفة الشحن": 0.0,
                     "الضريبة": round(calculated_tax / splits, 2),
                     "صافي المبيعات": round(item_net_sales / splits, 2)
                 })
         
-        # ✅ استخراج وتوزيع إحصائيات الشحن بذكاء (الآن دقيقة 100%)
+        # ✅ حساب ضريبة الشحن بدقة
         shipping_tax = max(0.0, order_total_tax - order_items_tax_sum)
-        if order_total_tax > 0 or shipping_tax > 0:
-            taxable_stats['shipping_sales'] += shipping_cost
-            taxable_stats['shipping_tax'] += shipping_tax
-        else:
-            nontaxable_stats['shipping_sales'] += shipping_cost
+        shipping_is_taxable = shipping_tax > 0 or order_total_tax > 0
+        
+        if shipping_cost > 0:
+            if shipping_is_taxable:
+                taxable_stats['shipping_sales'] += shipping_cost
+                taxable_stats['shipping_tax'] += shipping_tax
+            else:
+                nontaxable_stats['shipping_sales'] += shipping_cost
+                
+            # ✅ إضافة سطر مستقل للشحن في التصدير التفصيلي لكي تظهر ضريبة الشحن في العمود بوضوح
+            detailed_rows.append({
+                "الفرع": branch,
+                "تاريخ الطلب": str(order.get('date', {}).get('date', ''))[:10],
+                "رقم الطلب": order.get('reference_id', ''),
+                "حالة الطلب": order.get('status', {}).get('name', ''),
+                "اسم العميل": f"{order.get('customer', {}).get('first_name', '')} {order.get('customer', {}).get('last_name', '')}".strip(),
+                "المدينة": order.get('customer', {}).get('city', ''),
+                "شركة الشحن": shipping_company,
+                "رقم الصنف (SKU)": "SHIPPING",
+                "اسم الصنف": "تكلفة الشحن",
+                "الأصناف الفرعية": "بدون",
+                "خاضع للضريبة": "نعم" if shipping_is_taxable else "لا",
+                "الكمية": 1,
+                "سعر الصنف (بدون ضريبة)": shipping_cost,
+                "قيمة خصم الكوبون": 0.0,
+                "قيمة خصم العرض الخاص": 0.0,
+                "الاجمالي بعد الخصم": shipping_cost,
+                "تكلفة الشحن": shipping_cost,
+                "الضريبة": round(shipping_tax, 2),
+                "صافi المبيعات": round(shipping_cost + shipping_tax, 2)
+            })
                 
     return detailed_rows, taxable_stats, nontaxable_stats
 
@@ -268,18 +300,11 @@ def generate_short_export(orders):
         refund = float(order.get('payment_actions', {}).get('refund_action', {}).get('refund_amount', {}).get('amount', 0))
         
         total_after_disc = subtotal - total_discount
-        # ✅ صافي المبيعات شامل الضريبة (إجمالي المنتجات + الضريبة، بدون الشحن ليبقى في عموده)
-        net_sales_with_tax = total_after_disc + tax 
+        net_sales_with_tax = total_after_disc + tax + shipping # شامل الشحن والضريبة
         
         order_branches = order.get('order_branches', [])
         branch = order_branches[0].get('name', 'الفرع الرئيسي') if order_branches else 'غير متوفر'
-        
-        shipments = order.get('shipments', [])
-        shipping_company = 'غير متوفر'
-        if shipments:
-            shipping_company = shipments[0].get('courier_name', '') or shipments[0].get('courier_id', 'متوفر (بدون اسم)')
-        elif order.get('shipping', {}).get('company'):
-            shipping_company = order.get('shipping', {}).get('company')
+        shipping_company = extract_shipping_company(order)
 
         rows.append({
             "الفرع": branch,
@@ -344,7 +369,7 @@ def generate_detailed_export(detailed_rows, taxable_stats, nontaxable_stats):
     ws.sheet_view.rightToLeft = True
     
     ws.merge_cells('A1:G1')
-    ws['A1'] = "📊 إحصائيات المبيعات التفصيلية (بإحتساب الأصناف الفرعية)"
+    ws['A1'] = "📊 إحصائيات المبيعات التفصيلية (شامل الشحن والضريبة)"
     ws['A1'].font = Font(bold=True, size=13, color="FFFFFF")
     ws['A1'].fill = PatternFill(start_color="8E44AD", end_color="8E44AD", fill_type="solid")
     ws['A1'].alignment = Alignment(horizontal="center", vertical="center")
@@ -465,7 +490,6 @@ def render_orders_page():
 </div>
 """
         st.markdown(stats_html, unsafe_allow_html=True)
-
                 
         st.markdown("---")
         st.markdown("### 📥 خيارات التصدير")
@@ -491,13 +515,7 @@ def render_orders_page():
             o_date = str(o.get('date', {}).get('date', ''))[:16]
             status_name = o.get('status', {}).get('name', 'غير محدد')
             
-            shipments = o.get('shipments', [])
-            shipping_company = 'غير متوفر'
-            if shipments:
-                shipping_company = shipments[0].get('courier_name', '') or shipments[0].get('courier_id', 'متوفر (بدون اسم)')
-            elif o.get('shipping', {}).get('company'):
-                shipping_company = o.get('shipping', {}).get('company')
-                
+            shipping_company = extract_shipping_company(o)
             order_branches = o.get('order_branches', [])
             branch = order_branches[0].get('name', 'الفرع الرئيسي') if order_branches else 'غير متوفر'
             utm_source = o.get('source_details', {}).get('utm_source', '') or o.get('campaign', {}).get('source', 'مباشر')
