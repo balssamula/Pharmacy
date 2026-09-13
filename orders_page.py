@@ -3,6 +3,7 @@ import pandas as pd
 import io
 import time
 from datetime import datetime, timedelta
+import concurrent.futures
 import openpyxl
 from openpyxl.styles import PatternFill, Font, Alignment, Border, Side
 from utils import get_headers, safe_api_request, SALLA_API_URL
@@ -23,7 +24,6 @@ def get_orders_list(from_date, to_date, headers, search_keyword=None, order_refs
                 matched = [o for o in res["data"] if str(o.get('reference_id')) == str(ref)]
                 orders.extend(matched if matched else res["data"])
             progress_bar.progress((idx + 1) / total)
-            time.sleep(0.15)
     else:
         page = 1
         total_pages = 1
@@ -44,72 +44,80 @@ def get_orders_list(from_date, to_date, headers, search_keyword=None, order_refs
     status_text.empty()
     return orders
 
+def fetch_single_order_details(order_id, headers):
+    """دالة مساعدة لسحب تفاصيل طلب واحد (تستخدم للتنفيذ المتوازي السريع)"""
+    res_order = safe_api_request("GET", f"https://api.salla.dev/admin/v2/orders/{order_id}", headers)
+    order_data = res_order.get("data", {}) if res_order else {}
+    
+    items_res = safe_api_request("GET", f"https://api.salla.dev/admin/v2/orders/items?order_id={order_id}", headers)
+    order_items = items_res.get("data", []) if items_res else []
+    
+    items_data = order_items.copy() if isinstance(order_items, list) else []
+
+    for inv_item in items_data:
+        pid = inv_item.get('product_id') or (inv_item.get('product', {}).get('id'))
+        if pid and str(pid).isdigit():
+            prod_info = next((p for p in st.session_state.get('all_products', []) if str(p.get('id')) == str(pid)), None)
+            if not prod_info:
+                p_res = safe_api_request("GET", f"https://api.salla.dev/admin/v2/products/{pid}", headers)
+                prod_info = p_res.get("data", {}) if p_res else {}
+                
+            if prod_info and prod_info.get('type') == 'group_products':
+                if prod_info.get('grouped_items'):
+                    inv_item['grouped_items'] = prod_info.get('grouped_items')
+                elif prod_info.get('consisted_products'):
+                    inv_item['consisted_products'] = prod_info.get('consisted_products')
+                    
+    order_data['items'] = items_data
+    return order_data
+
 def get_detailed_orders(orders_summary, headers):
-    """سحب التفاصيل الدقيقة للطلبات وجلب الشحنات والمكونات بدقة"""
+    """⚡ سحب التفاصيل الدقيقة بأسلوب متوازي فائق السرعة (Multithreading)"""
     detailed_orders = []
     status_text = st.empty()
     progress_bar = st.progress(0)
     total = len(orders_summary)
+    completed = 0
     
-    for i, o_sum in enumerate(orders_summary):
-        status_text.info(f"🔍 جاري سحب التفاصيل للطلب {o_sum.get('reference_id')} ({i+1} من {total})...")
-        order_id = o_sum.get("id")
+    status_text.info(f"⚡ جاري سحب تفاصيل {total} طلب بوضع السرعة القصوى (Parallel Processing)...")
+    
+    with concurrent.futures.ThreadPoolExecutor(max_workers=8) as executor:
+        future_to_order = {
+            executor.submit(fetch_single_order_details, o_sum.get("id"), headers): o_sum 
+            for o_sum in orders_summary
+        }
         
-        # 1. سحب بيانات الطلب العامة
-        res_order = safe_api_request("GET", f"https://api.salla.dev/admin/v2/orders/{order_id}", headers)
-        order_data = res_order.get("data", {}) if res_order else {}
-        
-        # 2. سحب عناصر الطلب للخيارات والأسعار الدقيقة
-        items_res = safe_api_request("GET", f"https://api.salla.dev/admin/v2/orders/items?order_id={order_id}", headers)
-        order_items = items_res.get("data", []) if items_res else []
-        
-        # 3. سحب الشحنات المستقلة لجلب شركة الشحن بشكل مؤكد
-        ship_res = safe_api_request("GET", f"https://api.salla.dev/admin/v2/shipments?order_id={order_id}", headers)
-        if ship_res and ship_res.get("data"):
-            order_data['shipments'] = ship_res["data"]
-            
-        items_data = order_items.copy() if isinstance(order_items, list) else []
-
-        for inv_item in items_data:
-            pid = inv_item.get('product_id') or (inv_item.get('product', {}).get('id'))
-            if pid and str(pid).isdigit():
-                prod_info = next((p for p in st.session_state.get('all_products', []) if str(p.get('id')) == str(pid)), None)
-                if not prod_info:
-                    p_res = safe_api_request("GET", f"https://api.salla.dev/admin/v2/products/{pid}", headers)
-                    prod_info = p_res.get("data", {}) if p_res else {}
-                    
-                if prod_info and prod_info.get('type') == 'group_products':
-                    if prod_info.get('grouped_items'):
-                        inv_item['grouped_items'] = prod_info.get('grouped_items')
-                    elif prod_info.get('consisted_products'):
-                        inv_item['consisted_products'] = prod_info.get('consisted_products')
-                        
-        order_data['items'] = items_data
-        detailed_orders.append(order_data)
-        progress_bar.progress((i + 1) / total)
-        time.sleep(0.3)
-        
-    status_text.success(f"✅ تم سحب التفاصيل الكاملة لـ {total} طلب بنجاح!")
+        for future in concurrent.futures.as_completed(future_to_order):
+            completed += 1
+            progress_bar.progress(completed / total)
+            try:
+                data = future.result()
+                if data: detailed_orders.append(data)
+            except Exception as exc:
+                print(f"Order fetch generated an exception: {exc}")
+                
+    status_text.success(f"✅ تم سحب تفاصيل {len(detailed_orders)} طلب بنجاح وبسرعة فائقة!")
     progress_bar.empty()
     return detailed_orders
 
 def extract_shipping_company(order):
-    """دالة ذكية لاستخراج اسم شركة الشحن من أي مكان محتمل في بيانات الطلب"""
-    shipments = order.get('shipments', [])
-    if shipments:
-        c_name = shipments[0].get('courier_name')
-        if c_name: return c_name
-        
+    """دالة مطابقة تماماً لواجهة سلة لاستخراج اسم شركة الشحن الحقيقية"""
+    # 1. فحص كائن الـ shipping المباشر (مثل شركة بيز وغيرها)
     shipping_obj = order.get('shipping', {})
     if isinstance(shipping_obj, dict):
         comp = shipping_obj.get('company')
-        if comp: return comp
+        if comp and comp != 'غير متوفر': return comp
         
-    source_details = order.get('source_details', {})
+    # 2. فحص مصفوفة الشحنات إن وجدت
+    shipments = order.get('shipments', [])
+    if shipments and isinstance(shipments, list):
+        c_name = shipments[0].get('courier_name')
+        if c_name: return c_name
+        
     return "شحن يدوي / عادي"
 
 def process_financials(orders):
-    """أداة المعالجة المحاسبية: تفصيل المنتجات وإضافة سطر مستقل للشحن في التصدير التفصيلي"""
+    """أداة المعالجة المحاسبية: تفصيل المنتجات وإضافة سطر مستقل للشحن"""
     detailed_rows = []
     taxable_stats = {'item_sales': 0.0, 'shipping_sales': 0.0, 'qty': 0, 'item_tax': 0.0, 'shipping_tax': 0.0}
     nontaxable_stats = {'item_sales': 0.0, 'shipping_sales': 0.0, 'qty': 0, 'item_tax': 0.0, 'shipping_tax': 0.0}
@@ -241,7 +249,6 @@ def process_financials(orders):
                     "صافي المبيعات": round(item_net_sales / splits, 2)
                 })
         
-        # ✅ حساب ضريبة الشحن بدقة
         shipping_tax = max(0.0, order_total_tax - order_items_tax_sum)
         shipping_is_taxable = shipping_tax > 0 or order_total_tax > 0
         
@@ -252,7 +259,6 @@ def process_financials(orders):
             else:
                 nontaxable_stats['shipping_sales'] += shipping_cost
                 
-            # ✅ إضافة سطر مستقل للشحن في التصدير التفصيلي لكي تظهر ضريبة الشحن في العمود بوضوح
             detailed_rows.append({
                 "الفرع": branch,
                 "تاريخ الطلب": str(order.get('date', {}).get('date', ''))[:10],
@@ -272,7 +278,7 @@ def process_financials(orders):
                 "الاجمالي بعد الخصم": shipping_cost,
                 "تكلفة الشحن": shipping_cost,
                 "الضريبة": round(shipping_tax, 2),
-                "صافi المبيعات": round(shipping_cost + shipping_tax, 2)
+                "صافي المبيعات": round(shipping_cost + shipping_tax, 2)
             })
                 
     return detailed_rows, taxable_stats, nontaxable_stats
@@ -300,7 +306,7 @@ def generate_short_export(orders):
         refund = float(order.get('payment_actions', {}).get('refund_action', {}).get('refund_amount', {}).get('amount', 0))
         
         total_after_disc = subtotal - total_discount
-        net_sales_with_tax = total_after_disc + tax + shipping # شامل الشحن والضريبة
+        net_sales_with_tax = total_after_disc + tax + shipping 
         
         order_branches = order.get('order_branches', [])
         branch = order_branches[0].get('name', 'الفرع الرئيسي') if order_branches else 'غير متوفر'
@@ -440,7 +446,7 @@ def render_orders_page():
         with col3:
             st.markdown("<br>", unsafe_allow_html=True)
             if st.button("🚀 سحب الطلبات", use_container_width=True, type="primary"):
-                with st.spinner("جاري السحب..."):
+                with st.spinner("جاري السحب بالسرعة القصوى..."):
                     orders_summary = get_orders_list(
                         from_date.strftime('%Y-%m-%d'), to_date.strftime('%Y-%m-%d'), headers,
                         search_keyword=search_query.strip() if search_query else None,
