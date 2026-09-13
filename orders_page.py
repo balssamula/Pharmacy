@@ -5,19 +5,22 @@ import time
 from datetime import datetime, timedelta
 import concurrent.futures
 import openpyxl
-import requests # ✅ استدعاء ضروري لعمليات الـ Threads المستقلة
+import requests
 from openpyxl.styles import PatternFill, Font, Alignment, Border, Side
 from utils import get_headers, safe_api_request, SALLA_API_URL
 
+# تهيئة الذاكرة المؤقتة للمنتجات والطلبات
 if 'product_cache' not in st.session_state:
     st.session_state['product_cache'] = {}
+if 'detailed_fetched_orders' not in st.session_state:
+    st.session_state['detailed_fetched_orders'] = []
 
 def fetch_with_retry(url, headers, max_retries=3):
-    """دالة ذكية مستقلة تماماً عن Streamlit: صُممت خصيصاً للمسارات المتوازية لتمنع السقوط (0 طلب)"""
+    """دالة ذكية تعالج خطأ 429 وتعيد المحاولة تلقائياً لتجنب الحظر"""
     for attempt in range(max_retries):
         try:
             res = requests.get(url, headers=headers, timeout=20)
-            if res.status_code == 429: # إراحة السيرفر عند الضغط
+            if res.status_code == 429:
                 time.sleep(1.5 * (attempt + 1))
                 continue
             if res.status_code < 400:
@@ -48,7 +51,7 @@ def get_orders_list(from_date, to_date, headers, search_keyword=None, order_refs
         total_pages = 1
         while page <= total_pages:
             status_text.info(f"📥 جاري حصر الطلبات (صفحة {page} من {total_pages if page > 1 else '...'})...")
-            url = f"https://api.salla.dev/admin/v2/orders?from_date={from_date}&to_date={to_date}&per_page=100&page={page}"
+            url = f"https://api.salla.dev/admin/v2/orders?from_date={from_date}&to_date={to_date}&per_page=50&page={page}"
             if search_keyword: url += f"&keyword={search_keyword}"
                 
             res = fetch_with_retry(url, headers)
@@ -72,18 +75,16 @@ def get_orders_list(from_date, to_date, headers, search_keyword=None, order_refs
     return orders
 
 def fetch_single_order_details(order_id, headers, local_cache, all_products_list):
-    """سحب تفاصيل طلب واحد (تعمل بأمان داخل الخيوط - Threads) دون الاقتراب من st.session_state"""
+    """سحب تفاصيل طلب واحد بأمان داخل الـ Threads"""
     res_order = fetch_with_retry(f"https://api.salla.dev/admin/v2/orders/{order_id}", headers)
     if not res_order or not res_order.get("data"):
         return None
         
     order_data = res_order.get("data", {})
     
-    # استرجاع المنتجات من مسار Items بشكل مباشر لضمان الأسعار والخيارات
     items_res = fetch_with_retry(f"https://api.salla.dev/admin/v2/orders/items?order_id={order_id}", headers)
     order_items = items_res.get("data", []) if items_res and items_res.get("data") else []
 
-    # معالجة المنتجات المجمعة Group Products
     for item in order_items:
         pid = item.get('product_id') or item.get('product', {}).get('id')
         if pid and str(pid).isdigit():
@@ -105,20 +106,19 @@ def fetch_single_order_details(order_id, headers, local_cache, all_products_list
     return order_data
 
 def get_detailed_orders(orders_summary, headers):
-    """⚡ سحب التفاصيل الدقيقة بأسلوب متوازي سريع ومحمي تماماً من أخطاء الذاكرة"""
+    """⚡ سحب التفاصيل بأسلوب متوازي"""
     detailed_orders = []
     status_text = st.empty()
     progress_bar = st.progress(0)
     total = len(orders_summary)
     completed = 0
     
-    # ✅ نسخ المتغيرات لمنع الأخطاء في بيئة التشغيل المتوازي
     local_cache = st.session_state.get('product_cache', {})
     all_products_list = st.session_state.get('all_products', [])
     
-    status_text.info(f"⚡ جاري سحب تفاصيل {total} طلب بنظام (Multithreading)...")
+    status_text.info(f"⚡ جاري سحب تفاصيل {total} طلب...")
     
-    with concurrent.futures.ThreadPoolExecutor(max_workers=4) as executor:
+    with concurrent.futures.ThreadPoolExecutor(max_workers=10) as executor:
         future_to_order = {
             executor.submit(fetch_single_order_details, o_sum.get("id"), headers, local_cache, all_products_list): o_sum 
             for o_sum in orders_summary
@@ -126,22 +126,21 @@ def get_detailed_orders(orders_summary, headers):
         
         for future in concurrent.futures.as_completed(future_to_order):
             completed += 1
-            if completed % 5 == 0 or completed == total:
+            if completed % 20 == 0 or completed == total:
                 progress_bar.progress(completed / total)
                 status_text.info(f"⏳ تم سحب تفاصيل {completed} من {total} طلب...")
             try:
                 data = future.result()
                 if data: detailed_orders.append(data)
-            except Exception as e:
+            except Exception:
                 pass
                 
-    st.session_state['product_cache'] = local_cache # حفظ الذاكرة المؤقتة بعد الانتهاء
+    st.session_state['product_cache'] = local_cache
     status_text.success(f"✅ اكتمل سحب تفاصيل {len(detailed_orders)} طلب بنجاح وأمان!")
     progress_bar.empty()
     return detailed_orders
 
 def extract_shipping_company(order):
-    """استخراج شركة الشحن من الطلب بذكاء"""
     shipments = order.get('shipments', [])
     if shipments and isinstance(shipments, list) and len(shipments) > 0:
         c_name = shipments[0].get('courier_name')
@@ -158,7 +157,6 @@ def extract_shipping_company(order):
     return "شحن يدوي / عادي"
 
 def process_financials(orders):
-    """المعالجة المحاسبية الشاملة"""
     detailed_rows = []
     taxable_stats = {'item_sales': 0.0, 'shipping_sales': 0.0, 'qty': 0, 'item_tax': 0.0, 'shipping_tax': 0.0}
     nontaxable_stats = {'item_sales': 0.0, 'shipping_sales': 0.0, 'qty': 0, 'item_tax': 0.0, 'shipping_tax': 0.0}
@@ -285,12 +283,11 @@ def process_financials(orders):
                     "قيمة خصم الكوبون": round(item_coupon_share / splits, 2),
                     "قيمة خصم العرض الخاص": round(total_special_share / splits, 2),
                     "الاجمالي بعد الخصم": round(item_total_after_disc / splits, 2),
-                    "تحصيل قيمة شحن": 0.0,
+                    "تحصيل قيمة الشحن": 0.0,
                     "الضريبة": round(calculated_tax / splits, 2),
                     "صافي المبيعات": round(item_net_sales / splits, 2)
                 })
         
-        # معالجة ضريبة الشحن (سطر منفصل)
         shipping_tax = max(0.0, order_total_tax - order_items_tax_sum)
         shipping_is_taxable = shipping_tax > 0 or order_total_tax > 0
         
@@ -318,7 +315,7 @@ def process_financials(orders):
                 "قيمة خصم الكوبون": 0.0,
                 "قيمة خصم العرض الخاص": 0.0,
                 "الاجمالي بعد الخصم": shipping_cost,
-                "تحصيل قيمة شحن": shipping_cost,
+                "تحصيل قيمة الشحن": shipping_cost,
                 "الضريبة": round(shipping_tax, 2),
                 "صافي المبيعات": round(shipping_cost + shipping_tax, 2)
             })
@@ -326,13 +323,12 @@ def process_financials(orders):
     return detailed_rows, taxable_stats, nontaxable_stats
 
 def generate_short_export(orders):
-    """بناء التصدير المختصر"""
     rows = []
     columns_list = [
         "الفرع", "تاريخ الطلب", "رقم الطلب", "حالة الطلب", "اسم العميل",
         "رقم الجوال", "بريد العميل", "المدينة", "شركة الشحن", "طريقة الدفع",
         "utm_source", "مجموع السلة", "الخصم الإجمالي", "قيمة خصم الكوبون",
-        "قيمة خصم العروض الخاصة", "الاجمالي بعد الخصم", "تكلفة الشحن",
+        "قيمة خصم العروض الخاصة", "الاجمالي بعد الخصم", "تحصيل قيمة الشحن",
         "الضريبة", "صافي المبيعات", "المبلغ المسترجع"
     ]
     
@@ -374,7 +370,7 @@ def generate_short_export(orders):
             "قيمة خصم الكوبون": coupon_disc,
             "قيمة خصم العروض الخاصة": special_disc,
             "الاجمالي بعد الخصم": total_after_disc,
-            "تحصيل قيمة شحن": shipping,
+            "تحصيل قيمة الشحن": shipping,
             "الضريبة": tax,
             "صافي المبيعات": net_sales_with_tax,
             "المبلغ المسترجع": refund
@@ -405,12 +401,11 @@ def generate_short_export(orders):
     return buf.getvalue()
 
 def generate_detailed_export(detailed_rows, taxable_stats, nontaxable_stats):
-    """بناء إكسيل التصدير التفصيلي"""
     columns_list = [
         "الفرع", "تاريخ الطلب", "رقم الطلب", "حالة الطلب", "اسم العميل",
         "المدينة", "شركة الشحن", "رقم الصنف (SKU)", "اسم الصنف", "الأصناف الفرعية", "خاضع للضريبة",
         "الكمية", "سعر الصنف (بدون ضريبة)", "قيمة خصم الكوبون", "قيمة خصم العرض الخاص",
-        "الاجمالي بعد الخصم", "تحصيل قيمة شحن", "الضريبة", "صافي المبيعات"
+        "الاجمالي بعد الخصم", "تحصيل قيمة الشحن", "الضريبة", "صافي المبيعات"
     ]
     df = pd.DataFrame(detailed_rows, columns=columns_list)
     buf = io.BytesIO()
@@ -425,7 +420,7 @@ def generate_detailed_export(detailed_rows, taxable_stats, nontaxable_stats):
     ws['A1'].fill = PatternFill(start_color="8E44AD", end_color="8E44AD", fill_type="solid")
     ws['A1'].alignment = Alignment(horizontal="center", vertical="center")
     
-    stat_headers = ["النوع", "مبيعات المنتجات", "تحصيلات الشحن", "إجمالي المبيعات", "الكمية المباعة", "ضريبة المنتجات", "ضريبة الشحن", "إجمالي الضريبة"]
+    stat_headers = ["النوع", "مبيعات المنتجات", "تحصيلات قيمة شحن", "إجمالي المبيعات", "الكمية المباعة", "ضريبة المنتجات", "ضريبة الشحن", "إجمالي الضريبة"]
     ws.append(stat_headers)
     for cell in ws[2]: cell.font = Font(bold=True); cell.fill = PatternFill(start_color="ECF0F1", fill_type="solid")
         
@@ -470,8 +465,11 @@ def render_orders_page():
     headers = get_headers()
     if not headers: return
     
+    # ==========================================
+    # القسم الأول: أدوات السحب من الـ API
+    # ==========================================
     with st.container(border=True):
-        st.markdown("#### 🔍 أدوات البحث واستخراج الطلبات")
+        st.markdown("#### 📥 استخراج الطلبات من سلة")
         
         uploaded_orders_file = st.file_uploader("📂 رفع ملف أرقام الطلبات (اختياري - Excel/CSV):", type=["xlsx", "csv"], help="ضع أرقام الطلبات في العمود الأول للملف.")
         order_refs_from_file = []
@@ -483,7 +481,7 @@ def render_orders_page():
             except Exception as e:
                 st.error("خطأ في قراءة الملف.")
         
-        search_query = st.text_input("🔎 ابحث برقم الطلب أو الجوال (اختياري):", placeholder="مثال: 41027662", disabled=bool(order_refs_from_file))
+        search_api_query = st.text_input("🔎 الكلمة المفتاحية في سلة (اختياري):", placeholder="مثال: رقم طلب محدد أو رقم جوال لجلب طلباته من سلة", disabled=bool(order_refs_from_file))
         
         col1, col2, col3 = st.columns([2, 2, 1])
         with col1: from_date = st.date_input("من تاريخ:", value=datetime.now().date() - timedelta(days=7), disabled=bool(order_refs_from_file))
@@ -494,35 +492,69 @@ def render_orders_page():
                 with st.spinner("جاري السحب..."):
                     orders_summary = get_orders_list(
                         from_date.strftime('%Y-%m-%d'), to_date.strftime('%Y-%m-%d'), headers,
-                        search_keyword=search_query.strip() if search_query else None,
+                        search_keyword=search_api_query.strip() if search_api_query else None,
                         order_refs_list=order_refs_from_file
                     )
                 if not orders_summary:
                     st.warning("⚠️ لا توجد طلبات مطابقة.")
-                    st.session_state['detailed_fetched_orders'] = []
                 else:
                     detailed_orders = get_detailed_orders(orders_summary, headers)
+                    # ✅ حفظ الطلبات في الذاكرة الدائمة لتظل موجودة عند العودة للصفحة
                     st.session_state['detailed_fetched_orders'] = detailed_orders
+                    st.rerun()
 
+    # ==========================================
+    # القسم الثاني: الطلبات المحفوظة (البحث المحلي، الإحصائيات، التصدير)
+    # ==========================================
     if st.session_state.get('detailed_fetched_orders'):
-        orders_data = st.session_state['detailed_fetched_orders']
+        all_saved_orders = st.session_state['detailed_fetched_orders']
         
-        detailed_rows, t_stats, nt_stats = process_financials(orders_data)
-                
         st.markdown("---")
-        st.markdown("### 📥 خيارات التصدير")
+        st.markdown(f"### 💾 الطلبات المحفوظة بالذاكرة ({len(all_saved_orders)} طلب)")
         
+        # ✅ شريط الفلترة المحلي (يبحث داخل الطلبات المحفوظة فوراً بدون إنترنت)
+        col_s1, col_s2, col_s3 = st.columns([3, 1, 1])
+        with col_s1:
+            local_search = st.text_input("🔎 فلترة الطلبات المحفوظة (رقم الطلب، الجوال، اسم العميل):", key="local_filter")
+        with col_s2:
+            st.markdown("<br>", unsafe_allow_html=True)
+            st.button("فلترة", use_container_width=True) # مجرد زر لتحديث الصفحة
+        with col_s3:
+            st.markdown("<br>", unsafe_allow_html=True)
+            if st.button("🗑️ مسح الذاكرة", type="primary", use_container_width=True):
+                st.session_state['detailed_fetched_orders'] = []
+                st.rerun()
+
+        # تطبيق الفلترة المحلية
+        orders_data = all_saved_orders
+        if local_search:
+            ls_lower = local_search.lower().strip()
+            orders_data = [
+                o for o in all_saved_orders
+                if ls_lower in str(o.get('reference_id', ''))
+                or ls_lower in str(o.get('customer', {}).get('mobile', ''))
+                or ls_lower in f"{o.get('customer', {}).get('first_name', '')} {o.get('customer', {}).get('last_name', '')}".lower()
+            ]
+            
+            if not orders_data:
+                st.warning("لم يتم العثور على طلبات مطابقة للفلترة.")
+                st.stop()
+        
+        # معالجة وعرض البيانات للطلبات المفلترة
+        detailed_rows, t_stats, nt_stats = process_financials(orders_data)
+        
+        # ✅ أزرار التصدير في الأعلى لسهولة الوصول
         col_short, col_detailed = st.columns(2)
         with col_short:
             excel_short = generate_short_export(orders_data)
-            st.download_button(label="📥 تحميل تصدير إكسيل المختصر", data=excel_short, file_name=f"Orders_Short_{datetime.now().strftime('%Y%m%d')}.xlsx", mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", use_container_width=True, type="primary")
+            st.download_button(label="📥 تحميل التصدير المختصر للطلبات المعروضة", data=excel_short, file_name=f"Orders_Short_{datetime.now().strftime('%Y%m%d')}.xlsx", mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", use_container_width=True, type="primary")
             
         with col_detailed:
             excel_detailed = generate_detailed_export(detailed_rows, t_stats, nt_stats)
-            st.download_button(label="📥 تحميل تصدير إكسيل التفصيلي (شامل الفرعيات)", data=excel_detailed, file_name=f"Orders_Detailed_{datetime.now().strftime('%Y%m%d')}.xlsx", mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", use_container_width=True, type="primary")
-            
+            st.download_button(label="📥 تحميل التصدير التفصيلي للطلبات المعروضة", data=excel_detailed, file_name=f"Orders_Detailed_{datetime.now().strftime('%Y%m%d')}.xlsx", mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", use_container_width=True, type="primary")
+
         st.markdown("---")
-        st.markdown("### 📊 إحصائيات المبيعات التفصيلية")
+        st.markdown("### 📊 إحصائيات المبيعات للطلبات المعروضة")
         
         t_total_sales = t_stats['item_sales'] + t_stats['shipping_sales']
         t_total_tax = t_stats['item_tax'] + t_stats['shipping_tax']
@@ -555,7 +587,7 @@ def render_orders_page():
         st.markdown(stats_html, unsafe_allow_html=True)
         
         st.markdown("---")
-        st.markdown(f"### 📋 ملخص الطلبات المسحوبة ({len(orders_data)})")
+        st.markdown(f"### 📋 استعراض الطلبات ({len(orders_data)})")
         
         cols = st.columns(2)
         for i, o in enumerate(orders_data):
@@ -572,10 +604,8 @@ def render_orders_page():
             utm_source = o.get('source_details', {}).get('utm_source', '') or o.get('campaign', {}).get('source', 'مباشر')
             
             subtotal = float(o.get('amounts', {}).get('sub_total', {}).get('amount', 0))
-            
             tax_obj = o.get('amounts', {}).get('tax', {})
             tax = float(tax_obj['amount'].get('amount', 0)) if isinstance(tax_obj, dict) and isinstance(tax_obj.get('amount'), dict) else 0.0
-            
             shipping_cost = float(o.get('amounts', {}).get('shipping_cost', {}).get('amount', 0))
             discounts = o.get('amounts', {}).get('discounts', [])
             total_discount = sum(float(d.get('discount', 0)) for d in discounts)
