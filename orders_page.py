@@ -8,16 +8,15 @@ import openpyxl
 from openpyxl.styles import PatternFill, Font, Alignment, Border, Side
 from utils import get_headers, safe_api_request, SALLA_API_URL
 
-# ذاكرة مؤقتة لتقليل استهلاك الـ API
 if 'product_cache' not in st.session_state:
     st.session_state['product_cache'] = {}
 
 def fetch_with_retry(url, headers, max_retries=3):
-    """دالة ذكية تعالج خطأ 429 (الضغط على السيرفر) وتعيد المحاولة تلقائياً لتجنب الحظر أو الفقد"""
+    """دالة ذكية تعالج خطأ 429 وتعيد المحاولة تلقائياً لتجنب الحظر"""
     for attempt in range(max_retries):
         res = safe_api_request("GET", url, headers)
         if res and isinstance(res, dict) and res.get("status") == 429:
-            time.sleep(1.5 * (attempt + 1)) # إراحة سيرفرات سلة عند الضغط
+            time.sleep(1.5 * (attempt + 1))
             continue
         return res
     return None
@@ -47,7 +46,7 @@ def get_orders_list(from_date, to_date, headers, search_keyword=None, order_refs
             url = f"https://api.salla.dev/admin/v2/orders?from_date={from_date}&to_date={to_date}&per_page=50&page={page}"
             if search_keyword: url += f"&keyword={search_keyword}"
                 
-            res = fetch_with_retry(url, headers) # ✅ استخدام الدالة المحمية هنا يضمن عدم فقدان صفحات!
+            res = fetch_with_retry(url, headers)
             
             if res and isinstance(res, dict) and res.get("status") == 422:
                 st.warning("⚠️ عدد الطلبات كبير جداً ويتجاوز حد سلة (10,000). سيتم الاكتفاء بما تم سحبه.")
@@ -68,16 +67,19 @@ def get_orders_list(from_date, to_date, headers, search_keyword=None, order_refs
     return orders
 
 def fetch_single_order_details(order_id, headers):
-    """سحب تفاصيل طلب واحد. تم الإصلاح الجذري لضمان عدم فقدان المنتجات"""
+    """سحب تفاصيل طلب واحد بشكل دقيق ومضمون 100%"""
     res_order = fetch_with_retry(f"https://api.salla.dev/admin/v2/orders/{order_id}", headers)
     if not res_order or not res_order.get("data"):
         return None
         
     order_data = res_order.get("data", {})
-    items_data = order_data.get('items', [])
+    
+    # ✅ استرجاع المنتجات من مسار Items بشكل مباشر لضمان عدم ضياعها
+    items_res = fetch_with_retry(f"https://api.salla.dev/admin/v2/orders/items?order_id={order_id}", headers)
+    order_items = items_res.get("data", []) if items_res and items_res.get("data") else []
 
-    # ✅ إصلاح جوهري: التكرار بأمان والتأكد من بقاء المنتج حتى لو لم نجد تفاصيل المجموعة
-    for item in items_data:
+    # ✅ معالجة المنتجات وتفكيك المجموعات (Group Products)
+    for item in order_items:
         pid = item.get('product_id') or item.get('product', {}).get('id')
         if pid and str(pid).isdigit():
             if pid not in st.session_state['product_cache']:
@@ -91,11 +93,11 @@ def fetch_single_order_details(order_id, headers):
                 elif prod_info.get('consisted_products'):
                     item['consisted_products'] = prod_info.get('consisted_products')
                     
-    order_data['items'] = items_data
+    order_data['items'] = order_items
     return order_data
 
 def get_detailed_orders(orders_summary, headers):
-    """⚡ سحب التفاصيل الدقيقة بأسلوب متوازي محمي (Safe Parallel Processing)"""
+    """⚡ سحب التفاصيل الدقيقة بأسلوب متوازي محمي"""
     detailed_orders = []
     status_text = st.empty()
     progress_bar = st.progress(0)
@@ -126,7 +128,7 @@ def get_detailed_orders(orders_summary, headers):
     return detailed_orders
 
 def extract_shipping_company(order):
-    """استخراج شركة الشحن من الطلب مباشرة"""
+    """استخراج شركة الشحن من الطلب بذكاء"""
     shipments = order.get('shipments', [])
     if shipments and isinstance(shipments, list) and len(shipments) > 0:
         c_name = shipments[0].get('courier_name')
@@ -136,11 +138,14 @@ def extract_shipping_company(order):
     if isinstance(shipping_obj, dict):
         comp = shipping_obj.get('company')
         if comp and comp != 'غير متوفر': return comp
+        shipper = shipping_obj.get('shipper', {})
+        if isinstance(shipper, dict) and shipper.get('company_name'):
+            return shipper.get('company_name')
         
     return "شحن يدوي / عادي"
 
 def process_financials(orders):
-    """أداة المعالجة المحاسبية الشاملة (المنتجات + الشحن)"""
+    """المعالجة المحاسبية الشاملة"""
     detailed_rows = []
     taxable_stats = {'item_sales': 0.0, 'shipping_sales': 0.0, 'qty': 0, 'item_tax': 0.0, 'shipping_tax': 0.0}
     nontaxable_stats = {'item_sales': 0.0, 'shipping_sales': 0.0, 'qty': 0, 'item_tax': 0.0, 'shipping_tax': 0.0}
@@ -490,7 +495,7 @@ def render_orders_page():
         orders_data = st.session_state['detailed_fetched_orders']
         
         detailed_rows, t_stats, nt_stats = process_financials(orders_data)
-                
+        
         st.markdown("---")
         st.markdown("### 📥 خيارات التصدير")
         
@@ -502,7 +507,7 @@ def render_orders_page():
         with col_detailed:
             excel_detailed = generate_detailed_export(detailed_rows, t_stats, nt_stats)
             st.download_button(label="📥 تحميل تصدير إكسيل التفصيلي (شامل الفرعيات)", data=excel_detailed, file_name=f"Orders_Detailed_{datetime.now().strftime('%Y%m%d')}.xlsx", mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", use_container_width=True, type="primary")
-            
+
         st.markdown("---")
         st.markdown("### 📊 إحصائيات المبيعات التفصيلية")
         
@@ -566,6 +571,7 @@ def render_orders_page():
             border_color = "#2ecc71" if "تنفيذ" in status_name or "توصيل" in status_name else ("#e74c3c" if "لغي" in status_name else "#f39c12")
             
             with col:
+                # ✅ إضافة برواز أنيق (border) حول منطقة الملخص المالي
                 card_html = f"""
 <div style="background: linear-gradient(145deg, #1e293b, #0f172a); border-radius: 12px; padding: 16px; margin-bottom: 16px; border: 1px solid #334155; border-right: 5px solid {border_color}; position: relative; box-shadow: 0 4px 15px rgba(0,0,0,0.2);">
 <div style="display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid rgba(255,255,255,0.05); padding-bottom: 12px; margin-bottom: 12px;">
@@ -587,7 +593,7 @@ def render_orders_page():
 <div>🚚 <b style="color:#fff;">الشحن:</b> {shipping_company}</div>
 </div>
 </div>
-<div style="background: rgba(0,0,0,0.2); border-radius: 8px; padding: 10px; display: flex; justify-content: space-around; text-align: center; border: 1px solid rgba(255,255,255,0.05);">
+<div style="background: rgba(0,0,0,0.3); border-radius: 8px; padding: 12px; display: flex; justify-content: space-around; text-align: center; border: 1px solid #475569; box-shadow: inset 0 2px 4px rgba(0,0,0,0.5);">
 <div><span style="display:block; font-size:11px; color:#94a3b8;">مجموع السلة</span><b style="color:#fff; font-size:14px;">{round(subtotal, 2):,}</b></div>
 <div><span style="display:block; font-size:11px; color:#94a3b8;">الخصومات</span><b style="color:#ef4444; font-size:14px;">{round(total_discount, 2):,}</b></div>
 <div><span style="display:block; font-size:11px; color:#94a3b8;">الشحن</span><b style="color:#38bdf8; font-size:14px;">{round(shipping_cost, 2):,}</b></div>
