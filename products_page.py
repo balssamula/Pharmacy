@@ -2,6 +2,7 @@ import streamlit as st
 import pandas as pd
 import requests
 import io
+import re
 from datetime import datetime, timedelta
 from typing import Dict, List, Any
 
@@ -445,6 +446,152 @@ def render_discount_expiry_alerts(headers: Dict[str, str]):
                                         st.session_state["ignored_discount_alerts"].add(p_id)
                                         st.rerun()
 
+import re
+
+def calculate_effective_offer_price(base_price: float, offer_name: str) -> float:
+    """محلل ذكي لنصوص العروض لتحويلها إلى سعر فعلي للحبة الواحدة"""
+    offer_name = str(offer_name).strip()
+    
+    # 1. حالة "اشتر X واحصل على Y مجاناً" (مثال: 1+1 مجاناً، 2+1)
+    match_plus = re.search(r'(\d+)\s*\+\s*(\d+)', offer_name)
+    if match_plus:
+        buy_qty = int(match_plus.group(1))
+        free_qty = int(match_plus.group(2))
+        total_qty = buy_qty + free_qty
+        # سعر الحبة = (سعر الشراء * الكمية المشتراة) / إجمالي الكمية
+        return (base_price * buy_qty) / total_qty
+
+    # 2. حالة "خصم X% على الحبة الثانية"
+    match_second = re.search(r'خصم\s*(\d+)%\s*على\s*الحبة\s*الثانية', offer_name)
+    if match_second:
+        discount_pct = float(match_second.group(1)) / 100.0
+        # سعر الحبتين = سعر الأولى كامل + سعر الثانية بعد الخصم
+        price_two_items = base_price + (base_price * (1.0 - discount_pct))
+        # سعر الحبة المتوسط
+        return price_two_items / 2.0
+
+    # 3. حالة "خصم مباشر X%" على المنتج
+    match_pct = re.search(r'خصم\s*(\d+)%', offer_name)
+    if match_pct and "الثانية" not in offer_name:
+        discount_pct = float(match_pct.group(1)) / 100.0
+        return base_price * (1.0 - discount_pct)
+
+    # إذا لم يتم التعرف على صيغة العرض، نفترض أنه لا يغير سعر الحبة الأساسي
+    return base_price
+
+def generate_price_comparison_excel(all_products, offers_map):
+    """بناء ملف إكسيل لمقارنة الأسعار بين الفردي، المجموعات، والعروض الخاصة"""
+    
+    # 1. استخراج وفهرسة جميع "مجموعات المنتجات" لمعرفة سعر الحبة بداخلها
+    group_components_map = {}
+    for p in all_products:
+        if p.get('type') == 'group_products':
+            # تحديد سعر المجموعة (المخفض إن وجد، وإلا الأساسي)
+            g_reg_price = get_flat_price(p.get('regular_price', 0)) or get_flat_price(p.get('price', 0))
+            g_sale_price = get_flat_price(p.get('sale_price', 0))
+            g_final_price = g_sale_price if (g_sale_price > 0 and g_sale_price < g_reg_price) else g_reg_price
+            
+            # تفكيك مكونات المجموعة
+            items = p.get('consisted_products') or p.get('grouped_items') or []
+            for item in items:
+                child_prod = item.get('product', {}) if 'product' in item else item
+                child_id = str(child_prod.get('id', ''))
+                if not child_id: continue
+                
+                # استخراج الكمية داخل المجموعة
+                qty = int(item.get('quantity_in_group', item.get('quantity', 1)))
+                if qty <= 0: qty = 1
+                
+                if child_id not in group_components_map:
+                    group_components_map[child_id] = []
+                    
+                group_components_map[child_id].append({
+                    'group_sku': p.get('sku', 'بدون'),
+                    'qty_in_group': qty,
+                    'group_price': g_final_price,
+                    'unit_price': g_final_price / qty
+                })
+
+    # 2. المرور على المنتجات الفردية والمقارنة
+    results = []
+    for p in all_products:
+        if p.get('type') == 'group_products': 
+            continue # نتخطى المجموعات لأننا نحلل المنتجات الفردية
+            
+        p_id = str(p.get('id', ''))
+        sku = str(p.get('sku', 'بدون'))
+        name = p.get('name', 'بدون اسم')
+        
+        # سعر الفردي
+        base_price = get_flat_price(p.get('regular_price', 0)) or get_flat_price(p.get('price', 0))
+        sale_price = get_flat_price(p.get('sale_price', 0))
+        indiv_price = sale_price if (sale_price > 0 and sale_price < base_price) else base_price
+        
+        # سعر أفضل مجموعة
+        groups = group_components_map.get(p_id, [])
+        best_group = min(groups, key=lambda x: x['unit_price']) if groups else None
+        
+        # سعر أفضل عرض
+        offers = offers_map.get(p_id, [])
+        best_offer_price = None
+        best_offer_name = None
+        
+        for off in offers:
+            off_name = off.get('name', '')
+            # استخدام السعر الفردي المخفض أو الأساسي كقاعدة لحساب العرض
+            calc_price = calculate_effective_offer_price(indiv_price, off_name)
+            if best_offer_price is None or calc_price < best_offer_price:
+                best_offer_price = calc_price
+                best_offer_name = off_name
+
+        # المقارنة النهائية لاستخراج "أفضل سعر"
+        comparison_list = [('شراء فردي (مباشر)', indiv_price)]
+        if best_group:
+            comparison_list.append((f"شراء كمجموعة ({best_group['group_sku']})", best_group['unit_price']))
+        if best_offer_price is not None:
+            comparison_list.append((f"شراء من عرض ({best_offer_name})", best_offer_price))
+            
+        best_method, lowest_price = min(comparison_list, key=lambda x: x[1])
+        
+        # إضافة السطر
+        results.append({
+            "رمز SKU": sku,
+            "اسم المنتج": name,
+            "سعر الحبة (أساسي)": base_price,
+            "سعر الحبة (مخفض)": sale_price if sale_price > 0 else "-",
+            "أفضل سعر داخل مجموعة": round(best_group['unit_price'], 2) if best_group else "-",
+            "SKU المجموعة": best_group['group_sku'] if best_group else "-",
+            "سعر الحبة داخل العرض الخاص": round(best_offer_price, 2) if best_offer_price is not None else "-",
+            "اسم العرض المؤثر": best_offer_name if best_offer_name else "-",
+            "أرخص سعر ممكن للحبة": round(lowest_price, 2),
+            "الطريقة الأوفر للعميل": best_method
+        })
+
+    # 3. بناء ملف الإكسيل وتنسيقه
+    df = pd.DataFrame(results)
+    buf = io.BytesIO()
+    wb = openpyxl.Workbook()
+    ws = wb.active
+    ws.title = "مقارنة الأسعار الذكية"
+    ws.sheet_view.rightToLeft = True
+    
+    headers = list(df.columns)
+    ws.append(headers)
+    for row in df.itertuples(index=False, name=None): ws.append(row)
+        
+    header_fill = PatternFill(start_color="1E293B", end_color="1E293B", fill_type="solid")
+    header_font = Font(color="00EBCF", bold=True)
+    center_align = Alignment(horizontal="center", vertical="center")
+    
+    for col in range(1, len(headers) + 1):
+        cell = ws.cell(row=1, column=col)
+        cell.fill = header_fill; cell.font = header_font; cell.alignment = center_align
+        ws.column_dimensions[openpyxl.utils.get_column_letter(col)].width = 22
+        
+    ws.auto_filter.ref = f"A1:{openpyxl.utils.get_column_letter(len(headers))}{ws.max_row}"
+    wb.save(buf)
+    return buf.getvalue()
+    
 def render_products_page():
     initialize_session()
     headers = get_headers()
@@ -459,6 +606,28 @@ def render_products_page():
     # ✅ عرض تنبيهات التخفيضات المنتهية
     render_discount_expiry_alerts(headers)
 
+    # ========================================================
+    # 📊 قسم التقارير المتقدمة (زر مقارنة الأسعار)
+    # ========================================================
+    with st.expander("📊 تقارير التسعير المتقدمة والمقارنات", expanded=False):
+        st.info("💡 يقوم هذا التقرير بحساب سعر الحبة الفعلي لكل منتج سواء تم بيعه كـ (فردي)، أو داخل (مجموعة)، أو داخل (عرض خاص)، ويستخرج لك أرخص وأفضل طريقة يتم بيع المنتج بها حالياً.")
+        all_prods = st.session_state.get("all_products", [])
+        offers_map = st.session_state.get("product_offers_map", {})
+        
+        if all_prods:
+            excel_bytes = generate_price_comparison_excel(all_prods, offers_map)
+            st.download_button(
+                label="📥 تحميل إكسيل: مقارنة سعر المنتج (فردي / مجموعة / عروض)",
+                data=excel_bytes,
+                file_name=f"Price_Comparison_Report_{datetime.now().strftime('%Y%m%d')}.xlsx",
+                mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                type="primary",
+                use_container_width=True,
+                icon="⚖️"
+            )
+        else:
+            st.warning("يرجى الانتظار حتى يتم تحميل المنتجات...")
+            
     st.markdown("""
     <style>
         div[data-testid="stElementContainer"]:has(span[id^="qa-marker-"]) { display: none !important; margin: 0 !important; padding: 0 !important; }
