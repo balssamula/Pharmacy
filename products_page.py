@@ -3,6 +3,9 @@ import pandas as pd
 import requests
 import io
 import re
+import openpyxl
+from openpyxl.styles import PatternFill, Font, Alignment
+from openpyxl.utils import get_column_letter
 from datetime import datetime, timedelta
 from typing import Dict, List, Any
 
