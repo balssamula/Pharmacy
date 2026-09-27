@@ -1077,7 +1077,7 @@ def render_products_page():
                                 with col_d3:
                                     st.markdown("<br>", unsafe_allow_html=True) # لإنزال الزر ليكون بمحاذاة الحقول
                                     # يتم رسم الزر هنا، وقيمته ستُحفظ تلقائياً في الذاكرة لتستخدم في المرة القادمة
-                                    no_end_date = st.checkbox("♾️ بدون تاريخ", key=f"no_date_{g_name}")
+                                    no_end_date = st.checkbox("♾️", key=f"no_date_{g_name}")
                                     
                                 confs = []
                                 for p in group_products_data:
