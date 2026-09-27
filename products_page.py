@@ -600,6 +600,109 @@ def generate_price_comparison_excel(all_products, offers_map):
     ws.auto_filter.ref = f"A1:{openpyxl.utils.get_column_letter(len(headers))}{ws.max_row}"
     wb.save(buf)
     return buf.getvalue()
+
+def get_pricing_anomalies(all_products, offers_map):
+    """خوارزمية ذكية لاكتشاف أخطاء التسعير (مجموعات أو عروض سعر الحبة فيها أعلى من الفردي)"""
+    group_components_map = {}
+    for p in all_products:
+        if p.get('type') == 'group_products':
+            g_reg_price = get_flat_price(p.get('regular_price', 0)) or get_flat_price(p.get('price', 0))
+            g_sale_price = get_flat_price(p.get('sale_price', 0))
+            g_final_price = g_sale_price if (g_sale_price > 0 and g_sale_price < g_reg_price) else g_reg_price
+            
+            items = p.get('consisted_products') or p.get('grouped_items') or []
+            for item in items:
+                child_prod = item.get('product', {}) if 'product' in item else item
+                child_id = str(child_prod.get('id', ''))
+                if not child_id: continue
+                
+                qty = int(item.get('quantity_in_group', item.get('quantity', 1)))
+                if qty <= 0: qty = 1
+                
+                if child_id not in group_components_map:
+                    group_components_map[child_id] = []
+                    
+                group_components_map[child_id].append({
+                    'group_id': str(p.get('id', '')),
+                    'group_name': p.get('name', 'مجموعة بدون اسم'),
+                    'group_sku': p.get('sku', 'بدون'),
+                    'qty_in_group': qty,
+                    'group_price': g_final_price,
+                    'unit_price': g_final_price / qty
+                })
+
+    anomalies = []
+    for p in all_products:
+        if p.get('type') == 'group_products': 
+            continue
+            
+        p_id = str(p.get('id', ''))
+        sku = str(p.get('sku', 'بدون'))
+        name = p.get('name', 'بدون اسم')
+        
+        base_price = get_flat_price(p.get('regular_price', 0)) or get_flat_price(p.get('price', 0))
+        sale_price = get_flat_price(p.get('sale_price', 0))
+        indiv_price = sale_price if (sale_price > 0 and sale_price < base_price) else base_price
+        
+        if indiv_price <= 0: continue # تجاهل المنتجات المجانية أو ذات التسعير الخاطئ أساساً
+        
+        # 1. فحص أخطاء تسعير المجموعات
+        for grp in group_components_map.get(p_id, []):
+            # نستخدم التقريب لمنع الفروقات العشرية الطفيفة من إطلاق إنذار كاذب
+            if round(grp['unit_price'], 2) > round(indiv_price, 2):
+                anomalies.append({
+                    "نوع الخلل": "مجموعة أغلى من الفردي",
+                    "رقم المنتج (SKU)": sku,
+                    "المنتج الفردي": name,
+                    "سعر الحبة الفردي": round(indiv_price, 2),
+                    "المجموعة / العرض": f"{grp['group_name']} (SKU: {grp['group_sku']})",
+                    "سعر الحبة بداخلها": round(grp['unit_price'], 2),
+                    "خسارة العميل في الحبة": round(grp['unit_price'] - indiv_price, 2)
+                })
+                
+        # 2. فحص أخطاء تسعير العروض الخاصة
+        for off in offers_map.get(p_id, []):
+            off_name = off.get('name', '')
+            calc_price = calculate_effective_offer_price(indiv_price, off_name)
+            
+            if round(calc_price, 2) > round(indiv_price, 2):
+                anomalies.append({
+                    "نوع الخلل": "عرض خاص أغلى من الفردي",
+                    "رقم المنتج (SKU)": sku,
+                    "المنتج الفردي": name,
+                    "سعر الحبة الفردي": round(indiv_price, 2),
+                    "المجموعة / العرض": off_name,
+                    "سعر الحبة بداخلها": round(calc_price, 2),
+                    "خسارة العميل في الحبة": round(calc_price - indiv_price, 2)
+                })
+                
+    return anomalies
+
+def generate_anomalies_excel(anomalies):
+    """بناء إكسيل منسق لإنذارات أخطاء التسعير باللون الأحمر للتنبيه"""
+    df = pd.DataFrame(anomalies)
+    buf = io.BytesIO()
+    wb = openpyxl.Workbook()
+    ws = wb.active
+    ws.title = "أخطاء التسعير المكتشفة"
+    ws.sheet_view.rightToLeft = True
+    
+    headers = list(df.columns)
+    ws.append(headers)
+    for row in df.itertuples(index=False, name=None): ws.append(row)
+        
+    header_fill = PatternFill(start_color="C0392B", end_color="C0392B", fill_type="solid") # أحمر داكن للتنبيه
+    header_font = Font(color="FFFFFF", bold=True)
+    center_align = Alignment(horizontal="center", vertical="center")
+    
+    for col in range(1, len(headers) + 1):
+        cell = ws.cell(row=1, column=col)
+        cell.fill = header_fill; cell.font = header_font; cell.alignment = center_align
+        ws.column_dimensions[openpyxl.utils.get_column_letter(col)].width = 24
+        
+    ws.auto_filter.ref = f"A1:{openpyxl.utils.get_column_letter(len(headers))}{ws.max_row}"
+    wb.save(buf)
+    return buf.getvalue()
     
 def render_products_page():
     initialize_session()
@@ -616,24 +719,52 @@ def render_products_page():
     render_discount_expiry_alerts(headers)
 
     # ========================================================
-    # 📊 قسم التقارير المتقدمة (زر مقارنة الأسعار)
+    # 📊 قسم التقارير المتقدمة والمدقق المالي
     # ========================================================
-    with st.expander("📊 تقارير التسعير المتقدمة والمقارنات", expanded=False):
-        st.info("💡 يقوم هذا التقرير بحساب سعر الحبة الفعلي لكل منتج سواء تم بيعه كـ (فردي)، أو داخل (مجموعة)، أو داخل (عرض خاص)، ويستخرج لك أرخص وأفضل طريقة يتم بيع المنتج بها حالياً.")
+    with st.expander("📊 تقارير التسعير المتقدمة والمدقق المالي الذكي", expanded=False):
+        st.info("💡 المدقق المالي: يقوم بحساب سعر الحبة الفعلي لكل منتج سواء تم بيعه كـ (فردي)، أو داخل (مجموعة)، أو داخل (عرض خاص)، ويستخرج لك أرخص وأفضل طريقة يتم بيع المنتج بها حالياً، ويكتشف الأخطاء تلقائياً.")
         all_prods = st.session_state.get("all_products", [])
         offers_map = st.session_state.get("product_offers_map", {})
         
         if all_prods:
-            excel_bytes = generate_price_comparison_excel(all_prods, offers_map)
-            st.download_button(
-                label="📥 تحميل إكسيل: مقارنة سعر المنتج (فردي / مجموعة / عروض)",
-                data=excel_bytes,
-                file_name=f"Price_Comparison_Report_{datetime.now().strftime('%Y%m%d')}.xlsx",
-                mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-                type="primary",
-                use_container_width=True,
-                icon="⚖️"
-            )
+            col_rp1, col_rp2 = st.columns(2)
+            
+            with col_rp1:
+                # 1. زر التقرير الشامل
+                excel_bytes = generate_price_comparison_excel(all_prods, offers_map)
+                st.download_button(
+                    label="📥 تحميل التقرير الشامل: مقارنة سعر المنتج (فردي/مجموعة/عروض)",
+                    data=excel_bytes,
+                    file_name=f"Price_Comparison_Report_{datetime.now().strftime('%Y%m%d')}.xlsx",
+                    mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                    use_container_width=True
+                )
+                
+            with col_rp2:
+                # 2. زر حصر أخطاء التسعير فقط (اكتشاف الكوارث التسعيرية)
+                anomalies = get_pricing_anomalies(all_prods, offers_map)
+                if anomalies:
+                    st.download_button(
+                        label=f"🚨 تنزيل أخطاء التسعير المكتشفة ({len(anomalies)} خطأ)",
+                        data=generate_anomalies_excel(anomalies),
+                        file_name=f"Pricing_Errors_Alert_{datetime.now().strftime('%Y%m%d')}.xlsx",
+                        mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                        type="primary",
+                        use_container_width=True
+                    )
+                else:
+                    st.button("✅ التسعير سليم 100% (لا يوجد أخطاء)", disabled=True, use_container_width=True)
+
+            # عرض جزء من الأخطاء في الواجهة للفت الانتباه فوراً
+            if anomalies:
+                st.markdown(f"""
+                <div style="background: rgba(231, 76, 60, 0.1); border-right: 5px solid #e74c3c; padding: 15px; border-radius: 8px; margin-top: 15px;">
+                    <h4 style="color: #e74c3c; margin: 0 0 10px 0;">🚨 تنبيه مالي عاجل!</h4>
+                    تم اكتشاف <b>({len(anomalies)})</b> حالة يكون فيها الشراء عبر (المجموعة أو العرض الخاص) <b>أغلى</b> من الشراء الفردي للمنتج! يرجى تحميل ملف أخطاء التسعير لتعديلها.
+                </div>
+                """, unsafe_allow_html=True)
+                # عرض عينة صغيرة في الواجهة
+                st.dataframe(pd.DataFrame(anomalies).head(5), use_container_width=True)
         else:
             st.warning("يرجى الانتظار حتى يتم تحميل المنتجات...")
             
