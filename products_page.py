@@ -595,14 +595,14 @@ def generate_price_comparison_excel(all_products, offers_map, excluded_skus=None
     return buf.getvalue()
 
 def get_pricing_anomalies(all_products, offers_map, excluded_skus=None):
-    """خوارزمية ذكية لاكتشاف أخطاء التسعير (مع استبعاد الرموز المحددة)"""
+    """خوارزمية ذكية لاكتشاف أخطاء التسعير (محدّثة مع أعمدة جديدة ومعرفات مخفية للمعالجة الآلية)"""
     excluded_skus = set(excluded_skus) if excluded_skus else set()
     
     group_components_map = {}
     for p in all_products:
         if p.get('type') == 'group_products':
             g_sku = str(p.get('sku', '')).strip().replace('.0', '')
-            if g_sku in excluded_skus: continue # 🚫 استبعاد هذه المجموعة
+            if g_sku in excluded_skus: continue 
                 
             g_reg_price = get_flat_price(p.get('regular_price', 0)) or get_flat_price(p.get('price', 0))
             g_sale_price = get_flat_price(p.get('sale_price', 0))
@@ -634,7 +634,7 @@ def get_pricing_anomalies(all_products, offers_map, excluded_skus=None):
         if p.get('type') == 'group_products': continue
             
         sku = str(p.get('sku', 'بدون')).strip().replace('.0', '')
-        if sku in excluded_skus: continue # 🚫 استبعاد هذا الفردي من التدقيق
+        if sku in excluded_skus: continue 
             
         p_id = str(p.get('id', ''))
         name = p.get('name', 'بدون اسم')
@@ -649,11 +649,15 @@ def get_pricing_anomalies(all_products, offers_map, excluded_skus=None):
         for grp in group_components_map.get(p_id, []):
             if round(grp['unit_price'], 2) > round(indiv_price, 2):
                 anomalies.append({
+                    "_indiv_id": p_id,
+                    "_group_id": grp['group_id'],
+                    "_qty": grp['qty_in_group'],
                     "نوع الخلل": "مجموعة أغلى من الفردي",
                     "رقم المنتج (SKU)": sku,
                     "المنتج الفردي": name,
                     "سعر الحبة الفردي": round(indiv_price, 2),
                     "المجموعة / العرض": f"{grp['group_name']} (SKU: {grp['group_sku']})",
+                    "العرض": "السعر المخفض للمجموعة",
                     "سعر الحبة بداخلها": round(grp['unit_price'], 2),
                     "خسارة العميل في الحبة": round(grp['unit_price'] - indiv_price, 2)
                 })
@@ -665,11 +669,15 @@ def get_pricing_anomalies(all_products, offers_map, excluded_skus=None):
             
             if round(calc_price, 2) > round(indiv_price, 2):
                 anomalies.append({
+                    "_indiv_id": p_id,
+                    "_group_id": None,
+                    "_qty": 1,
                     "نوع الخلل": "عرض خاص أغلى من الفردي",
                     "رقم المنتج (SKU)": sku,
                     "المنتج الفردي": name,
                     "سعر الحبة الفردي": round(indiv_price, 2),
-                    "المجموعة / العرض": off_name,
+                    "المجموعة / العرض": "إعدادات العروض الخاصة",
+                    "العرض": off_name,
                     "سعر الحبة بداخلها": round(calc_price, 2),
                     "خسارة العميل في الحبة": round(calc_price - indiv_price, 2)
                 })
@@ -677,8 +685,11 @@ def get_pricing_anomalies(all_products, offers_map, excluded_skus=None):
     return anomalies
 
 def generate_anomalies_excel(anomalies):
-    """بناء إكسيل منسق لإنذارات أخطاء التسعير باللون الأحمر للتنبيه"""
-    df = pd.DataFrame(anomalies)
+    """بناء إكسيل منسق لإنذارات أخطاء التسعير (يقوم بتجاهل المتغيرات المخفية)"""
+    # تصفية الأعمدة التي تبدأ بـ "_" لأنها متغيرات برمجية فقط وليست للعرض
+    clean_anomalies = [{k: v for k, v in a.items() if not k.startswith('_')} for a in anomalies]
+    
+    df = pd.DataFrame(clean_anomalies)
     buf = io.BytesIO()
     wb = openpyxl.Workbook()
     ws = wb.active
@@ -689,7 +700,7 @@ def generate_anomalies_excel(anomalies):
     ws.append(headers)
     for row in df.itertuples(index=False, name=None): ws.append(row)
         
-    header_fill = PatternFill(start_color="C0392B", end_color="C0392B", fill_type="solid") # أحمر داكن للتنبيه
+    header_fill = PatternFill(start_color="C0392B", end_color="C0392B", fill_type="solid")
     header_font = Font(color="FFFFFF", bold=True)
     center_align = Alignment(horizontal="center", vertical="center")
     
@@ -717,26 +728,22 @@ def render_products_page():
     render_discount_expiry_alerts(headers)
 
     # ========================================================
-    # 📊 قسم التقارير المتقدمة والمدقق المالي
+    # 📊 قسم التقارير المتقدمة والمدقق المالي الذكي
     # ========================================================
     with st.expander("📊 تقارير التسعير المتقدمة والمدقق المالي الذكي", expanded=False):
         st.info("💡 المدقق المالي: يقوم بحساب سعر الحبة الفعلي لكل منتج سواء تم بيعه كـ (فردي)، أو داخل (مجموعة)، أو داخل (عرض خاص)، ويستخرج لك أرخص وأفضل طريقة يتم بيع المنتج بها حالياً، ويكتشف الأخطاء تلقائياً.")
         
-        # ✅ قسم رفع ملف الاستبعاد الجديد
         st.markdown("#### 🚫 استبعاد مجموعات أو منتجات (اختياري)")
         uploaded_exclusion = st.file_uploader("📂 رفع ملف (Excel/CSV) يحتوي على رموز SKU للمجموعات المراد استبعادها في العمود الأول:", type=['xlsx', 'csv'], key="excl_skus_file")
         
         excluded_skus = set()
         if uploaded_exclusion:
             try:
-                if uploaded_exclusion.name.endswith('.csv'):
-                    df_ex = pd.read_csv(uploaded_exclusion)
-                else:
-                    df_ex = pd.read_excel(uploaded_exclusion)
+                if uploaded_exclusion.name.endswith('.csv'): df_ex = pd.read_csv(uploaded_exclusion)
+                else: df_ex = pd.read_excel(uploaded_exclusion)
                 
                 if not df_ex.empty:
-                    raw_skus = df_ex.iloc[:, 0].dropna().astype(str).str.strip()
-                    raw_skus = raw_skus.str.replace(r'\.0$', '', regex=True)
+                    raw_skus = df_ex.iloc[:, 0].dropna().astype(str).str.strip().str.replace(r'\.0$', '', regex=True)
                     excluded_skus = set(raw_skus.tolist())
                     st.success(f"✅ تم قراءة واستبعاد ({len(excluded_skus)}) رمز SKU بنجاح.")
             except Exception as e:
@@ -749,7 +756,6 @@ def render_products_page():
             col_rp1, col_rp2 = st.columns(2)
             
             with col_rp1:
-                # 1. زر التقرير الشامل (مع تمرير قائمة الاستبعاد)
                 excel_bytes = generate_price_comparison_excel(all_prods, offers_map, excluded_skus)
                 st.download_button(
                     label="📥 تحميل التقرير الشامل: مقارنة سعر المنتج (فردي/مجموعة/عروض)",
@@ -760,7 +766,6 @@ def render_products_page():
                 )
                 
             with col_rp2:
-                # 2. زر حصر أخطاء التسعير فقط (مع تمرير قائمة الاستبعاد)
                 anomalies = get_pricing_anomalies(all_prods, offers_map, excluded_skus)
                 if anomalies:
                     st.download_button(
@@ -776,12 +781,80 @@ def render_products_page():
 
             if anomalies:
                 st.markdown(f"""
-                <div style="background: rgba(231, 76, 60, 0.1); border-right: 5px solid #e74c3c; padding: 15px; border-radius: 8px; margin-top: 15px;">
+                <div style="background: rgba(231, 76, 60, 0.1); border-right: 5px solid #e74c3c; padding: 15px; border-radius: 8px; margin-top: 15px; margin-bottom: 15px;">
                     <h4 style="color: #e74c3c; margin: 0 0 10px 0;">🚨 تنبيه مالي عاجل!</h4>
-                    تم اكتشاف <b>({len(anomalies)})</b> حالة يكون فيها الشراء عبر (المجموعة أو العرض الخاص) <b>أغلى</b> من الشراء الفردي للمنتج! يرجى تحميل ملف أخطاء التسعير لتعديلها.
+                    تم اكتشاف <b>({len(anomalies)})</b> حالة يكون فيها الشراء عبر (المجموعة أو العرض الخاص) <b>أغلى</b> من الشراء الفردي للمنتج!
                 </div>
                 """, unsafe_allow_html=True)
-                st.dataframe(pd.DataFrame(anomalies).head(5), use_container_width=True)
+                
+                # عرض عينة صغيرة في الواجهة (بدون المتغيرات الخفية)
+                display_df = pd.DataFrame([{k: v for k, v in a.items() if not k.startswith('_')} for a in anomalies])
+                st.dataframe(display_df.head(5), use_container_width=True)
+
+                st.markdown("#### ⚡ إجراءات سريعة لمعالجة الأخطاء")
+                c_act1, c_act2, c_act3 = st.columns(3)
+                do_fix_group = c_act1.checkbox("🛠️ التعديل لمنطق سعر الفردي ومسح الترويجي (للمجموعة)")
+                do_clear_indiv = c_act2.checkbox("🧹 مسح المخفض والترويجي (للمنتج الفردي)")
+                do_refresh_ano = c_act3.checkbox("🔄 تحديث بيانات المنتجات المكتشفة من سلة")
+
+                if st.button("🚀 تنفيذ الإجراءات المحددة", type="primary", use_container_width=True):
+                    if not (do_fix_group or do_clear_indiv or do_refresh_ano):
+                        st.warning("يرجى تحديد إجراء واحد على الأقل.")
+                    else:
+                        progress_bar = st.progress(0)
+                        status_msg = st.empty()
+                        
+                        processed_groups = set()
+                        processed_indivs = set()
+                        refresh_ids = set()
+                        
+                        for idx, ano in enumerate(anomalies):
+                            indiv_id = ano["_indiv_id"]
+                            group_id = ano["_group_id"]
+                            qty = ano["_qty"]
+                            indiv_price = ano["سعر الحبة الفردي"]
+                            
+                            status_msg.info(f"⏳ جاري معالجة الخطأ {idx+1} من {len(anomalies)}...")
+                            
+                            # الإجراء الأول: ضرب سعر الفردي بالكمية وتعديل المجموعة
+                            if do_fix_group and group_id and group_id not in processed_groups:
+                                new_group_price = round(indiv_price * qty, 2)
+                                update_product_sale_price(int(group_id), new_group_price)
+                                update_product_promotions_secure(int(group_id), "", "", headers)
+                                processed_groups.add(group_id)
+                                refresh_ids.add(group_id)
+                                import time; time.sleep(0.3)
+                                
+                            # الإجراء الثاني: تصفير المنتج الفردي
+                            if do_clear_indiv and indiv_id not in processed_groups:
+                                prod = next((p for p in all_prods if str(p['id']) == indiv_id), None)
+                                if prod:
+                                    base_p = get_flat_price(prod.get('regular_price', 0)) or get_flat_price(prod.get('price', 0))
+                                    payload = {"name": prod.get('name'), "price": base_p, "status": prod.get('status', 'sale'), "sale_price": None, "sale_start": None, "sale_end": None}
+                                    safe_api_request("PUT", f"https://api.salla.dev/admin/v2/products/{indiv_id}", headers, json=payload)
+                                    update_product_promotions_secure(int(indiv_id), "", "", headers)
+                                    processed_indivs.add(indiv_id)
+                                    refresh_ids.add(indiv_id)
+                                    import time; time.sleep(0.3)
+                                    
+                            progress_bar.progress((idx + 1) / len(anomalies))
+
+                        # الإجراء الثالث: سحب التحديثات من API سلة
+                        if do_refresh_ano and refresh_ids:
+                            status_msg.info("⏳ جاري جلب أحدث البيانات للمنتجات المعدلة...")
+                            for idx, r_id in enumerate(refresh_ids):
+                                fresh_res = safe_api_request("GET", f"https://api.salla.dev/admin/v2/products/{r_id}", headers)
+                                if fresh_res and fresh_res.get('data'):
+                                    for i, p in enumerate(st.session_state["all_products"]):
+                                        if str(p.get('id')) == r_id:
+                                            st.session_state["all_products"][i] = fresh_res['data']
+                                            break
+                                import time; time.sleep(0.2)
+
+                        status_msg.success("✅ تم الانتهاء من المعالجة بنجاح!")
+                        import time; time.sleep(1.5)
+                        st.rerun()
+
         else:
             st.warning("يرجى الانتظار حتى يتم تحميل المنتجات...")
             
