@@ -449,10 +449,8 @@ def render_discount_expiry_alerts(headers: Dict[str, str]):
                                         st.session_state["ignored_discount_alerts"].add(p_id)
                                         st.rerun()
 
-import re
-
 def calculate_effective_offer_price(base_price: float, offer_name: str) -> float:
-    """محلل ذكي لنصوص العروض لتحويلها إلى سعر فعلي للحبة الواحدة"""
+    """محلل ذكي لنصوص العروض لتحويلها إلى سعر فعلي للحبة الواحدة (يدعم كافة طرق الكتابة العربية)"""
     offer_name = str(offer_name).strip()
     
     # 1. حالة "اشتر X واحصل على Y مجاناً" (مثال: 1+1 مجاناً، 2+1)
@@ -461,11 +459,11 @@ def calculate_effective_offer_price(base_price: float, offer_name: str) -> float
         buy_qty = int(match_plus.group(1))
         free_qty = int(match_plus.group(2))
         total_qty = buy_qty + free_qty
-        # سعر الحبة = (سعر الشراء * الكمية المشتراة) / إجمالي الكمية
         return (base_price * buy_qty) / total_qty
 
-    # 2. حالة "خصم X% على الحبة الثانية"
-    match_second = re.search(r'خصم\s*(\d+)%\s*على\s*الحبة\s*الثانية', offer_name)
+    # 2. حالة "خصم X% على الحبة/القطعة الثانية"
+    # ✅ (محدّث): يدعم مسافات مثل 50 % وكلمات مثل القطعة، القطعه، الحبة، الحبه، الثانية، الثانيه
+    match_second = re.search(r'خصم\s*(\d+)\s*%\s*على\s*(?:الحب[ةه]|القطع[ةه])\s*الثاني[ةه]', offer_name)
     if match_second:
         discount_pct = float(match_second.group(1)) / 100.0
         # سعر الحبتين = سعر الأولى كامل + سعر الثانية بعد الخصم
@@ -474,8 +472,9 @@ def calculate_effective_offer_price(base_price: float, offer_name: str) -> float
         return price_two_items / 2.0
 
     # 3. حالة "خصم مباشر X%" على المنتج
-    match_pct = re.search(r'خصم\s*(\d+)%', offer_name)
-    if match_pct and "الثانية" not in offer_name:
+    match_pct = re.search(r'خصم\s*(\d+)\s*%', offer_name)
+    # ✅ (محدّث): التأكد من عدم وجود كلمة "الثانية" أو "الثانيه" حتى لا يتداخل مع العرض السابق
+    if match_pct and not re.search(r'الثاني[ةه]', offer_name):
         discount_pct = float(match_pct.group(1)) / 100.0
         return base_price * (1.0 - discount_pct)
 
