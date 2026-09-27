@@ -1034,7 +1034,7 @@ def render_products_page():
                                     disc_pct = st.number_input("نسبة الخصم %:", min_value=1.0, max_value=99.0, value=15.0, step=1.0, key=f"dpct_{g_name}")
                                 with col_d2:
                                     # ✅ زر لتفعيل العرض المستمر وقفل التاريخ
-                                    no_end_date = st.checkbox("♾️ عرض مستمر (بدون تاريخ انتهاء)", key=f"no_date_{g_name}")
+                                    no_end_date = st.checkbox("♾️", key=f"no_date_{g_name}")
                                     disc_end_date = st.date_input("تاريخ الانتهاء:", value=datetime.now().date() + timedelta(days=7), disabled=no_end_date, key=f"dend_{g_name}")
                                 
                                 confs = []
