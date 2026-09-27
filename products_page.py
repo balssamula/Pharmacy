@@ -461,8 +461,16 @@ def calculate_effective_offer_price(base_price: float, offer_name: str) -> float
         total_qty = buy_qty + free_qty
         return (base_price * buy_qty) / total_qty
 
-    # 2. حالة "خصم X% على الحبة/القطعة الثانية"
-    # ✅ (محدّث): يدعم مسافات مثل 50 % وكلمات مثل القطعة، القطعه، الحبة، الحبه، الثانية، الثانيه
+    # 2. حالة "X حبات بسعر Y ريال" (مثال: 3حبات بسعر 69 ريال، 3 حبة ب 69ريال)
+    # ✅ (جديد): يدعم (حبة/حبات/قطعة/قطع/حبه) مع أو بدون مسافات، ويدعم (بسعر/ب/بـ)، ويدعم الريال
+    match_bulk_price = re.search(r'(\d+)\s*(?:حب[ةه]|حبات|قطع[ةه]|قطع)\s*(?:بسعر|بـ|ب)\s*(\d+(?:\.\d+)?)(?:\s*(?:ريال|ر\.س))?', offer_name)
+    if match_bulk_price:
+        qty = int(match_bulk_price.group(1))
+        total_price = float(match_bulk_price.group(2))
+        if qty > 0:
+            return total_price / qty
+
+    # 3. حالة "خصم X% على الحبة/القطعة الثانية"
     match_second = re.search(r'خصم\s*(\d+)\s*%\s*على\s*(?:الحب[ةه]|القطع[ةه])\s*الثاني[ةه]', offer_name)
     if match_second:
         discount_pct = float(match_second.group(1)) / 100.0
@@ -471,9 +479,8 @@ def calculate_effective_offer_price(base_price: float, offer_name: str) -> float
         # سعر الحبة المتوسط
         return price_two_items / 2.0
 
-    # 3. حالة "خصم مباشر X%" على المنتج
+    # 4. حالة "خصم مباشر X%" على المنتج
     match_pct = re.search(r'خصم\s*(\d+)\s*%', offer_name)
-    # ✅ (محدّث): التأكد من عدم وجود كلمة "الثانية" أو "الثانيه" حتى لا يتداخل مع العرض السابق
     if match_pct and not re.search(r'الثاني[ةه]', offer_name):
         discount_pct = float(match_pct.group(1)) / 100.0
         return base_price * (1.0 - discount_pct)
