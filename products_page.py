@@ -1029,14 +1029,15 @@ def render_products_page():
                                 st.markdown("**⚡ الإجراءات السريعة للمجموعة:**")
                                 
                                 # 1. إنشاء سعر مخفض (مع زر العرض المستمر)
-                                col_d1, col_d2 = st.columns(2)
+                                col_d1, col_d2, col_d3 = st.columns(3)
                                 with col_d1:
                                     disc_pct = st.number_input("نسبة الخصم %:", min_value=1.0, max_value=99.0, value=15.0, step=1.0, key=f"dpct_{g_name}")
                                 with col_d2:
+                                    disc_end_date = st.date_input("تاريخ الانتهاء:", value=datetime.now().date() + timedelta(days=7), disabled=no_end_date, key=f"dend_{g_name}")
+                                with col_d3:
                                     # ✅ زر لتفعيل العرض المستمر وقفل التاريخ
                                     no_end_date = st.checkbox("♾️", key=f"no_date_{g_name}")
-                                    disc_end_date = st.date_input("تاريخ الانتهاء:", value=datetime.now().date() + timedelta(days=7), disabled=no_end_date, key=f"dend_{g_name}")
-                                
+                                    
                                 confs = []
                                 for p in group_products_data:
                                     sale = get_flat_price(p.get('sale_price', 0))
