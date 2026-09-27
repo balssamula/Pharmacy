@@ -488,26 +488,27 @@ def calculate_effective_offer_price(base_price: float, offer_name: str) -> float
     # إذا لم يتم التعرف على صيغة العرض، نفترض أنه لا يغير سعر الحبة الأساسي
     return base_price
 
-def generate_price_comparison_excel(all_products, offers_map):
-    """بناء ملف إكسيل لمقارنة الأسعار بين الفردي، المجموعات، والعروض الخاصة"""
+def generate_price_comparison_excel(all_products, offers_map, excluded_skus=None):
+    """بناء ملف إكسيل لمقارنة الأسعار مع استبعاد الرموز المحددة"""
+    excluded_skus = set(excluded_skus) if excluded_skus else set()
     
-    # 1. استخراج وفهرسة جميع "مجموعات المنتجات" لمعرفة سعر الحبة بداخلها
+    # 1. استخراج وفهرسة "مجموعات المنتجات" (تخطي المستبعدة)
     group_components_map = {}
     for p in all_products:
         if p.get('type') == 'group_products':
-            # تحديد سعر المجموعة (المخفض إن وجد، وإلا الأساسي)
+            g_sku = str(p.get('sku', '')).strip().replace('.0', '')
+            if g_sku in excluded_skus: continue # 🚫 استبعاد هذه المجموعة
+                
             g_reg_price = get_flat_price(p.get('regular_price', 0)) or get_flat_price(p.get('price', 0))
             g_sale_price = get_flat_price(p.get('sale_price', 0))
             g_final_price = g_sale_price if (g_sale_price > 0 and g_sale_price < g_reg_price) else g_reg_price
             
-            # تفكيك مكونات المجموعة
             items = p.get('consisted_products') or p.get('grouped_items') or []
             for item in items:
                 child_prod = item.get('product', {}) if 'product' in item else item
                 child_id = str(child_prod.get('id', ''))
                 if not child_id: continue
                 
-                # استخراج الكمية داخل المجموعة
                 qty = int(item.get('quantity_in_group', item.get('quantity', 1)))
                 if qty <= 0: qty = 1
                 
@@ -515,7 +516,7 @@ def generate_price_comparison_excel(all_products, offers_map):
                     group_components_map[child_id] = []
                     
                 group_components_map[child_id].append({
-                    'group_sku': p.get('sku', 'بدون'),
+                    'group_sku': g_sku if g_sku else 'بدون',
                     'qty_in_group': qty,
                     'group_price': g_final_price,
                     'unit_price': g_final_price / qty
@@ -524,45 +525,38 @@ def generate_price_comparison_excel(all_products, offers_map):
     # 2. المرور على المنتجات الفردية والمقارنة
     results = []
     for p in all_products:
-        if p.get('type') == 'group_products': 
-            continue # نتخطى المجموعات لأننا نحلل المنتجات الفردية
+        if p.get('type') == 'group_products': continue
+            
+        sku = str(p.get('sku', 'بدون')).strip().replace('.0', '')
+        if sku in excluded_skus: continue # 🚫 استبعاد هذا المنتج الفردي
             
         p_id = str(p.get('id', ''))
-        sku = str(p.get('sku', 'بدون'))
         name = p.get('name', 'بدون اسم')
         
-        # سعر الفردي
         base_price = get_flat_price(p.get('regular_price', 0)) or get_flat_price(p.get('price', 0))
         sale_price = get_flat_price(p.get('sale_price', 0))
         indiv_price = sale_price if (sale_price > 0 and sale_price < base_price) else base_price
         
-        # سعر أفضل مجموعة
         groups = group_components_map.get(p_id, [])
         best_group = min(groups, key=lambda x: x['unit_price']) if groups else None
         
-        # سعر أفضل عرض
         offers = offers_map.get(p_id, [])
         best_offer_price = None
         best_offer_name = None
         
         for off in offers:
             off_name = off.get('name', '')
-            # استخدام السعر الفردي المخفض أو الأساسي كقاعدة لحساب العرض
             calc_price = calculate_effective_offer_price(indiv_price, off_name)
             if best_offer_price is None or calc_price < best_offer_price:
                 best_offer_price = calc_price
                 best_offer_name = off_name
 
-        # المقارنة النهائية لاستخراج "أفضل سعر"
         comparison_list = [('شراء فردي (مباشر)', indiv_price)]
-        if best_group:
-            comparison_list.append((f"شراء كمجموعة ({best_group['group_sku']})", best_group['unit_price']))
-        if best_offer_price is not None:
-            comparison_list.append((f"شراء من عرض ({best_offer_name})", best_offer_price))
+        if best_group: comparison_list.append((f"شراء كمجموعة ({best_group['group_sku']})", best_group['unit_price']))
+        if best_offer_price is not None: comparison_list.append((f"شراء من عرض ({best_offer_name})", best_offer_price))
             
         best_method, lowest_price = min(comparison_list, key=lambda x: x[1])
         
-        # إضافة السطر
         results.append({
             "رمز SKU": sku,
             "اسم المنتج": name,
@@ -576,7 +570,6 @@ def generate_price_comparison_excel(all_products, offers_map):
             "الطريقة الأوفر للعميل": best_method
         })
 
-    # 3. بناء ملف الإكسيل وتنسيقه
     df = pd.DataFrame(results)
     buf = io.BytesIO()
     wb = openpyxl.Workbook()
@@ -601,11 +594,16 @@ def generate_price_comparison_excel(all_products, offers_map):
     wb.save(buf)
     return buf.getvalue()
 
-def get_pricing_anomalies(all_products, offers_map):
-    """خوارزمية ذكية لاكتشاف أخطاء التسعير (مجموعات أو عروض سعر الحبة فيها أعلى من الفردي)"""
+def get_pricing_anomalies(all_products, offers_map, excluded_skus=None):
+    """خوارزمية ذكية لاكتشاف أخطاء التسعير (مع استبعاد الرموز المحددة)"""
+    excluded_skus = set(excluded_skus) if excluded_skus else set()
+    
     group_components_map = {}
     for p in all_products:
         if p.get('type') == 'group_products':
+            g_sku = str(p.get('sku', '')).strip().replace('.0', '')
+            if g_sku in excluded_skus: continue # 🚫 استبعاد هذه المجموعة
+                
             g_reg_price = get_flat_price(p.get('regular_price', 0)) or get_flat_price(p.get('price', 0))
             g_sale_price = get_flat_price(p.get('sale_price', 0))
             g_final_price = g_sale_price if (g_sale_price > 0 and g_sale_price < g_reg_price) else g_reg_price
@@ -625,7 +623,7 @@ def get_pricing_anomalies(all_products, offers_map):
                 group_components_map[child_id].append({
                     'group_id': str(p.get('id', '')),
                     'group_name': p.get('name', 'مجموعة بدون اسم'),
-                    'group_sku': p.get('sku', 'بدون'),
+                    'group_sku': g_sku if g_sku else 'بدون',
                     'qty_in_group': qty,
                     'group_price': g_final_price,
                     'unit_price': g_final_price / qty
@@ -633,22 +631,22 @@ def get_pricing_anomalies(all_products, offers_map):
 
     anomalies = []
     for p in all_products:
-        if p.get('type') == 'group_products': 
-            continue
+        if p.get('type') == 'group_products': continue
+            
+        sku = str(p.get('sku', 'بدون')).strip().replace('.0', '')
+        if sku in excluded_skus: continue # 🚫 استبعاد هذا الفردي من التدقيق
             
         p_id = str(p.get('id', ''))
-        sku = str(p.get('sku', 'بدون'))
         name = p.get('name', 'بدون اسم')
         
         base_price = get_flat_price(p.get('regular_price', 0)) or get_flat_price(p.get('price', 0))
         sale_price = get_flat_price(p.get('sale_price', 0))
         indiv_price = sale_price if (sale_price > 0 and sale_price < base_price) else base_price
         
-        if indiv_price <= 0: continue # تجاهل المنتجات المجانية أو ذات التسعير الخاطئ أساساً
+        if indiv_price <= 0: continue
         
-        # 1. فحص أخطاء تسعير المجموعات
+        # 1. فحص المجموعات
         for grp in group_components_map.get(p_id, []):
-            # نستخدم التقريب لمنع الفروقات العشرية الطفيفة من إطلاق إنذار كاذب
             if round(grp['unit_price'], 2) > round(indiv_price, 2):
                 anomalies.append({
                     "نوع الخلل": "مجموعة أغلى من الفردي",
@@ -660,7 +658,7 @@ def get_pricing_anomalies(all_products, offers_map):
                     "خسارة العميل في الحبة": round(grp['unit_price'] - indiv_price, 2)
                 })
                 
-        # 2. فحص أخطاء تسعير العروض الخاصة
+        # 2. فحص العروض
         for off in offers_map.get(p_id, []):
             off_name = off.get('name', '')
             calc_price = calculate_effective_offer_price(indiv_price, off_name)
@@ -723,6 +721,27 @@ def render_products_page():
     # ========================================================
     with st.expander("📊 تقارير التسعير المتقدمة والمدقق المالي الذكي", expanded=False):
         st.info("💡 المدقق المالي: يقوم بحساب سعر الحبة الفعلي لكل منتج سواء تم بيعه كـ (فردي)، أو داخل (مجموعة)، أو داخل (عرض خاص)، ويستخرج لك أرخص وأفضل طريقة يتم بيع المنتج بها حالياً، ويكتشف الأخطاء تلقائياً.")
+        
+        # ✅ قسم رفع ملف الاستبعاد الجديد
+        st.markdown("#### 🚫 استبعاد مجموعات أو منتجات (اختياري)")
+        uploaded_exclusion = st.file_uploader("📂 رفع ملف (Excel/CSV) يحتوي على رموز SKU للمجموعات المراد استبعادها في العمود الأول:", type=['xlsx', 'csv'], key="excl_skus_file")
+        
+        excluded_skus = set()
+        if uploaded_exclusion:
+            try:
+                if uploaded_exclusion.name.endswith('.csv'):
+                    df_ex = pd.read_csv(uploaded_exclusion)
+                else:
+                    df_ex = pd.read_excel(uploaded_exclusion)
+                
+                if not df_ex.empty:
+                    raw_skus = df_ex.iloc[:, 0].dropna().astype(str).str.strip()
+                    raw_skus = raw_skus.str.replace(r'\.0$', '', regex=True)
+                    excluded_skus = set(raw_skus.tolist())
+                    st.success(f"✅ تم قراءة واستبعاد ({len(excluded_skus)}) رمز SKU بنجاح.")
+            except Exception as e:
+                st.error(f"❌ خطأ في قراءة ملف الاستبعاد: {e}")
+
         all_prods = st.session_state.get("all_products", [])
         offers_map = st.session_state.get("product_offers_map", {})
         
@@ -730,8 +749,8 @@ def render_products_page():
             col_rp1, col_rp2 = st.columns(2)
             
             with col_rp1:
-                # 1. زر التقرير الشامل
-                excel_bytes = generate_price_comparison_excel(all_prods, offers_map)
+                # 1. زر التقرير الشامل (مع تمرير قائمة الاستبعاد)
+                excel_bytes = generate_price_comparison_excel(all_prods, offers_map, excluded_skus)
                 st.download_button(
                     label="📥 تحميل التقرير الشامل: مقارنة سعر المنتج (فردي/مجموعة/عروض)",
                     data=excel_bytes,
@@ -741,8 +760,8 @@ def render_products_page():
                 )
                 
             with col_rp2:
-                # 2. زر حصر أخطاء التسعير فقط (اكتشاف الكوارث التسعيرية)
-                anomalies = get_pricing_anomalies(all_prods, offers_map)
+                # 2. زر حصر أخطاء التسعير فقط (مع تمرير قائمة الاستبعاد)
+                anomalies = get_pricing_anomalies(all_prods, offers_map, excluded_skus)
                 if anomalies:
                     st.download_button(
                         label=f"🚨 تنزيل أخطاء التسعير المكتشفة ({len(anomalies)} خطأ)",
@@ -755,7 +774,6 @@ def render_products_page():
                 else:
                     st.button("✅ التسعير سليم 100% (لا يوجد أخطاء)", disabled=True, use_container_width=True)
 
-            # عرض جزء من الأخطاء في الواجهة للفت الانتباه فوراً
             if anomalies:
                 st.markdown(f"""
                 <div style="background: rgba(231, 76, 60, 0.1); border-right: 5px solid #e74c3c; padding: 15px; border-radius: 8px; margin-top: 15px;">
@@ -763,7 +781,6 @@ def render_products_page():
                     تم اكتشاف <b>({len(anomalies)})</b> حالة يكون فيها الشراء عبر (المجموعة أو العرض الخاص) <b>أغلى</b> من الشراء الفردي للمنتج! يرجى تحميل ملف أخطاء التسعير لتعديلها.
                 </div>
                 """, unsafe_allow_html=True)
-                # عرض عينة صغيرة في الواجهة
                 st.dataframe(pd.DataFrame(anomalies).head(5), use_container_width=True)
         else:
             st.warning("يرجى الانتظار حتى يتم تحميل المنتجات...")
