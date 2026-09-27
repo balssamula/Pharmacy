@@ -1023,20 +1023,61 @@ def render_products_page():
                             with st.expander(f"📁 {g_name} ({len(g_ids)} منتجات)", expanded=False):
                                 st.download_button("📥 تصدير (Excel)", data=export_featured_group_to_excel(group_products_data, po_map), file_name=f"Group_{g_name}.xlsx", use_container_width=True)
                                 
-                                # ... (كود استعراض المحتوى وإضافة منتجات يبقى كما هو) ...
+                                 with st.popover("📦 استعراض المحتوى", use_container_width=True):
+                                    st.markdown("**حدد المنتجات التي تريد إزالتها من المجموعة:**")
+                                    selected_to_remove = []
+                                    
+                                    # ✅ عرض المنتجات مع Checkbox + زر الإزالة الفردي
+                                    for pid in list(g_ids):
+                                        prod_info = next((p for p in group_products_data if str(p['id']) == pid), None)
+                                        if prod_info:
+                                            cx_chk, cx_info, cx_btn = st.columns([0.8, 5, 1.2])
+                                            with cx_chk:
+                                                if st.checkbox("", key=f"chk_rm_{pid}_{g_name}", label_visibility="collapsed"):
+                                                    selected_to_remove.append(pid)
+                                            with cx_info: 
+                                                st.markdown(f"`{prod_info.get('sku')}` | {prod_info.get('name')}")
+                                            with cx_btn:
+                                                if st.button("❌", key=f"rm_{pid}_{g_name}", help="حذف هذا المنتج فقط"):
+                                                    st.session_state["featured_product_groups"][g_name].remove(pid)
+                                                    st.rerun()
+                                                    
+                                    # ✅ زر الحذف الجماعي للمنتجات المحددة عبر الـ Checkbox
+                                    if selected_to_remove:
+                                        if st.button(f"🗑️ إزالة المحددة ({len(selected_to_remove)})", key=f"rm_bulk_{g_name}", type="primary", use_container_width=True):
+                                            for pid in selected_to_remove:
+                                                st.session_state["featured_product_groups"][g_name].remove(pid)
+                                            st.rerun()
+                                            
+                                    st.markdown("---")
+                                    st.markdown("**إضافة منتجات جديدة للمجموعة:**")
+                                    add_opts = {f"📦 {p['name']} (SKU: {p.get('sku','')})": str(p['id']) for p in st.session_state.get("all_products", []) if str(p['id']) not in g_ids}
+                                    to_add = st.multiselect("اختر لإضافة المزيد:", options=list(add_opts.keys()), key=f"add_ms_{g_name}", label_visibility="collapsed")
+                                    if st.button("➕ إضافة المحددة", key=f"add_btn_{g_name}"):
+                                        if to_add:
+                                            st.session_state["featured_product_groups"][g_name].extend([add_opts[k] for k in to_add])
+                                            st.rerun()
                                 
                                 st.markdown("---")
                                 st.markdown("**⚡ الإجراءات السريعة للمجموعة:**")
                                 
                                 # 1. إنشاء سعر مخفض (مع زر العرض المستمر)
-                                col_d1, col_d2, col_d3 = st.columns(3)
+                                is_open_ended = st.session_state.get(f"no_date_{g_name}", False)
+                                
+                                # استخدمنا نسب تقسيم للأعمدة ليكون الشكل متناسقاً
+                                col_d1, col_d2, col_d3 = st.columns([2, 2, 1.5]) 
+                                
                                 with col_d1:
                                     disc_pct = st.number_input("نسبة الخصم %:", min_value=1.0, max_value=99.0, value=15.0, step=1.0, key=f"dpct_{g_name}")
+                                
                                 with col_d2:
-                                    disc_end_date = st.date_input("تاريخ الانتهاء:", value=datetime.now().date() + timedelta(days=7), disabled=no_end_date, key=f"dend_{g_name}")
+                                    # الاعتماد على المتغير المقروء من الذاكرة
+                                    disc_end_date = st.date_input("تاريخ الانتهاء:", value=datetime.now().date() + timedelta(days=7), disabled=is_open_ended, key=f"dend_{g_name}")
+                                
                                 with col_d3:
-                                    # ✅ زر لتفعيل العرض المستمر وقفل التاريخ
-                                    no_end_date = st.checkbox("♾️", key=f"no_date_{g_name}")
+                                    st.markdown("<br>", unsafe_allow_html=True) # لإنزال الزر ليكون بمحاذاة الحقول
+                                    # يتم رسم الزر هنا، وقيمته ستُحفظ تلقائياً في الذاكرة لتستخدم في المرة القادمة
+                                    no_end_date = st.checkbox("♾️ بدون تاريخ", key=f"no_date_{g_name}")
                                     
                                 confs = []
                                 for p in group_products_data:
