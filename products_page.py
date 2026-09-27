@@ -1023,7 +1023,7 @@ def render_products_page():
                             with st.expander(f"📁 {g_name} ({len(g_ids)} منتجات)", expanded=False):
                                 st.download_button("📥 تصدير (Excel)", data=export_featured_group_to_excel(group_products_data, po_map), file_name=f"Group_{g_name}.xlsx", use_container_width=True)
                                 
-                                 with st.popover("📦 استعراض المحتوى", use_container_width=True):
+                                with st.popover("📦 استعراض المحتوى", use_container_width=True):
                                     st.markdown("**حدد المنتجات التي تريد إزالتها من المجموعة:**")
                                     selected_to_remove = []
                                     
