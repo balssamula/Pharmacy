@@ -595,7 +595,7 @@ def generate_price_comparison_excel(all_products, offers_map, excluded_skus=None
     return buf.getvalue()
 
 def get_pricing_anomalies(all_products, offers_map, excluded_skus=None):
-    """خوارزمية ذكية لاكتشاف أخطاء التسعير (محدّثة مع أعمدة جديدة ومعرفات مخفية للمعالجة الآلية)"""
+    """خوارزمية ذكية لاكتشاف أخطاء التسعير مع إظهار السعر الفعلي للمجموعة والمعرفات للتحكم الآلي"""
     excluded_skus = set(excluded_skus) if excluded_skus else set()
     
     group_components_map = {}
@@ -657,12 +657,12 @@ def get_pricing_anomalies(all_products, offers_map, excluded_skus=None):
                     "المنتج الفردي": name,
                     "سعر الحبة الفردي": round(indiv_price, 2),
                     "المجموعة / العرض": f"{grp['group_name']} (SKU: {grp['group_sku']})",
-                    "العرض": "السعر المخفض للمجموعة",
+                    "العرض": f"{round(grp['group_price'], 2)} ريال", # ✅ هنا يظهر السعر الفعلي للمجموعة بدلاً من النص الثابت
                     "سعر الحبة بداخلها": round(grp['unit_price'], 2),
                     "خسارة العميل في الحبة": round(grp['unit_price'] - indiv_price, 2)
                 })
                 
-        # 2. فحص العروض
+        # 2. فحص العروض الخاصة
         for off in offers_map.get(p_id, []):
             off_name = off.get('name', '')
             calc_price = calculate_effective_offer_price(indiv_price, off_name)
@@ -792,71 +792,106 @@ def render_products_page():
                 st.dataframe(display_df.head(5), use_container_width=True)
 
                 st.markdown("#### ⚡ إجراءات سريعة لمعالجة الأخطاء")
-                c_act1, c_act2, c_act3 = st.columns(3)
-                do_fix_group = c_act1.checkbox("🛠️ التعديل لمنطق سعر الفردي ومسح الترويجي (للمجموعة)")
-                do_clear_indiv = c_act2.checkbox("🧹 مسح المخفض والترويجي (للمنتج الفردي)")
-                do_refresh_ano = c_act3.checkbox("🔄 تحديث بيانات المنتجات المكتشفة من سلة")
+                c_act1, c_act2, c_act3, c_act4 = st.columns(4)
+                with c_act1:
+                    do_fix_group = st.checkbox("🛠️ التعديل لمنطق سعر الفردي ومسح الترويجي (للمجموعة)")
+                with c_act2:
+                    do_clear_indiv = st.checkbox("🧹 مسح المخفض والترويجي (للمنتج الفردي)")
+                with c_act3:
+                    do_create_group = st.checkbox("⭐ إنشاء مجموعة مميزة لمنتجات الأخطاء")
+                with c_act4:
+                    do_refresh_ano = st.checkbox("🔄 تحديث بيانات المنتجات المكتشفة من سلة")
+
+                # حقل اسم المجموعة المميزة يظهر إذا تم تفعيل خيار إنشاء المجموعة
+                new_ano_group_name = None
+                if do_create_group:
+                    new_ano_group_name = st.text_input(
+                        "اسم المجموعة المميزة الجديدة:", 
+                        value=f"أخطاء التسعير ({datetime.now().strftime('%Y-%m-%d')})"
+                    )
 
                 if st.button("🚀 تنفيذ الإجراءات المحددة", type="primary", use_container_width=True):
-                    if not (do_fix_group or do_clear_indiv or do_refresh_ano):
+                    if not (do_fix_group or do_clear_indiv or do_create_group or do_refresh_ano):
                         st.warning("يرجى تحديد إجراء واحد على الأقل.")
                     else:
+                        # 1. جمع كافة معرفات المنتجات المكتشفة في الأخطاء
+                        all_anomaly_prod_ids = set()
+                        for a in anomalies:
+                            if a.get("_indiv_id"): all_anomaly_prod_ids.add(str(a["_indiv_id"]))
+                            if a.get("_group_id"): all_anomaly_prod_ids.add(str(a["_group_id"]))
+
                         progress_bar = st.progress(0)
                         status_msg = st.empty()
-                        
+
+                        # 2. إنشاء مجموعة مميزة لمنتجات الأخطاء
+                        if do_create_group:
+                            if not new_ano_group_name:
+                                st.error("⚠️ يرجى كتابة اسم للمجموعة المميزة.")
+                                st.stop()
+                            if "featured_product_groups" not in st.session_state:
+                                st.session_state["featured_product_groups"] = {}
+                            st.session_state["featured_product_groups"][new_ano_group_name] = list(all_anomaly_prod_ids)
+                            st.success(f"✅ تم إنشاء المجموعة المميزة '{new_ano_group_name}' بعدد {len(all_anomaly_prod_ids)} منتج بنجاح!")
+
+                        # 3. تعديل سعر المجموعات لمنطق الفردي ومسح الترويجي
                         processed_groups = set()
-                        processed_indivs = set()
-                        refresh_ids = set()
-                        
-                        for idx, ano in enumerate(anomalies):
-                            indiv_id = ano["_indiv_id"]
-                            group_id = ano["_group_id"]
-                            qty = ano["_qty"]
-                            indiv_price = ano["سعر الحبة الفردي"]
-                            
-                            status_msg.info(f"⏳ جاري معالجة الخطأ {idx+1} من {len(anomalies)}...")
-                            
-                            # الإجراء الأول: ضرب سعر الفردي بالكمية وتعديل المجموعة
-                            if do_fix_group and group_id and group_id not in processed_groups:
-                                new_group_price = round(indiv_price * qty, 2)
-                                update_product_sale_price(int(group_id), new_group_price)
-                                update_product_promotions_secure(int(group_id), "", "", headers)
-                                processed_groups.add(group_id)
-                                refresh_ids.add(group_id)
-                                import time; time.sleep(0.3)
+                        if do_fix_group:
+                            for idx, ano in enumerate(anomalies):
+                                group_id = ano.get("_group_id")
+                                qty = ano.get("_qty", 1)
+                                indiv_price = ano["سعر الحبة الفردي"]
                                 
-                            # الإجراء الثاني: تصفير المنتج الفردي
-                            if do_clear_indiv and indiv_id not in processed_groups:
-                                prod = next((p for p in all_prods if str(p['id']) == indiv_id), None)
-                                if prod:
-                                    base_p = get_flat_price(prod.get('regular_price', 0)) or get_flat_price(prod.get('price', 0))
-                                    payload = {"name": prod.get('name'), "price": base_p, "status": prod.get('status', 'sale'), "sale_price": None, "sale_start": None, "sale_end": None}
-                                    safe_api_request("PUT", f"https://api.salla.dev/admin/v2/products/{indiv_id}", headers, json=payload)
-                                    update_product_promotions_secure(int(indiv_id), "", "", headers)
-                                    processed_indivs.add(indiv_id)
-                                    refresh_ids.add(indiv_id)
-                                    import time; time.sleep(0.3)
-                                    
-                            progress_bar.progress((idx + 1) / len(anomalies))
+                                if group_id and group_id not in processed_groups:
+                                    new_group_price = round(indiv_price * qty, 2)
+                                    status_msg.info(f"⏳ جاري تعديل سعر المجموعة ID: {group_id} إلى {new_group_price} SAR...")
+                                    update_product_sale_price(int(group_id), new_group_price)
+                                    update_product_promotions_secure(int(group_id), "", "", headers)
+                                    processed_groups.add(group_id)
+                                    time.sleep(0.3)
 
-                        # الإجراء الثالث: سحب التحديثات من API سلة
-                        if do_refresh_ano and refresh_ids:
-                            status_msg.info("⏳ جاري جلب أحدث البيانات للمنتجات المعدلة...")
-                            for idx, r_id in enumerate(refresh_ids):
-                                fresh_res = safe_api_request("GET", f"https://api.salla.dev/admin/v2/products/{r_id}", headers)
+                        # 4. مسح السعر المخفض والعنوان الترويجي للمنتج الفردي
+                        processed_indivs = set()
+                        if do_clear_indiv:
+                            for idx, ano in enumerate(anomalies):
+                                indiv_id = ano.get("_indiv_id")
+                                if indiv_id and indiv_id not in processed_indivs:
+                                    status_msg.info(f"⏳ جاري مسح التخفيض للمنتج الفردي ID: {indiv_id}...")
+                                    prod = next((p for p in all_prods if str(p['id']) == indiv_id), None)
+                                    if prod:
+                                        base_p = get_flat_price(prod.get('regular_price', 0)) or get_flat_price(prod.get('price', 0))
+                                        payload = {"name": prod.get('name'), "price": base_p, "status": prod.get('status', 'sale'), "sale_price": None, "sale_start": None, "sale_end": None}
+                                        safe_api_request("PUT", f"https://api.salla.dev/admin/v2/products/{indiv_id}", headers, json=payload)
+                                        update_product_promotions_secure(int(indiv_id), "", "", headers)
+                                        processed_indivs.add(indiv_id)
+                                        time.sleep(0.3)
+
+                        # 5. تحديث بيانات المنتجات المكتشفة من سلة (نفس آلية زر تحديث المنتجات المفلترة تماماً)
+                        if do_refresh_ano:
+                            target_refresh_ids = list(all_anomaly_prod_ids)
+                            total_to_refresh = len(target_refresh_ids)
+                            updated_count = 0
+                            
+                            for idx, p_id in enumerate(target_refresh_ids):
+                                status_msg.info(f"⏳ جاري سحب أحدث البيانات لمنتج الخطأ {idx+1} من {total_to_refresh} (ID: {p_id})...")
+                                fresh_res = safe_api_request("GET", f"https://api.salla.dev/admin/v2/products/{p_id}", headers)
                                 if fresh_res and fresh_res.get('data'):
-                                    for i, p in enumerate(st.session_state["all_products"]):
-                                        if str(p.get('id')) == r_id:
+                                    for i, prod in enumerate(st.session_state.get("all_products", [])):
+                                        if str(prod.get('id')) == str(p_id):
                                             st.session_state["all_products"][i] = fresh_res['data']
+                                            updated_count += 1
                                             break
-                                import time; time.sleep(0.2)
+                                    if "product_cache" in st.session_state:
+                                        st.session_state["product_cache"][str(p_id)] = fresh_res['data']
+                                
+                                progress_bar.progress((idx + 1) / total_to_refresh)
+                                time.sleep(0.3) # حماية من الـ Rate Limit والـ 504
+                                
+                            status_msg.success(f"✅ تم سحب وتحديث بيانات {updated_count} منتج بنجاح من سلة!")
+                            time.sleep(1.5)
 
-                        status_msg.success("✅ تم الانتهاء من المعالجة بنجاح!")
-                        import time; time.sleep(1.5)
+                        st.success("✅ اكتملت كافة الإجراءات المحددة بنجاح!")
+                        time.sleep(1.2)
                         st.rerun()
-
-        else:
-            st.warning("يرجى الانتظار حتى يتم تحميل المنتجات...")
             
     st.markdown("""
     <style>
