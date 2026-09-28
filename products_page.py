@@ -1473,7 +1473,7 @@ def render_products_page():
         if sub_t: available_subtitles.add(str(sub_t).strip())
 
     date_options = ["الكل", "بدون تاريخ"] + sorted(list(available_dates))
-    brand_options = sorted(list(available_brands))
+    brand_options = ["بدون ماركة"] + sorted(list(available_brands))
     category_options = sorted(list(available_categories))
     promo_options = ["الكل", "بدون"] + sorted(list(available_promo_titles))
     subtitle_options = ["الكل", "بدون"] + sorted(list(available_subtitles))
@@ -1542,7 +1542,13 @@ def render_products_page():
         if f_brands:
             brand = p.get('brand')
             p_brand_name = brand.get('name') if isinstance(brand, dict) else None
-            if p_brand_name not in f_brands: continue
+            
+            # التحقق مما إذا كان المنتج يطابق إحدى الماركات المختارة أو يطابق خيار "بدون ماركة"
+            is_no_brand_match = ("بدون ماركة" in f_brands) and (not p_brand_name)
+            is_brand_name_match = (p_brand_name in f_brands)
+            
+            if not (is_no_brand_match or is_brand_name_match):
+                continue
                 
         # 3. تطبيق فلتر المجموعات المميزة
         if f_feat_group != "الكل":
