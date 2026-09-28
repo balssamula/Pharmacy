@@ -7,6 +7,7 @@ import json
 import threading
 import logging
 import re
+import openpyxl
 from datetime import datetime
 from typing import Optional, List, Dict, Any
 from openpyxl.styles import PatternFill, Font, Alignment, Border, Side
@@ -457,52 +458,95 @@ def update_product_status(product_id: int, status: str) -> bool:
     res = safe_api_request("POST", url, headers, json={"status": status})
     return res is not None
 
-def export_products_to_excel(products: List[Dict], po_map: Dict = None) -> bytes:
+def export_products_to_excel(products, po_map=None):
+    """تصدير المنتجات إلى ملف Excel منسق واحترافي شامل عمود الماركة"""
     if po_map is None:
         po_map = {}
-    try:
-        data = []
-        for p in products:
-            pid_str = str(p.get('id', ''))
-            price = get_flat_price(p.get('price', 0))
-            sale_price = get_flat_price(p.get('sale_price', 0))
-            regular_price = get_flat_price(p.get('regular_price', 0))
-            base_price = regular_price if regular_price > 0 else price
-            promo = p.get('promotion', {})
-            promo_title = p.get('promotion_title') or (promo.get('title') if isinstance(promo, dict) else '') or "لا يوجد"
-            promo_sub = (promo.get('sub_title') if isinstance(promo, dict) else '') or "لا يوجد"
-            sale_start = p.get('sale_start') or (p.get('sale_price', {}).get('start_at') if isinstance(p.get('sale_price'), dict) else None) or "غير محدد"
-            sale_end = p.get('sale_end') or (p.get('sale_price', {}).get('expired_at') if isinstance(p.get('sale_price'), dict) else None) or "غير محدد"
-            
-            # ✅ استخراج بيانات العروض الخاصة للمنتج
-            offers = po_map.get(pid_str, [])
-            in_offer = "نعم" if offers else "لا"
-            offer_names = " ، ".join([o['name'] for o in offers]) if offers else "لا يوجد"
+        
+    rows = []
+    for p in products:
+        p_id = str(p.get('id', ''))
+        
+        # 🏷️ استخراج اسم الماركة بذكاء
+        brand_data = p.get('brand')
+        if isinstance(brand_data, dict):
+            brand_name = brand_data.get('name') or "بدون ماركة"
+        elif isinstance(brand_data, str) and brand_data.strip():
+            brand_name = brand_data.strip()
+        else:
+            brand_name = "بدون ماركة"
 
-            data.append({
-                'المعرف': p.get('id', ''), 'الاسم': p.get('name', ''), 'SKU': p.get('sku', ''),
-                'السعر الأساسي الأصل': base_price, 'السعر المخفض الحالي': sale_price if sale_price > 0 else 'لا يوجد',
-                'خاضع للضريبة': 'نعم' if p.get('with_tax', True) else 'لا',
-                'العنوان الترويجي': promo_title, 'العنوان الفرعي': promo_sub,
-                'تاريخ بداية التخفيض': sale_start, 'تاريخ نهاية التخفيض': sale_end,
-                'المخزون': p.get('quantity', 0), 'المبيعات': p.get('sold_quantity', 0),
-                'الحالة': 'معروض' if p.get('status') == 'sale' else 'مخفي',
-                'مشمول في عرض خاص؟': in_offer,        # ✅ العمود الجديد 1
-                'اسم العرض الخاص': offer_names         # ✅ العمود الجديد 2
-            })
-            
-        df = pd.DataFrame(data)
-        buffer = io.BytesIO()
-        with pd.ExcelWriter(buffer, engine='openpyxl') as writer:
-            df.to_excel(writer, index=False)
-            style_excel_file(writer.sheets['Sheet1'], is_template=False, header_color="0F1C2E")
-            
-            # توسيع الأعمدة لتناسب النصوص الطويلة
-            ws = writer.sheets['Sheet1']
-            ws.column_dimensions['B'].width = 40  # عمود الاسم
-            ws.column_dimensions['O'].width = 35  # عمود اسم العرض الخاص
-            
-        return buffer.getvalue()
+        # استخراج التصنيفات
+        cats = p.get('categories', [])
+        cat_names = [c.get('name', '') for c in cats if isinstance(c, dict)] if isinstance(cats, list) else []
+        cat_str = " | ".join(filter(None, cat_names)) if cat_names else "غير مصنف"
+
+        # الأسعار
+        price_val = get_flat_price(p.get('price', 0))
+        reg_val = get_flat_price(p.get('regular_price', 0))
+        sale_val = get_flat_price(p.get('sale_price', 0))
+        base_price = reg_val if reg_val > 0 else price_val
+        has_disc = (sale_val > 0 and sale_val < base_price)
+        display_sale = sale_val if has_disc else "-"
+        
+        # العناوين الترويجية
+        promo = p.get('promotion', {})
+        promo_title = p.get('promotion_title') or (promo.get('title') if isinstance(promo, dict) else '') or "-"
+        sub_title = p.get('promotion_subtitle') or (promo.get('sub_title') if isinstance(promo, dict) else '') or "-"
+
+        # العروض المشمول بها
+        p_offers = po_map.get(p_id, [])
+        offers_str = " | ".join([o.get('name', '') for o in p_offers]) if p_offers else "لا يوجد"
+
+        rows.append({
+            "معرف المنتج (ID)": p_id,
+            "رمز الصنف (SKU)": str(p.get('sku', '')).replace('.0', ''),
+            "اسم المنتج": p.get('name', 'بدون اسم'),
+            "الماركة": brand_name,  # ✅ عمود الماركة الجديد
+            "التصنيفات": cat_str,
+            "النوع": "مجموعة منتجات" if p.get('type') == 'group_products' else "منتج فردي",
+            "الحالة": "معروض" if p.get('status') == 'sale' else "مخفي",
+            "السعر الأساسي": base_price,
+            "السعر المخفض": display_sale,
+            "تاريخ بداية التخفيض": p.get('sale_start') or "-",
+            "تاريخ نهاية التخفيض": p.get('sale_end') or "-",
+            "العنوان الترويجي": promo_title,
+            "العنوان الفرعي": sub_title,
+            "المخزون الإجمالي": p.get('quantity', 0),
+            "الكمية المباعة": p.get('sold_quantity', 0),
+            "خاضع للضريبة": "نعم" if p.get('with_tax', True) else "معفى",
+            "العروض المشمول بها": offers_str,
+            "رابط المنتج": p.get('url', '-')
+        })
+
+    # بناء وتنسيق الإكسيل
+    df = pd.DataFrame(rows)
+    buf = io.BytesIO()
+    wb = openpyxl.Workbook()
+    ws = wb.active
+    ws.title = "المنتجات"
+    ws.sheet_view.rightToLeft = True
+
+    headers = list(df.columns)
+    ws.append(headers)
+    for row in df.itertuples(index=False, name=None):
+        ws.append(row)
+
+    # التنسيق الجمالي
+    header_fill = PatternFill(start_color="1E293B", end_color="1E293B", fill_type="solid")
+    header_font = Font(color="00EBCF", bold=True, size=11)
+    center_align = Alignment(horizontal="center", vertical="center")
+
+    for col in range(1, len(headers) + 1):
+        cell = ws.cell(row=1, column=col)
+        cell.fill = header_fill
+        cell.font = header_font
+        cell.alignment = center_align
+        ws.column_dimensions[openpyxl.utils.get_column_letter(col)].width = 20
+
+    ws.auto_filter.ref = f"A1:{openpyxl.utils.get_column_letter(len(headers))}{ws.max_row}"
+    wb.save(buf)
+    return buf.getvalue()
     except Exception as e:
         import streamlit as st
         st.error(f"خطأ في التصدير: {e}")
