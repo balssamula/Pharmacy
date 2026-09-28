@@ -547,10 +547,6 @@ def export_products_to_excel(products, po_map=None):
     ws.auto_filter.ref = f"A1:{openpyxl.utils.get_column_letter(len(headers))}{ws.max_row}"
     wb.save(buf)
     return buf.getvalue()
-    except Exception as e:
-        import streamlit as st
-        st.error(f"خطأ في التصدير: {e}")
-        return b""
 
 def fill_salla_template(products: List[Dict], template_path: str = "Salla_Products_Template.xlsx") -> bytes:
     try:
