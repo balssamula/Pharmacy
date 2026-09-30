@@ -6,6 +6,7 @@ import os
 import json
 import re
 import openpyxl
+import time
 from openpyxl.styles import PatternFill, Font, Alignment
 from openpyxl.utils import get_column_letter
 from datetime import datetime, timedelta
@@ -18,7 +19,8 @@ from utils import (
     process_quantities_import, fill_salla_template, generate_salla_new_products_file, 
     delete_product, update_product_price, update_product_sale_price, export_featured_group_to_excel,
     remove_product_from_group, add_product_to_group, get_product_details, get_group_products,
-    update_group_product_quantity, generate_promotions_template, process_promotions_bulk
+    update_group_product_quantity, generate_promotions_template, process_promotions_bulk,
+    SCHEDULE_DIR, load_schedules, save_schedules, init_background_scheduler
 )
 
 TAX_EXEMPTION_CAUSES = ["الخدمات المالية", "عقد تأمين على الحياة", "التوريدات العقارية المعفاة", "صادرات السلع من المملكة", "صادرات الخدمات من المملكة", "النقل الدولي للسلع", "النقل الدولي للركاب", "توريد وسائل النقل", "الأدوية والمعدات الطبية"]
@@ -1132,11 +1134,6 @@ def render_products_page():
                         # ==========================================
                         # ⏰ تحديد آلية التنفيذ: فوري أم مجدول؟
                         # ==========================================
-                        from utils import SCHEDULE_DIR, load_schedules, save_schedules, init_background_scheduler
-                        import os
-                        import json
-                        import time
-
                         # التأكد من تشغيل خيط الجدولة وربطه بالسياق الحالي
                         init_background_scheduler()
 
