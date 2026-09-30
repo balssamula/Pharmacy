@@ -1129,45 +1129,114 @@ def render_products_page():
                                     if offers: reasons.append("مشمول في عرض خاص")
                                     conflicts.append({'sku': p_sku, 'name': p['name'], 'id': str(p['id']), 'promo': promo_text, 'reason': " + ".join(reasons)})
 
-                        if conflicts:
-                            st.error(f"⚠️ تحذير: تم اكتشاف ({len(conflicts)}) منتج في الملف يحتوي بالفعل على تخفيضات أو عروض نشطة!")
-                            with st.expander("👀 عرض تفاصيل المنتجات المتعارضة", expanded=True):
-                                for c in conflicts:
-                                    st.markdown(f"- **{c['name']}** (SKU: `{c['sku']}`)<br>  <span style='color:#e74c3c; font-size:13px;'>سبب التعارض: {c['reason']} | العنوان الحالي: {c['promo']}</span>", unsafe_allow_html=True)
-                                    
-                            st.markdown("**يرجى اتخاذ إجراء لاكتمال عملية الرفع:**")
-                            # ✅ تعديل لـ 4 أعمدة وإضافة زر أخرى
-                            c1, c2, c3, c4 = st.columns(4)
-                            if c1.button("🚀 تنفيذ عـ الكل (تجاهل)", type="primary", use_container_width=True):
-                                with st.spinner("⏳ جاري المعالجة..."):
-                                    res = process_promotions_bulk(df_promo, st.session_state.get("all_products", []), headers)
-                                    for m in res["success"]: st.success(m)
-                                    for m in res["errors"]: st.error(m)
-                                    st.session_state["all_products_fetched"] = False
-                            if c2.button("✅ التنفيذ عـ الباقي (استبعاد)", type="primary", use_container_width=True):
-                                with st.spinner("⏳ جاري المعالجة..."):
-                                    conflict_skus = [c['sku'] for c in conflicts]
-                                    df_clean = df_promo[~df_promo['clean_sku'].isin(conflict_skus)]
-                                    res = process_promotions_bulk(df_clean, st.session_state.get("all_products", []), headers)
-                                    for m in res["success"]: st.success(m)
-                                    for m in res["errors"]: st.error(m)
-                                    st.session_state["all_products_fetched"] = False
-                            if c3.button("❌ إلغاء العملية", use_container_width=True):
-                                st.info("تم إلغاء عملية الرفع.")
+                        # ==========================================
+                        # ⏰ تحديد آلية التنفيذ: فوري أم مجدول؟
+                        # ==========================================
+                        from utils import SCHEDULE_DIR, load_schedules, save_schedules, init_background_scheduler
+                        import os
+                        import json
+                        import time
+
+                        # التأكد من تشغيل خيط الجدولة وربطه بالسياق الحالي
+                        init_background_scheduler()
+
+                        st.markdown("---")
+                        st.markdown("#### ⏰ خيارات التنفيذ والجدولة التلقائية")
+                        
+                        exec_type = st.radio(
+                            "اختر آلية التنفيذ:", 
+                            ["🚀 تنفيذ مباشر وفوري", "📅 جدولة الملف لوقت محدد تلقائياً"], 
+                            horizontal=True,
+                            key="promo_exec_type"
+                        )
+
+                        # ----------------------------------------------------
+                        # الحالة الأولى: الجدولة لوقت محدد (تنفيذ عـ الكل تلقائياً)
+                        # ----------------------------------------------------
+                        if exec_type == "📅 جدولة الملف لوقت محدد تلقائياً":
+                            if conflicts:
+                                st.info(f"ℹ️ تم رصد ({len(conflicts)}) منتج يحتوي على عروض/تخفيضات سابقة. وبما أنك اخترت **الجدولة التلقائية**، فسيتم تطبيق إجراء **(تنفيذ عـ الكل وتحديث كافة المنتجات)** تلقائياً فور حلول الموعد دون الحاجة لتدخل يدوي.")
+                            
+                            col_sd, col_st = st.columns(2)
+                            with col_sd:
+                                sched_date = st.date_input("تاريخ التنفيذ:", value=datetime.now().date(), key="sch_d")
+                            with col_st:
+                                sched_time = st.time_input("وقت التنفيذ:", value=(datetime.now() + timedelta(minutes=15)).time(), key="sch_t")
                                 
-                            with c4:
-                                with st.popover("⚙️ أخرى", use_container_width=True):
-                                    st.markdown("**إجراءات إضافية:**")
-                                    # 1. تحميل المنتجات المتعارضة
-                                    conflict_prods = [p for p in st.session_state.get("all_products", []) if str(p.get('sku', '')).strip().replace('.0', '') in [c['sku'] for c in conflicts]]
-                                    st.download_button(
-                                        label="📥 تحميل المنتجات المتعارضة",
-                                        data=export_products_to_excel(conflict_prods, po_map),
-                                        file_name=f"Conflicting_Products_Upload.xlsx",
-                                        mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-                                        use_container_width=True,
-                                        key="dl_conf_upload"
-                                    )
+                            sched_datetime_str = f"{sched_date.strftime('%Y-%m-%d')} {sched_time.strftime('%H:%M')}"
+                            st.info(f"🕒 سيتم حفظ الملف وتشغيله تلقائياً في سلة بتاريخ: **{sched_datetime_str}** بتوقيت السعودية.")
+                            
+                            if st.button("💾 حفظ وجدولة الملف (اعتماد تنفيذ عـ الكل)", type="primary", use_container_width=True, key="btn_save_sched"):
+                                if not uploaded_promo:
+                                    st.error("⚠️ يرجى رفع ملف البيانات أولاً.")
+                                else:
+                                    safe_filename = f"{datetime.now().strftime('%Y%m%d_%H%M%S')}_{uploaded_promo.name}"
+                                    target_path = os.path.join(SCHEDULE_DIR, safe_filename)
+                                    
+                                    # حفظ الملف بالكامل ليتنفذ على جميع المنتجات
+                                    with open(target_path, "wb") as f:
+                                        f.write(uploaded_promo.getvalue())
+                                        
+                                    meta_path = os.path.join(SCHEDULE_DIR, safe_filename + ".meta.json")
+                                    with open(meta_path, "w", encoding="utf-8") as mf:
+                                        json.dump(st.session_state.get("all_products", []), mf, ensure_ascii=False)
+                                        
+                                    schedules = load_schedules()
+                                    schedules.append({
+                                        "id": len(schedules) + 1,
+                                        "original_name": uploaded_promo.name,
+                                        "filename": safe_filename,
+                                        "run_at": sched_datetime_str,
+                                        "status": "pending",
+                                        "mode": "all",  # تنفيذ عـ الكل
+                                        "created_at": datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+                                    })
+                                    save_schedules(schedules)
+                                    st.success(f"✅ تم حفظ وجدولة الملف بنجاح! سينفذ تلقائياً بوضع (تنفيذ عـ الكل) في {sched_datetime_str}.")
+                                    time.sleep(1.5)
+                                    st.rerun()
+
+                        # ----------------------------------------------------
+                        # الحالة الثانية: تنفيذ مباشر وفوري (خيارات يدوية)
+                        # ----------------------------------------------------
+                        else:
+                            if conflicts:
+                                st.error(f"⚠️ تحذير: تم اكتشاف ({len(conflicts)}) منتج في الملف يحتوي بالفعل على تخفيضات أو عروض نشطة!")
+                                with st.expander("👀 عرض تفاصيل المنتجات المتعارضة", expanded=False):
+                                    for c in conflicts:
+                                        st.markdown(f"- **{c['name']}** (SKU: `{c['sku']}`)<br><span style='color:#e74c3c; font-size:13px;'>سبب التعارض: {c['reason']} | العنوان الحالي: {c['promo']}</span>", unsafe_allow_html=True)
+                                        
+                                st.markdown("**يرجى اتخاذ إجراء لاكتمال عملية الرفع المباشر:**")
+                                c1, c2, c3, c4 = st.columns(4)
+                                if c1.button("🚀 تنفيذ عـ الكل (تجاهل)", type="primary", use_container_width=True):
+                                    with st.spinner("⏳ جاري المعالجة..."):
+                                        res = process_promotions_bulk(df_promo, st.session_state.get("all_products", []), headers)
+                                        for m in res["success"]: st.success(m)
+                                        for m in res["errors"]: st.error(m)
+                                        st.session_state["all_products_fetched"] = False
+                                if c2.button("✅ التنفيذ عـ الباقي (استبعاد)", type="primary", use_container_width=True):
+                                    with st.spinner("⏳ جاري المعالجة..."):
+                                        conflict_skus = [c['sku'] for c in conflicts]
+                                        df_clean = df_promo[~df_promo['clean_sku'].isin(conflict_skus)]
+                                        res = process_promotions_bulk(df_clean, st.session_state.get("all_products", []), headers)
+                                        for m in res["success"]: st.success(m)
+                                        for m in res["errors"]: st.error(m)
+                                        st.session_state["all_products_fetched"] = False
+                                if c3.button("❌ إلغاء العملية", use_container_width=True):
+                                    st.info("تم إلغاء عملية الرفع.")
+                                    
+                                with c4:
+                                    with st.popover("⚙️ أخرى", use_container_width=True):
+                                        st.markdown("**إجراءات إضافية:**")
+                                        conflict_prods = [p for p in st.session_state.get("all_products", []) if str(p.get('sku', '')).strip().replace('.0', '') in [c['sku'] for c in conflicts]]
+                                        st.download_button(
+                                            label="📥 تحميل المنتجات المتعارضة",
+                                            data=export_products_to_excel(conflict_prods, po_map),
+                                            file_name=f"Conflicting_Products_Upload.xlsx",
+                                            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                                            use_container_width=True,
+                                            key="dl_conf_upload"
+                                        )
                                     # 2. إيقاف العروض الخاصة لهذه المنتجات
                                     if st.button("🛑 إيقاف عروضها الخاصة", key="stop_off_upload", use_container_width=True):
                                         with st.spinner("جاري إيقاف العروض..."):
@@ -1186,13 +1255,13 @@ def render_products_page():
                                                         st.session_state["product_offers_map"][pid] = [o for o in st.session_state["product_offers_map"][pid] if str(o['id']) != oid]
                                             st.success(f"✅ تم إيقاف {stopped_count} عرض خاص بنجاح!")
                                             import time; time.sleep(1.5); st.rerun()
-                        else:
-                            if st.button("🚀 تنفيذ التحديثات دفعة واحدة", type="primary", use_container_width=True):
-                                with st.spinner("⏳ جاري المعالجة..."):
-                                    res = process_promotions_bulk(df_promo, st.session_state.get("all_products", []), headers)
-                                    for m in res["success"]: st.success(m)
-                                    for m in res["errors"]: st.error(m)
-                                    st.session_state["all_products_fetched"] = False 
+                            else:
+                                if st.button("🚀 تنفيذ التحديثات دفعة واحدة الآن", type="primary", use_container_width=True):
+                                    with st.spinner("⏳ جاري المعالجة..."):
+                                        res = process_promotions_bulk(df_promo, st.session_state.get("all_products", []), headers)
+                                        for m in res["success"]: st.success(m)
+                                        for m in res["errors"]: st.error(m)
+                                        st.session_state["all_products_fetched"] = False
                     except Exception as e:
                         st.error(f"❌ خطأ في قراءة الملف: {str(e)}")
 
