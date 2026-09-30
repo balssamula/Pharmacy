@@ -977,11 +977,11 @@ def render_products_page():
             box-shadow: 0 4px 14px rgba(15, 28, 46, 0.08) !important;
         }
     </style>
-    """, unsafe_allow_html=True)
     <button class="mobile-toggle-btn" onclick="
         var btns = document.querySelectorAll('div[data-testid=\\'stElementContainer\\']:has(span[id^=\\'qa-marker-\\']) + div[data-testid=\\'stElementContainer\\']');
         btns.forEach(function(el) { el.style.right = (el.style.right === '0px' || el.style.right === '0') ? '-200px' : '0px'; });
     ">⚡ إجراءات</button>
+    """, unsafe_allow_html=True)
 
     st.markdown('<span id="qa-marker-1"></span>', unsafe_allow_html=True)
     if st.button("🏢 التحكم بالمنتجات والفروع", key="btn_qa_1"):
@@ -1308,9 +1308,10 @@ def render_products_page():
                         st.error(f"❌ خطأ في قراءة الملف: {str(e)}")
 
                 # ==========================================
-                # استعراض المهام المجدولة (مع زر تحديث وسجل المكتملة)
+                # استعراض المهام المجدولة (مع شريط التقدم الحي)
                 # ==========================================
                 schedules = load_schedules()
+                in_progress_tasks = [s for s in schedules if s.get("status") == "in_progress"]
                 pending_tasks = [s for s in schedules if s.get("status") == "pending"]
                 completed_tasks = [s for s in schedules if s.get("status") == "completed"]
                 
@@ -1321,7 +1322,28 @@ def render_products_page():
                     if st.button("🔄 تحديث الحالة", key="refresh_sched_btn", use_container_width=True):
                         st.rerun()
 
-                # 1. عرض المهام قيد الانتظار (بتصميم وردي مميز وبطاقة احترافية)
+                # ⚡ عرض المهام التي تعمل حالياً مع شريط التقدم (Live Progress)
+                if in_progress_tasks:
+                    for task in in_progress_tasks:
+                        prog_pct = task.get("progress", 0)
+                        cur_cnt = task.get("processed_count", 0)
+                        tot_cnt = task.get("total_count", 0)
+                        cur_sku = task.get("current_sku", "")
+                        
+                        st.markdown(f"""
+                        <div style="background: linear-gradient(135deg, #EFF6FF 0%, #DBEAFE 100%); 
+                                    border: 1px solid #93C5FD; border-right: 6px solid #2563EB; 
+                                    border-radius: 8px; padding: 12px 16px; margin-bottom: 8px;">
+                            <b style="color: #1E40AF; font-size: 14px;">⚡ جاري تنفيذ الجدولة الآن: {task['original_name']}</b><br>
+                            <span style="color: #1E3A8A; font-size: 12px;">جاري تحديث المنتج SKU: <code>{cur_sku}</code> ({cur_cnt} من {tot_cnt})</span>
+                        </div>
+                        """, unsafe_allow_html=True)
+                        st.progress(prog_pct / 100.0)
+                    # إعادة تحميل تلقائية خفيفة لتحديث الشريط لحظياً أثناء عمل المهمة
+                    time.sleep(4)
+                    st.rerun()
+
+                # 1. عرض المهام قيد الانتظار (اللون الوردي)
                 if pending_tasks:
                     with st.expander(f"⏳ المهام قيد الانتظار ({len(pending_tasks)})", expanded=True):
                         for task in pending_tasks:
@@ -1330,18 +1352,10 @@ def render_products_page():
                             with c_t1:
                                 st.markdown(f"""
                                 <div style="background: linear-gradient(135deg, #FFF1F2 0%, #FCE7F3 100%); 
-                                            border: 1px solid #FDA4AF; 
-                                            border-right: 6px solid #E11D48; 
-                                            border-radius: 8px; 
-                                            padding: 10px 16px; 
-                                            color: #881337; 
-                                            font-size: 13.5px; 
-                                            display: flex; 
-                                            justify-content: space-between; 
-                                            align-items: center;
-                                            flex-wrap: wrap;
-                                            gap: 10px;
-                                            box-shadow: 0 1px 3px rgba(244, 63, 94, 0.08);">
+                                            border: 1px solid #FDA4AF; border-right: 6px solid #E11D48; 
+                                            border-radius: 8px; padding: 10px 16px; color: #881337; 
+                                            font-size: 13.5px; display: flex; justify-content: space-between; 
+                                            align-items: center; flex-wrap: wrap; gap: 10px;">
                                     <span>📄 <b>{task['original_name']}</b> — ⏰ الموعد: <code>{task['run_at']}</code></span>
                                     <span style="background: #FFE4E6; color: #BE123C; padding: 3px 12px; border-radius: 20px; font-size: 12px; font-weight: bold; border: 1px solid #FECDD3;">
                                         {rem_time}
@@ -1358,7 +1372,7 @@ def render_products_page():
                                     save_schedules(schedules)
                                     st.rerun()
 
-                # 2. عرض المهام المكتملة للتأكد من نجاحها (اللون الأخضر)
+                # 2. عرض المهام المكتملة حديثاً (اللون الأخضر)
                 if completed_tasks:
                     with st.expander(f"✅ المهام المكتملة حديثاً ({len(completed_tasks)})", expanded=False):
                         for task in reversed(completed_tasks[-5:]):
