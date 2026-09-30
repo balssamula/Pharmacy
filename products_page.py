@@ -716,6 +716,10 @@ def generate_anomalies_excel(anomalies):
     return buf.getvalue()
     
 def render_products_page():
+    import time
+    import os
+    import json
+    
     initialize_session()
     headers = get_headers()
     if not headers: return
@@ -1196,7 +1200,10 @@ def render_products_page():
                 # ⏰ نظام الجدولة وحفظ الملفات للتنفيذ التلقائي
                 # ==========================================
                 from utils import SCHEDULE_DIR, load_schedules, save_schedules
-                
+                import os
+                import json
+                import time
+
                 st.markdown("---")
                 st.markdown("#### ⏰ خيارات التنفيذ والجدولة التلقائية")
                 
