@@ -1266,65 +1266,6 @@ def render_products_page():
                         st.error(f"❌ خطأ في قراءة الملف: {str(e)}")
 
                 # ==========================================
-                # ⏰ نظام الجدولة وحفظ الملفات للتنفيذ التلقائي
-                # ==========================================
-                from utils import SCHEDULE_DIR, load_schedules, save_schedules
-                import os
-                import json
-                import time
-
-                st.markdown("---")
-                st.markdown("#### ⏰ خيارات التنفيذ والجدولة التلقائية")
-                
-                exec_type = st.radio(
-                    "اختر آلية التنفيذ:", 
-                    ["🚀 تنفيذ مباشر وفوري", "📅 جدولة الملف لوقت محدد تلقائياً"], 
-                    horizontal=True,
-                    key="promo_exec_type"
-                )
-                
-                if exec_type == "📅 جدولة الملف لوقت محدد تلقائياً":
-                    col_sd, col_st = st.columns(2)
-                    with col_sd:
-                        sched_date = st.date_input("تاريخ التنفيذ:", value=datetime.now().date(), key="sch_d")
-                    with col_st:
-                        sched_time = st.time_input("وقت التنفيذ:", value=(datetime.now() + timedelta(minutes=30)).time(), key="sch_t")
-                        
-                    sched_datetime_str = f"{sched_date.strftime('%Y-%m-%d')} {sched_time.strftime('%H:%M')}"
-                    st.info(f"🕒 سيتم حفظ الملف وتشغيله تلقائياً في سلة بتاريخ: **{sched_datetime_str}** حتى لو أغلقت الموقع.")
-                    
-                    if st.button("💾 حفظ وجدولة الملف", type="primary", use_container_width=True, key="btn_save_sched"):
-                        if not uploaded_promo:
-                            st.error("⚠️️ يرجى رفع ملف البيانات أولاً.")
-                        else:
-                            safe_filename = f"{datetime.now().strftime('%Y%m%d_%H%M%S')}_{uploaded_promo.name}"
-                            target_path = os.path.join(SCHEDULE_DIR, safe_filename)
-                            
-                            # 1. حفظ ملف الإكسيل في المجلد السحابي
-                            with open(target_path, "wb") as f:
-                                f.write(uploaded_promo.getvalue())
-                                
-                            # 2. حفظ بيانات المنتجات الحالية لضمان مطابقة الـ SKU بدقة أثناء غيابك
-                            meta_path = os.path.join(SCHEDULE_DIR, safe_filename + ".meta.json")
-                            with open(meta_path, "w", encoding="utf-8") as mf:
-                                json.dump(st.session_state.get("all_products", []), mf, ensure_ascii=False)
-                                
-                            # 3. إدراج المهمة في سجل المهام
-                            schedules = load_schedules()
-                            schedules.append({
-                                "id": len(schedules) + 1,
-                                "original_name": uploaded_promo.name,
-                                "filename": safe_filename,
-                                "run_at": sched_datetime_str,
-                                "status": "pending",
-                                "created_at": datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-                            })
-                            save_schedules(schedules)
-                            st.success(f"✅ تم حفظ وجدولة الملف بنجاح! سينفذ تلقائياً في {sched_datetime_str}.")
-                            time.sleep(1.5)
-                            st.rerun()
-
-                # ==========================================
                 # استعراض المهام المجدولة (مع زر تحديث وسجل المكتملة)
                 # ==========================================
                 schedules = load_schedules()
