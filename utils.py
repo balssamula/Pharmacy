@@ -8,6 +8,7 @@ import threading
 import logging
 import re
 import openpyxl
+import time
 from datetime import datetime
 from typing import Optional, List, Dict, Any
 from openpyxl.styles import PatternFill, Font, Alignment, Border, Side
@@ -1300,3 +1301,74 @@ def export_featured_group_to_excel(group_products: List[Dict], po_map: Dict) -> 
         import streamlit as st
         st.error(f"خطأ في إنشاء ملف التصدير: {e}")
         return b""
+
+SCHEDULE_DIR = "scheduled_uploads"
+SCHEDULE_FILE = "schedules.json"
+
+os.makedirs(SCHEDULE_DIR, exist_ok=True)
+
+def load_schedules():
+    if not os.path.exists(SCHEDULE_FILE):
+        return []
+    try:
+        with open(SCHEDULE_FILE, "r", encoding="utf-8") as f:
+            return json.load(f)
+    except Exception:
+        return []
+
+def save_schedules(schedules):
+    with open(SCHEDULE_FILE, "w", encoding="utf-8") as f:
+        json.dump(schedules, f, ensure_ascii=False, indent=2)
+
+def background_scheduler_worker():
+    """محرك فحص المهام المجدولة - يعمل في الخلفية 24/7 بشكل مستقل تماماً"""
+    while True:
+        try:
+            schedules = load_schedules()
+            now = datetime.now()
+            modified = False
+
+            for task in schedules:
+                if task.get("status") == "pending":
+                    run_time = datetime.strptime(task["run_at"], "%Y-%m-%d %H:%M")
+                    if now >= run_time:
+                        file_path = os.path.join(SCHEDULE_DIR, task["filename"])
+                        meta_path = os.path.join(SCHEDULE_DIR, task["filename"] + ".meta.json")
+                        
+                        if os.path.exists(file_path):
+                            df_promo = pd.read_excel(file_path)
+                            headers = get_headers()
+                            
+                            # قراءة بيانات المنتجات المحفوظة وقت الجدولة
+                            cached_products = []
+                            if os.path.exists(meta_path):
+                                try:
+                                    with open(meta_path, "r", encoding="utf-8") as mf:
+                                        cached_products = json.load(mf)
+                                except Exception:
+                                    cached_products = []
+                                    
+                            # تنفيذ رفع وتحديث العناوين والأسعار لمتجر سلة
+                            process_promotions_bulk(df_promo, cached_products, headers)
+                            task["status"] = "completed"
+                            task["executed_at"] = now.strftime("%Y-%m-%d %H:%M:%S")
+                        else:
+                            task["status"] = "failed (file missing)"
+                        modified = True
+
+            if modified:
+                save_schedules(schedules)
+        except Exception as e:
+            print(f"Error in scheduler worker: {e}")
+
+        time.sleep(60) # الفحص الدوري كل دقيقة
+
+# بدء تشغيل محرك الجدولة مرة واحدة عند تشغيل السيرفر
+def init_background_scheduler():
+    for th in threading.enumerate():
+        if th.name == "SallaPromoDaemon":
+            return
+    t = threading.Thread(target=background_scheduler_worker, name="SallaPromoDaemon", daemon=True)
+    t.start()
+
+init_background_scheduler()
