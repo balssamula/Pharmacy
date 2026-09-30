@@ -1255,12 +1255,23 @@ def render_products_page():
                             time.sleep(1.5)
                             st.rerun()
 
-                # استعراض المهام المجدولة المحفوظة مع إمكانية الإلغاء
+                # ==========================================
+                # استعراض المهام المجدولة (مع زر تحديث وسجل المكتملة)
+                # ==========================================
                 schedules = load_schedules()
                 pending_tasks = [s for s in schedules if s.get("status") == "pending"]
+                completed_tasks = [s for s in schedules if s.get("status") == "completed"]
                 
+                col_hd1, col_hd2 = st.columns([4, 1])
+                with col_hd1:
+                    st.markdown(f"##### 📋 سجل المهام المجدولة (قيد الانتظار: {len(pending_tasks)})")
+                with col_hd2:
+                    if st.button("🔄 تحديث الحالة", key="refresh_sched_btn", use_container_width=True):
+                        st.rerun()
+
+                # 1. عرض المهام قيد الانتظار
                 if pending_tasks:
-                    with st.expander(f"📋 المهام المجدولة قيد الانتظار ({len(pending_tasks)})", expanded=True):
+                    with st.expander(f"⏳ المهام قيد الانتظار ({len(pending_tasks)})", expanded=True):
                         for task in pending_tasks:
                             c_t1, c_t2, c_t3 = st.columns([3, 2, 1])
                             with c_t1: st.markdown(f"📄 **{task['original_name']}**")
@@ -1274,6 +1285,12 @@ def render_products_page():
                                     if os.path.exists(p_meta): os.remove(p_meta)
                                     save_schedules(schedules)
                                     st.rerun()
+
+                # 2. عرض المهام المكتملة للتأكد من نجاحها
+                if completed_tasks:
+                    with st.expander(f"✅ المهام المكتملة حديثاً ({len(completed_tasks)})", expanded=False):
+                        for task in reversed(completed_tasks[-5:]): # عرض آخر 5 مهام
+                            st.success(f"📄 **{task['original_name']}** — تم التنفيذ بنجاح في: `{task.get('executed_at', 'وقت سابق')}`")
                                     
             elif st.session_state.qa_action_prod == "featured_groups":
                 with col_t: st.markdown("### ⭐ إدارة مجموعات المنتجات المميزة")
