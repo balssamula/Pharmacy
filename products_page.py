@@ -728,7 +728,7 @@ def render_products_page():
     
     st.markdown("""
     <div style="background: linear-gradient(135deg, #0F1C2E 0%, #00EBCF 100%); padding: 15px 25px; border-radius: 12px; color: white; margin-bottom: 20px; box-shadow: 0 4px 6px rgba(0,0,0,0.1);">
-        <h2 style="color: white; margin: 0;">📦 مركز إدارة المنتجات الذكي والمتقدم</h2>
+        <h2 style="color: white; margin: 0;">📦 مركز إدارة المنتجات المتقدم</h2>
     </div>
     """, unsafe_allow_html=True)
     
@@ -738,7 +738,7 @@ def render_products_page():
     # ========================================================
     # 📊 قسم التقارير المتقدمة والمدقق المالي الذكي
     # ========================================================
-    with st.expander("📊 تقارير التسعير المتقدمة والمدقق المالي الذكي", expanded=False):
+    with st.expander("📊 تقارير التسعير المتقدمة (للفردي والمجموعة)", expanded=False):
         st.info("💡 المدقق المالي: يقوم بحساب سعر الحبة الفعلي لكل منتج سواء تم بيعه كـ (فردي)، أو داخل (مجموعة)، أو داخل (عرض خاص)، ويستخرج لك أرخص وأفضل طريقة يتم بيع المنتج بها حالياً، ويكتشف الأخطاء تلقائياً.")
         
         st.markdown("#### 🚫 استبعاد مجموعات أو منتجات (اختياري)")
@@ -785,12 +785,12 @@ def render_products_page():
                         use_container_width=True
                     )
                 else:
-                    st.button("✅ التسعير سليم 100% (لا يوجد أخطاء)", disabled=True, use_container_width=True)
+                    st.button("✅ أمورك طيبة ... التسعير سليم 100% (لا يوجد أخطاء)", disabled=True, use_container_width=True)
 
             if anomalies:
                 st.markdown(f"""
                 <div style="background: rgba(231, 76, 60, 0.1); border-right: 5px solid #e74c3c; padding: 15px; border-radius: 8px; margin-top: 15px; margin-bottom: 15px;">
-                    <h4 style="color: #e74c3c; margin: 0 0 10px 0;">🚨 تنبيه مالي عاجل!</h4>
+                    <h4 style="color: #e74c3c; margin: 0 0 10px 0;">🚨 تنبيه عاجل!</h4>
                     تم اكتشاف <b>({len(anomalies)})</b> حالة يكون فيها الشراء عبر (المجموعة أو العرض الخاص) <b>أغلى</b> من الشراء الفردي للمنتج!
                 </div>
                 """, unsafe_allow_html=True)
@@ -802,13 +802,13 @@ def render_products_page():
                 st.markdown("#### ⚡ إجراءات سريعة لمعالجة الأخطاء")
                 c_act1, c_act2, c_act3, c_act4 = st.columns(4)
                 with c_act1:
-                    do_fix_group = st.checkbox("🛠️ التعديل لمنطق سعر الفردي ومسح الترويجي (للمجموعة)")
+                    do_fix_group = st.checkbox("🛠️ تعديل السعر ومسح الترويجي (للمجموعة)")
                 with c_act2:
                     do_clear_indiv = st.checkbox("🧹 مسح المخفض والترويجي (للمنتج الفردي)")
                 with c_act3:
                     do_create_group = st.checkbox("⭐ إنشاء مجموعة مميزة لمنتجات الأخطاء")
                 with c_act4:
-                    do_refresh_ano = st.checkbox("🔄 تحديث بيانات المنتجات المكتشفة من سلة")
+                    do_refresh_ano = st.checkbox("🔄 تحديث منتجات الأخطاء المكتشفة")
 
                 # حقل اسم المجموعة المميزة يظهر إذا تم تفعيل خيار إنشاء المجموعة
                 new_ano_group_name = None
@@ -863,7 +863,7 @@ def render_products_page():
                             for idx, ano in enumerate(anomalies):
                                 indiv_id = ano.get("_indiv_id")
                                 if indiv_id and indiv_id not in processed_indivs:
-                                    status_msg.info(f"⏳ جاري مسح التخفيض للمنتج الفردي ID: {indiv_id}...")
+                                    status_msg.info(f"⏳ جاري مسح سعر التخفيض للمنتج الفردي ID: {indiv_id}...")
                                     prod = next((p for p in all_prods if str(p['id']) == indiv_id), None)
                                     if prod:
                                         base_p = get_flat_price(prod.get('regular_price', 0)) or get_flat_price(prod.get('price', 0))
