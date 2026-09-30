@@ -1072,10 +1072,10 @@ def generate_promotions_template() -> bytes:
     wb.save(output)
     return output.getvalue()
 
-def process_promotions_bulk(df: pd.DataFrame, products_list: List[Dict], headers: Dict[str, str]) -> Dict:
+# 1. تحديث دالة المعالجة الجماعية لدعم شريط التقدم
+def process_promotions_bulk(df: pd.DataFrame, products_list: List[Dict], headers: Dict[str, str], progress_callback=None) -> Dict:
     results = {"success": [], "errors": []}
     
-    # بناء قاموس لتحويل SKU إلى بيانات المنتج
     sku_to_product = {}
     for p in products_list:
         if p.get('sku'):
@@ -1083,14 +1083,22 @@ def process_promotions_bulk(df: pd.DataFrame, products_list: List[Dict], headers
             if clean_sku.endswith('.0'): clean_sku = clean_sku[:-2]
             sku_to_product[clean_sku] = p
             
-    for idx, row in df.iterrows():
-        if row.isna().all() or str(row.iloc[0]).strip().startswith("💡"): continue
-        
+    # تصفية الصفوف الصالحة لحساب النسبة الدقيقة
+    valid_rows = [r for _, r in df.iterrows() if not r.isna().all() and not str(r.iloc[0]).strip().startswith("💡")]
+    total_valid = len(valid_rows)
+
+    for idx, row in enumerate(valid_rows):
         sku_raw = str(row.get('SKU (رقم المنتج)', '')).strip()
         if sku_raw.endswith('.0'): sku_raw = sku_raw[:-2]
-        
         if not sku_raw or sku_raw == 'nan': continue
         
+        # استدعاء دالة تحديث شريط التقدم
+        if progress_callback and total_valid > 0:
+            try:
+                progress_callback(idx + 1, total_valid, sku_raw)
+            except Exception:
+                pass
+
         p = sku_to_product.get(sku_raw)
         if not p:
             results["errors"].append(f"السطر {idx+2}: لم يتم العثور على منتج بـ SKU ({sku_raw})")
@@ -1102,13 +1110,11 @@ def process_promotions_bulk(df: pd.DataFrame, products_list: List[Dict], headers
         sub_val = str(row.get('العنوان الفرعي', '')).strip()
         sale_price_val = str(row.get('السعر المخفض', '')).strip()
         
-        # ✅ استخراج تاريخ الانتهاء بذكاء وتحويله للصيغة المقبولة في سلة
         sale_end_raw = row.get('تاريخ انتهاء التخفيض', '')
         sale_end_val = ""
         if pd.notna(sale_end_raw) and str(sale_end_raw).strip() not in ['', 'nan']:
             try:
                 parsed_date = pd.to_datetime(sale_end_raw)
-                # إذا قام التاجر بكتابة التاريخ فقط (بدون وقت)، سيتم وضع نهاية اليوم تلقائياً
                 if parsed_date.hour == 0 and parsed_date.minute == 0:
                     sale_end_val = parsed_date.strftime('%Y-%m-%d 23:59:59')
                 else:
@@ -1120,7 +1126,6 @@ def process_promotions_bulk(df: pd.DataFrame, products_list: List[Dict], headers
         if sub_val == 'nan': sub_val = ""
         if sale_price_val == 'nan': sale_price_val = ""
         
-        # استرجاع القيم الحالية من الذاكرة
         current_promo = p.get('promotion_title', '') or (p.get('promotion', {}).get('title', '') if isinstance(p.get('promotion'), dict) else '')
         current_sub = p.get('promotion_subtitle', '') or (p.get('promotion', {}).get('sub_title', '') if isinstance(p.get('promotion'), dict) else '')
         current_sale = get_flat_price(p.get('sale_price', 0))
@@ -1131,91 +1136,108 @@ def process_promotions_bulk(df: pd.DataFrame, products_list: List[Dict], headers
         new_sale = current_sale
         new_sale_end = current_sale_end
         
-        # ✅ تطبيق المنطق الذكي للإجراءات الجديدة
         if action == 'تحديث':
             new_promo = promo_val
             new_sub = sub_val
-            if sale_price_val == "":
-                new_sale = 0.0
-            else:
-                try: new_sale = float(sale_price_val)
-                except: new_sale = current_sale
-            
-            # ✅ الإصلاح: إزالة الشرط وجعل القيمة تتبع الملف تماماً (فارغ = مسح)
+            new_sale = float(sale_price_val) if sale_price_val != "" else 0.0
             new_sale_end = sale_end_val
-                
         elif action == 'تحديث السعر المخفض':
-            if sale_price_val == "":
-                new_sale = 0.0
-            else:
-                try: new_sale = float(sale_price_val)
-                except: new_sale = current_sale
-                
-            # ✅ الإصلاح
+            new_sale = float(sale_price_val) if sale_price_val != "" else 0.0
             new_sale_end = sale_end_val
-                
         elif action == 'تحديث تاريخ الانتهاء':
-            # ✅ الإصلاح
             new_sale_end = sale_end_val
-                
         elif action == 'مسح الترويجي':
             new_promo = ""
             if sub_val: new_sub = sub_val
-            if sale_price_val == "": new_sale = 0.0
-            elif sale_price_val:
-                try: new_sale = float(sale_price_val)
-                except: pass
+            if sale_price_val: new_sale = float(sale_price_val)
             if sale_end_val != "": new_sale_end = sale_end_val
-                
         elif action == 'مسح الفرعي':
             new_sub = ""
             if promo_val: new_promo = promo_val
-            if sale_price_val == "": new_sale = 0.0
-            elif sale_price_val:
-                try: new_sale = float(sale_price_val)
-                except: pass
+            if sale_price_val: new_sale = float(sale_price_val)
             if sale_end_val != "": new_sale_end = sale_end_val
-                
         elif action == 'مسح الكل':
-            new_promo = ""
-            new_sub = ""
-            new_sale = 0.0
-            new_sale_end = ""
+            new_promo = ""; new_sub = ""; new_sale = 0.0; new_sale_end = ""
         
         base_price = get_flat_price(p.get('regular_price', 0)) or get_flat_price(p.get('price', 0))
-        
-        # منع خطأ 422 وحماية المتجر من الأخطاء البشرية
         if new_sale > 0 and new_sale >= base_price:
-            results["errors"].append(f"السطر {idx+2}: السعر المخفض ({new_sale}) يجب أن يكون أقل من الأصلي ({base_price}) للمنتج {sku_raw}")
+            results["errors"].append(f"السطر {idx+2}: السعر المخفض ({new_sale}) أكبر من الأصلي ({base_price}) للمنتج {sku_raw}")
             continue
-        
-        # بناء البيانات المُرسلة لسلة
+            
         payload = {
-            "name": p.get('name'), 
-            "price": base_price, 
-            "status": p.get('status', 'sale'),
-            "promotion_title": new_promo,
-            "promotion_subtitle": new_sub,
-            "subtitle": new_sub
+            "name": p.get('name'), "price": base_price, "status": p.get('status', 'sale'),
+            "promotion_title": new_promo, "promotion_subtitle": new_sub, "subtitle": new_sub
         }
-        
         if new_sale > 0:
             payload['sale_price'] = new_sale
-            if new_sale_end:
-                payload['sale_end'] = new_sale_end
-            else:
-                payload['sale_end'] = None
+            payload['sale_end'] = new_sale_end if new_sale_end else None
         else:
             payload['sale_price'] = None
             payload['sale_end'] = None
             
         res = safe_api_request("PUT", f"https://api.salla.dev/admin/v2/products/{p_id}", headers, json=payload)
-        if res:
-            results["success"].append(f"تم تنفيذ ({action}) للمنتج {sku_raw} بنجاح.")
-        else:
-            results["errors"].append(f"فشل تنفيذ ({action}) للمنتج {sku_raw}.")
+        if res: results["success"].append(f"تم تنفيذ ({action}) للمنتج {sku_raw} بنجاح.")
+        else: results["errors"].append(f"فشل تنفيذ ({action}) للمنتج {sku_raw}.")
+        time.sleep(0.3)
             
     return results
+
+
+# 2. تحديث محرك الجدولة ليقوم بتسجيل نسبة الإنجاز
+def background_scheduler_worker():
+    """محرك فحص المهام المجدولة مع تسجيل شريط التقدم لحظياً"""
+    while True:
+        try:
+            schedules = load_schedules()
+            saudi_now = datetime.now(timezone(timedelta(hours=3))).replace(tzinfo=None)
+            modified = False
+
+            for task in schedules:
+                if task.get("status") == "pending":
+                    run_time = datetime.strptime(task["run_at"], "%Y-%m-%d %H:%M")
+                    if saudi_now >= run_time:
+                        file_path = os.path.join(SCHEDULE_DIR, task["filename"])
+                        meta_path = os.path.join(SCHEDULE_DIR, task["filename"] + ".meta.json")
+                        
+                        if os.path.exists(file_path):
+                            # تغيير الحالة إلى "جاري التنفيذ"
+                            task["status"] = "in_progress"
+                            task["progress"] = 0
+                            task["current_sku"] = "بدء المعالجة"
+                            save_schedules(schedules)
+                            
+                            df_promo = pd.read_excel(file_path)
+                            headers = get_headers()
+                            
+                            cached_products = []
+                            if os.path.exists(meta_path):
+                                try:
+                                    with open(meta_path, "r", encoding="utf-8") as mf:
+                                        cached_products = json.load(mf)
+                                except Exception:
+                                    cached_products = []
+
+                            def update_task_progress(cur, total, sku):
+                                task["progress"] = int((cur / total) * 100)
+                                task["processed_count"] = cur
+                                task["total_count"] = total
+                                task["current_sku"] = str(sku)
+                                save_schedules(schedules)
+                                    
+                            process_promotions_bulk(df_promo, cached_products, headers, progress_callback=update_task_progress)
+                            task["status"] = "completed"
+                            task["progress"] = 100
+                            task["executed_at"] = saudi_now.strftime("%Y-%m-%d %I:%M %p")
+                        else:
+                            task["status"] = "failed (file missing)"
+                        modified = True
+
+            if modified:
+                save_schedules(schedules)
+        except Exception as e:
+            print(f"Error in scheduler worker: {e}")
+
+        time.sleep(20)
 
 def export_featured_group_to_excel(group_products: List[Dict], po_map: Dict) -> bytes:
     """تصدير منتجات المجموعة المميزة إلى ملف Excel احترافي ومنسق (محدث بالعناوين والمخزون والحالة)"""
@@ -1320,49 +1342,6 @@ def load_schedules():
 def save_schedules(schedules):
     with open(SCHEDULE_FILE, "w", encoding="utf-8") as f:
         json.dump(schedules, f, ensure_ascii=False, indent=2)
-
-def background_scheduler_worker():
-    """محرك فحص المهام المجدولة بتوقيت مكة المكرمة (UTC+3)"""
-    while True:
-        try:
-            schedules = load_schedules()
-            # ✅ جلب توقيت السعودية بدقة (توقيت السيرفر + 3 ساعات)
-            saudi_now = datetime.now(timezone(timedelta(hours=3))).replace(tzinfo=None)
-            modified = False
-
-            for task in schedules:
-                if task.get("status") == "pending":
-                    run_time = datetime.strptime(task["run_at"], "%Y-%m-%d %H:%M")
-                    # المقارنة الآن أصبحت بتوقيت السعودية مع توقيت السعودية
-                    if saudi_now >= run_time:
-                        file_path = os.path.join(SCHEDULE_DIR, task["filename"])
-                        meta_path = os.path.join(SCHEDULE_DIR, task["filename"] + ".meta.json")
-                        
-                        if os.path.exists(file_path):
-                            df_promo = pd.read_excel(file_path)
-                            headers = get_headers()
-                            
-                            cached_products = []
-                            if os.path.exists(meta_path):
-                                try:
-                                    with open(meta_path, "r", encoding="utf-8") as mf:
-                                        cached_products = json.load(mf)
-                                except Exception:
-                                    cached_products = []
-                                    
-                            process_promotions_bulk(df_promo, cached_products, headers)
-                            task["status"] = "completed"
-                            task["executed_at"] = saudi_now.strftime("%Y-%m-%d %I:%M %p")
-                        else:
-                            task["status"] = "failed (file missing)"
-                        modified = True
-
-            if modified:
-                save_schedules(schedules)
-        except Exception as e:
-            print(f"Error in scheduler worker: {e}")
-
-        time.sleep(30)
 
 # بدء تشغيل محرك الجدولة مرة واحدة عند تشغيل السيرفر
 def init_background_scheduler():
