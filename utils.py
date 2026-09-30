@@ -9,7 +9,7 @@ import logging
 import re
 import openpyxl
 import time
-from datetime import datetime
+from datetime import datetime, timezone, timedelta
 from typing import Optional, List, Dict, Any
 from openpyxl.styles import PatternFill, Font, Alignment, Border, Side
 from openpyxl.worksheet.datavalidation import DataValidation
@@ -1321,17 +1321,19 @@ def save_schedules(schedules):
         json.dump(schedules, f, ensure_ascii=False, indent=2)
 
 def background_scheduler_worker():
-    """محرك فحص المهام المجدولة - يعمل في الخلفية 24/7 بشكل مستقل تماماً"""
+    """محرك فحص المهام المجدولة بتوقيت مكة المكرمة (UTC+3)"""
     while True:
         try:
             schedules = load_schedules()
-            now = datetime.now()
+            # ✅ جلب توقيت السعودية بدقة (توقيت السيرفر + 3 ساعات)
+            saudi_now = datetime.now(timezone(timedelta(hours=3))).replace(tzinfo=None)
             modified = False
 
             for task in schedules:
                 if task.get("status") == "pending":
                     run_time = datetime.strptime(task["run_at"], "%Y-%m-%d %H:%M")
-                    if now >= run_time:
+                    # المقارنة الآن أصبحت بتوقيت السعودية مع توقيت السعودية
+                    if saudi_now >= run_time:
                         file_path = os.path.join(SCHEDULE_DIR, task["filename"])
                         meta_path = os.path.join(SCHEDULE_DIR, task["filename"] + ".meta.json")
                         
@@ -1339,7 +1341,6 @@ def background_scheduler_worker():
                             df_promo = pd.read_excel(file_path)
                             headers = get_headers()
                             
-                            # قراءة بيانات المنتجات المحفوظة وقت الجدولة
                             cached_products = []
                             if os.path.exists(meta_path):
                                 try:
@@ -1348,10 +1349,9 @@ def background_scheduler_worker():
                                 except Exception:
                                     cached_products = []
                                     
-                            # تنفيذ رفع وتحديث العناوين والأسعار لمتجر سلة
                             process_promotions_bulk(df_promo, cached_products, headers)
                             task["status"] = "completed"
-                            task["executed_at"] = now.strftime("%Y-%m-%d %H:%M:%S")
+                            task["executed_at"] = saudi_now.strftime("%Y-%m-%d %I:%M %p")
                         else:
                             task["status"] = "failed (file missing)"
                         modified = True
@@ -1361,7 +1361,7 @@ def background_scheduler_worker():
         except Exception as e:
             print(f"Error in scheduler worker: {e}")
 
-        time.sleep(60) # الفحص الدوري كل دقيقة
+        time.sleep(30)
 
 # بدء تشغيل محرك الجدولة مرة واحدة عند تشغيل السيرفر
 def init_background_scheduler():
