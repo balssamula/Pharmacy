@@ -9,7 +9,7 @@ import openpyxl
 import time
 from openpyxl.styles import PatternFill, Font, Alignment
 from openpyxl.utils import get_column_letter
-from datetime import datetime, timedelta
+from datetime import datetime, timezone, timedelta
 from typing import Dict, List, Any
 
 from utils import (
@@ -735,6 +735,29 @@ def render_products_page():
     # ✅ عرض تنبيهات التخفيضات المنتهية
     render_discount_expiry_alerts(headers)
 
+    def get_remaining_time_str(run_at_str):
+        """حساب الوقت المتبقي لبدء الجدولة بدقة بتوقيت السعودية"""
+        saudi_now = datetime.now(timezone(timedelta(hours=3))).replace(tzinfo=None)
+        try:
+            run_time = datetime.strptime(run_at_str, "%Y-%m-%d %H:%M")
+            diff = run_time - saudi_now
+            total_seconds = int(diff.total_seconds())
+            if total_seconds <= 0:
+                return "⏳ حان وقت التنفيذ الآن..."
+            
+            days = diff.days
+            hours, remainder = divmod(diff.seconds, 3600)
+            minutes, seconds = divmod(remainder, 60)
+            
+            parts = []
+            if days > 0: parts.append(f"{days} يوم")
+            if hours > 0: parts.append(f"{hours} ساعة")
+            if minutes > 0: parts.append(f"{minutes} دقيقة")
+            if not parts: parts.append(f"{seconds} ثانية")
+            return "⏳ متبقي: " + " و ".join(parts)
+        except Exception:
+            return ""
+            
     # ========================================================
     # 📊 قسم التقارير المتقدمة والمدقق المالي الذكي
     # ========================================================
@@ -931,12 +954,34 @@ def render_products_page():
             div[data-testid="stElementContainer"]:has(span[id^="qa-marker-"]) + div[data-testid="stElementContainer"] button { font-size: 12px !important; padding-right: 10px !important; padding: 4px 8px !important; }
             div[data-testid="stElementContainer"]:has(span[id^="qa-marker-"]) + div[data-testid="stElementContainer"]::before { display: none !important; }
         }
+
+        /* سلاسة الحركة والانتقال لكافة البطاقات */
+        div[data-testid="stContainer"],
+        div[data-testid="stVerticalBlockBorderWrapper"],
+        div[data-testid="stExpander"] {
+            transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1) !important;
+        }
+
+        /* تغيير الخلفية والإطار عند مرور مؤشر الماوس فوق أي حاوية أو بطاقة منتج */
+        div[data-testid="stContainer"]:hover,
+        div[data-testid="stVerticalBlockBorderWrapper"]:hover {
+            background-color: #F8FAFC !important; /* لون خلفية ناعم وأنيق */
+            border-color: #00EBCF !important;     /* إطار بلون المتجر الفيروزي المميز */
+            box-shadow: 0 6px 18px rgba(0, 235, 207, 0.15) !important;
+            transform: translateY(-2px) !important; /* رفعة بسيطة لأعلى تعطي شعوراً بالتفاعل */
+        }
+
+        /* تأثير المرور على القوائم المنسدلة (Expanders) */
+        div[data-testid="stExpander"]:hover {
+            border-color: #00EBCF !important;
+            box-shadow: 0 4px 14px rgba(15, 28, 46, 0.08) !important;
+        }
     </style>
+    """, unsafe_allow_html=True)
     <button class="mobile-toggle-btn" onclick="
         var btns = document.querySelectorAll('div[data-testid=\\'stElementContainer\\']:has(span[id^=\\'qa-marker-\\']) + div[data-testid=\\'stElementContainer\\']');
         btns.forEach(function(el) { el.style.right = (el.style.right === '0px' || el.style.right === '0') ? '-200px' : '0px'; });
     ">⚡ إجراءات</button>
-    """, unsafe_allow_html=True)
 
     st.markdown('<span id="qa-marker-1"></span>', unsafe_allow_html=True)
     if st.button("🏢 التحكم بالمنتجات والفروع", key="btn_qa_1"):
@@ -1276,15 +1321,35 @@ def render_products_page():
                     if st.button("🔄 تحديث الحالة", key="refresh_sched_btn", use_container_width=True):
                         st.rerun()
 
-                # 1. عرض المهام قيد الانتظار
+                # 1. عرض المهام قيد الانتظار (بتصميم وردي مميز وبطاقة احترافية)
                 if pending_tasks:
                     with st.expander(f"⏳ المهام قيد الانتظار ({len(pending_tasks)})", expanded=True):
                         for task in pending_tasks:
-                            c_t1, c_t2, c_t3 = st.columns([3, 2, 1])
-                            with c_t1: st.markdown(f"📄 **{task['original_name']}**")
-                            with c_t2: st.markdown(f"⏰ الموعد: `{task['run_at']}`")
-                            with c_t3:
-                                if st.button("❌ إلغاء", key=f"cancel_task_{task['id']}"):
+                            rem_time = get_remaining_time_str(task.get('run_at', ''))
+                            c_t1, c_t2 = st.columns([5, 1])
+                            with c_t1:
+                                st.markdown(f"""
+                                <div style="background: linear-gradient(135deg, #FFF1F2 0%, #FCE7F3 100%); 
+                                            border: 1px solid #FDA4AF; 
+                                            border-right: 6px solid #E11D48; 
+                                            border-radius: 8px; 
+                                            padding: 10px 16px; 
+                                            color: #881337; 
+                                            font-size: 13.5px; 
+                                            display: flex; 
+                                            justify-content: space-between; 
+                                            align-items: center;
+                                            flex-wrap: wrap;
+                                            gap: 10px;
+                                            box-shadow: 0 1px 3px rgba(244, 63, 94, 0.08);">
+                                    <span>📄 <b>{task['original_name']}</b> — ⏰ الموعد: <code>{task['run_at']}</code></span>
+                                    <span style="background: #FFE4E6; color: #BE123C; padding: 3px 12px; border-radius: 20px; font-size: 12px; font-weight: bold; border: 1px solid #FECDD3;">
+                                        {rem_time}
+                                    </span>
+                                </div>
+                                """, unsafe_allow_html=True)
+                            with c_t2:
+                                if st.button("❌ إلغاء", key=f"cancel_task_{task['id']}", use_container_width=True):
                                     schedules = [s for s in schedules if s["id"] != task["id"]]
                                     p_file = os.path.join(SCHEDULE_DIR, task["filename"])
                                     p_meta = p_file + ".meta.json"
@@ -1293,10 +1358,10 @@ def render_products_page():
                                     save_schedules(schedules)
                                     st.rerun()
 
-                # 2. عرض المهام المكتملة للتأكد من نجاحها
+                # 2. عرض المهام المكتملة للتأكد من نجاحها (اللون الأخضر)
                 if completed_tasks:
                     with st.expander(f"✅ المهام المكتملة حديثاً ({len(completed_tasks)})", expanded=False):
-                        for task in reversed(completed_tasks[-5:]): # عرض آخر 5 مهام
+                        for task in reversed(completed_tasks[-5:]):
                             st.success(f"📄 **{task['original_name']}** — تم التنفيذ بنجاح في: `{task.get('executed_at', 'وقت سابق')}`")
                                     
             elif st.session_state.qa_action_prod == "featured_groups":
