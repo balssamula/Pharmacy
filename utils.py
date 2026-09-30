@@ -14,6 +14,7 @@ from typing import Optional, List, Dict, Any
 from openpyxl.styles import PatternFill, Font, Alignment, Border, Side
 from openpyxl.worksheet.datavalidation import DataValidation
 from openpyxl.utils import get_column_letter
+from streamlit.runtime.scriptrunner import add_script_run_ctx
 
 SALLA_CLIENT_ID = "92c8725e-8d39-4516-bb00-3908fe5339b3"
 SALLA_CLIENT_SECRET = "e84d33ca4ecd7399a1a76292bae92bdd97a438d4c48caf935fa17a8f18ef1ad2"
@@ -1365,10 +1366,25 @@ def background_scheduler_worker():
 
 # بدء تشغيل محرك الجدولة مرة واحدة عند تشغيل السيرفر
 def init_background_scheduler():
+    """تشغيل خيط الجدولة وربطه بسياق Streamlit بأمان"""
+    # التحقق من عدم تشغيل الخيط مسبقاً لمنع التكرار
     for th in threading.enumerate():
         if th.name == "SallaPromoDaemon":
             return
-    t = threading.Thread(target=background_scheduler_worker, name="SallaPromoDaemon", daemon=True)
-    t.start()
+            
+    daemon_thread = threading.Thread(
+        target=background_scheduler_worker, 
+        name="SallaPromoDaemon", 
+        daemon=True
+    )
+    
+    # ✅ إضافة سياق التشغيل للثريد لمنع خطأ ScriptRunContext
+    try:
+        add_script_run_ctx(daemon_thread)
+    except Exception as e:
+        print(f"Notice: Could not attach script context: {e}")
+        
+    daemon_thread.start()
 
+# بدء تشغيل الخيط
 init_background_scheduler()
