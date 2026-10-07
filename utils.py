@@ -1367,3 +1367,94 @@ def init_background_scheduler():
 
 # بدء تشغيل الخيط
 init_background_scheduler()
+
+# ==========================================
+# 🔑 إدارة صلاحية وتحديث Access Token للمتجر
+# ==========================================
+
+def check_token_expiry_info(merchant_id=None):
+    """
+    فحص صلاحية التوكن وحساب الأيام المتبقية لدورة الـ 14 يوماً
+    تُرجع: (needs_alert: bool, days_left: float, expiry_date: datetime, last_updated_str: str)
+    """
+    STORES_FILE = 'stores.json'
+    if not os.path.exists(STORES_FILE):
+        return False, 14.0, None, ""
+
+    try:
+        with open(STORES_FILE, 'r', encoding='utf-8') as f:
+            stores = json.load(f)
+
+        store = None
+        if merchant_id:
+            store = next((s for s in stores if str(s.get('merchant_id')) == str(merchant_id)), None)
+        if not store:
+            # افتراضياً البحث عن متجر بلسم العلا أو أول متجر
+            store = next((s for s in stores if "بلسم" in str(s.get('store_name', ''))), stores[0] if stores else None)
+
+        if not store:
+            return False, 14.0, None, ""
+
+        # تاريخ التحديث الأخير (أو تاريخ التثبيت كبديل أولي)
+        date_str = store.get('token_updated_at') or store.get('installed_at')
+        if not date_str:
+            return False, 14.0, None, ""
+
+        last_dt = datetime.strptime(date_str[:19], '%Y-%m-%d %H:%M:%S')
+        expiry_dt = last_dt + timedelta(days=14)
+        now = datetime.now()
+        
+        diff = expiry_dt - now
+        days_left = diff.total_seconds() / 86400.0
+
+        # الإنذار يعمل إذا تبقى 5 أيام أو أقل (أو انتهى بالفعل)
+        needs_alert = days_left <= 5.0
+        return needs_alert, days_left, expiry_dt, date_str
+
+    except Exception as e:
+        print(f"Error checking token expiry: {e}")
+        return False, 14.0, None, ""
+
+
+def update_store_access_token(new_token: str, merchant_id=None) -> bool:
+    """استبدال Access Token لمتجر محدد وحفظه في stores.json مع تصفير العداد"""
+    STORES_FILE = 'stores.json'
+    new_token = str(new_token).strip()
+    if not new_token:
+        return False
+
+    with token_refresh_lock:
+        if not os.path.exists(STORES_FILE):
+            return False
+
+        try:
+            with open(STORES_FILE, 'r', encoding='utf-8') as f:
+                stores = json.load(f)
+
+            store_idx = None
+            if merchant_id:
+                store_idx = next((i for i, s in enumerate(stores) if str(s.get('merchant_id')) == str(merchant_id)), None)
+            if store_idx is None:
+                store_idx = next((i for i, s in enumerate(stores) if "بلسم" in str(s.get('store_name', ''))), 0 if stores else None)
+
+            if store_idx is None:
+                return False
+
+            now_str = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+            stores[store_idx]['access_token'] = new_token
+            stores[store_idx]['token_updated_at'] = now_str
+
+            with open(STORES_FILE, 'w', encoding='utf-8') as f:
+                json.dump(stores, f, ensure_ascii=False, indent=4)
+
+            # تحديث الذاكرة المؤقتة للتطبيق فوراً
+            if 'access_token' in st.session_state:
+                st.session_state['access_token'] = new_token
+            if 'headers' in st.session_state:
+                st.session_state['headers']['Authorization'] = f"Bearer {new_token}"
+
+            return True
+
+        except Exception as e:
+            print(f"Error updating access token: {e}")
+            return False
