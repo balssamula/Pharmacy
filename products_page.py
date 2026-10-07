@@ -784,28 +784,24 @@ def render_token_expiry_banner():
             if st.button("💾 حفظ الرموز وتحديث بيانات المتجر فوراً", type="primary", use_container_width=True, key="btn_save_all_tokens"):
                 if not acc_tok or not acc_tok.startswith("ory_at_"):
                     st.error("⚠️ يرجى التأكد من توفر رمز Access Token صحيح (يبدأ بـ ory_at_).")
-                if not target_merchant_id:
+                elif not target_merchant_id:
                     st.error("تعذر تحديد المتجر. سجّل الدخول إلى المتجر المطلوب أولاً.")
                 elif not acc_tok or not ref_tok:
                     st.error("أدخل Access Token و Refresh Token معاً.")
                 elif update_store_tokens(acc_tok, ref_tok, target_merchant_id, expires_at):
                     st.success("تم تحديث رموز المتجر وتاريخ الانتهاء.")
+
+                    # امسح بيانات الجلسة القديمة حتى لا تعرض منتجات مخزنة مؤقتاً.
+                    st.session_state.pop("all_products_fetched", None)
+                    st.session_state.pop("all_products", None)
+                    st.session_state.pop("all_offers", None)
+                    st.session_state.pop("customers_data", None)
+                    st.session_state.pop("product_offers_map", None)
+                    st.session_state["product_cache"] = {}
+
                     st.rerun()
                 else:
                     st.error("تعذر حفظ الرموز لهذا المتجر. تحقق من رقم التاجر في stores.json.")
-                        
-                        # 🔄 الحل الجذري لتحديث الصفحة: مسح الكاش لإجبار التطبيق على السحب الحي فوراً
-                        if "all_products_fetched" in st.session_state:
-                            del st.session_state["all_products_fetched"]
-                        if "all_products" in st.session_state:
-                            del st.session_state["all_products"]
-                        if "product_cache" in st.session_state:
-                            st.session_state["product_cache"] = {}
-
-                        time.sleep(1.5)
-                        st.rerun()
-                    else:
-                        st.error("❌ حدث خطأ أثناء الحفظ في stores.json.")
                             
 def render_products_page():
     import time
