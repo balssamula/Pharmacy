@@ -789,10 +789,10 @@ def render_token_expiry_banner():
                 elif not acc_tok or not ref_tok:
                     st.error("أدخل Access Token و Refresh Token معاً.")
                 elif update_store_tokens(acc_tok, ref_tok, target_merchant_id, expires_at):
-                        st.success("تم تحديث رموز المتجر وتاريخ الانتهاء.")
-                        st.rerun()
-                    else:
-                        st.error("تعذر حفظ الرموز لهذا المتجر. تحقق من رقم التاجر في stores.json.")
+                    st.success("تم تحديث رموز المتجر وتاريخ الانتهاء.")
+                    st.rerun()
+                else:
+                    st.error("تعذر حفظ الرموز لهذا المتجر. تحقق من رقم التاجر في stores.json.")
                         
                         # 🔄 الحل الجذري لتحديث الصفحة: مسح الكاش لإجبار التطبيق على السحب الحي فوراً
                         if "all_products_fetched" in st.session_state:
