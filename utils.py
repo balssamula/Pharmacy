@@ -11,51 +11,75 @@ import openpyxl
 import time
 from datetime import datetime, timezone, timedelta
 from typing import Optional, List, Dict, Any
+from supabase import create_client
 from openpyxl.styles import PatternFill, Font, Alignment, Border, Side
 from openpyxl.worksheet.datavalidation import DataValidation
 from openpyxl.utils import get_column_letter
 from streamlit.runtime.scriptrunner import add_script_run_ctx
 
-SALLA_CLIENT_ID = "92c8725e-8d39-4516-bb00-3908fe5339b3"
-SALLA_CLIENT_SECRET = "e84d33ca4ecd7399a1a76292bae92bdd97a438d4c48caf935fa17a8f18ef1ad2"
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
 
-# قفل أمني لمنع الاستخدام المزدوج للتوكن (Race Condition) كما تشترط سلة
+# Keep credentials in Streamlit Cloud > App settings > Secrets.
+def _get_secret(name):
+    try:
+        value = st.secrets.get(name)
+    except Exception:
+        value = None
+    return value or os.getenv(name)
+
+
+@st.cache_resource
+def get_supabase_client():
+    url = _get_secret("SUPABASE_URL")
+    key = _get_secret("SUPABASE_SECRET_KEY")
+    if not url or not key:
+        raise RuntimeError("Configure SUPABASE_URL and SUPABASE_SECRET_KEY in Streamlit Secrets.")
+    return create_client(url, key)
+
+
+def get_salla_store(merchant_id):
+    merchant_id = str(merchant_id or "").strip()
+    if not merchant_id:
+        return None
+    result = (
+        get_supabase_client()
+        .table("salla_stores")
+        .select("*")
+        .eq("merchant_id", merchant_id)
+        .limit(1)
+        .execute()
+    )
+    return result.data[0] if result.data else None
+
+
+def list_salla_stores():
+    result = (
+        get_supabase_client()
+        .table("salla_stores")
+        .select("merchant_id,store_name,access_token,installed_at,expires_at,token_updated_at")
+        .order("store_name")
+        .execute()
+    )
+    return result.data or []
+
+
+# Prevent two Streamlit sessions in this process from using one rotating token at once.
 token_refresh_lock = threading.Lock()
-STORES_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "stores.json")
-
-def _save_stores_atomically(stores):
-    temp_file = STORES_FILE + ".tmp"
-    with open(temp_file, "w", encoding="utf-8") as f:
-        json.dump(stores, f, ensure_ascii=False, indent=4)
-        f.flush()
-        os.fsync(f.fileno())
-    os.replace(temp_file, STORES_FILE)
 
 
 def refresh_salla_token(merchant_id, force=False):
     """يجدد رمز متجر محدد ويحفظ access_token و refresh_token الجديدين."""
     merchant_id = str(merchant_id or "").strip()
-    if not merchant_id or not os.path.exists(STORES_FILE):
+    if not merchant_id:
         return False
 
     with token_refresh_lock:
         try:
-            with open(STORES_FILE, "r", encoding="utf-8") as f:
-                stores = json.load(f)
-
-            store_idx = next(
-                (
-                    i for i, store in enumerate(stores)
-                    if str(store.get("merchant_id", "")).strip() == merchant_id
-                ),
-                None
-            )
-
-            # لا نخمن المتجر ولا نحدّث أول سجل عند غياب المعرّف.
-            if store_idx is None:
+            store = get_salla_store(merchant_id)
+            if not store:
                 return False
 
-            store = stores[store_idx]
             expires_at = int(store.get("expires_at") or 0)
 
             # جدّد قبل الانتهاء بـ 48 ساعة.
@@ -66,11 +90,17 @@ def refresh_salla_token(merchant_id, force=False):
             if not refresh_token:
                 return False
 
+            client_id = _get_secret("SALLA_CLIENT_ID")
+            client_secret = _get_secret("SALLA_CLIENT_SECRET")
+            if not client_id or not client_secret:
+                logger.error("Salla client credentials are missing from Streamlit Secrets")
+                return False
+
             response = requests.post(
                 "https://accounts.salla.sa/oauth2/token",
                 data={
-                    "client_id": SALLA_CLIENT_ID,
-                    "client_secret": SALLA_CLIENT_SECRET,
+                    "client_id": client_id,
+                    "client_secret": client_secret,
                     "grant_type": "refresh_token",
                     "refresh_token": refresh_token,
                 },
@@ -116,14 +146,18 @@ def refresh_salla_token(merchant_id, force=False):
                     result.get("expires_in", 14 * 24 * 3600)
                 )
 
-            stores[store_idx]["access_token"] = new_access
-            stores[store_idx]["refresh_token"] = new_refresh
-            stores[store_idx]["expires_at"] = new_expires_at
-            stores[store_idx]["token_updated_at"] = datetime.now().strftime(
-                "%Y-%m-%d %H:%M:%S"
+            (
+                get_supabase_client()
+                .table("salla_stores")
+                .update({
+                    "access_token": new_access,
+                    "refresh_token": new_refresh,
+                    "expires_at": new_expires_at,
+                    "token_updated_at": datetime.now(timezone.utc).isoformat(),
+                })
+                .eq("merchant_id", merchant_id)
+                .execute()
             )
-
-            _save_stores_atomically(stores)
 
             if str(st.session_state.get("merchant_id", "")) == merchant_id:
                 st.session_state["access_token"] = new_access
@@ -134,9 +168,6 @@ def refresh_salla_token(merchant_id, force=False):
             logger.exception("Error refreshing Salla token")
             return False
             
-logging.basicConfig(level=logging.INFO)
-logger = logging.getLogger(__name__)
-
 SALLA_API_URL = "https://api.salla.dev/admin/v2/specialoffers"
 
 OFFER_TYPES_MAP = {
@@ -1431,42 +1462,22 @@ def check_token_expiry_info(merchant_id=None):
     فحص صلاحية التوكن وحساب الأيام المتبقية لدورة الـ 14 يوماً
     تُرجع: (needs_alert: bool, days_left: float, expiry_date: datetime, last_updated_str: str)
     """
-    STORES_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "stores.json")
-    if not os.path.exists(STORES_FILE):
-        return False, 14.0, None, ""
-
     try:
-        with open(STORES_FILE, 'r', encoding='utf-8') as f:
-            stores = json.load(f)
-
-        store = None
-        if merchant_id:
-            store = next((s for s in stores if str(s.get('merchant_id')) == str(merchant_id)), None)
-        if not store:
-            # افتراضياً البحث عن متجر بلسم العلا أو أول متجر
-            store = next((s for s in stores if "بلسم" in str(s.get('store_name', ''))), stores[0] if stores else None)
-
+        store = get_salla_store(merchant_id)
         if not store:
             return False, 14.0, None, ""
 
-        # تاريخ التحديث الأخير (أو تاريخ التثبيت كبديل أولي)
-        date_str = store.get('token_updated_at') or store.get('installed_at')
-        if not date_str:
-            return False, 14.0, None, ""
+        expires_at = int(store.get("expires_at") or 0)
+        if not expires_at:
+            return True, 0.0, None, ""
 
-        last_dt = datetime.strptime(date_str[:19], '%Y-%m-%d %H:%M:%S')
-        expiry_dt = last_dt + timedelta(days=14)
-        now = datetime.now()
-        
-        diff = expiry_dt - now
-        days_left = diff.total_seconds() / 86400.0
-
-        # الإنذار يعمل إذا تبقى 5 أيام أو أقل (أو انتهى بالفعل)
+        expiry_dt = datetime.fromtimestamp(expires_at, tz=timezone.utc).astimezone()
+        days_left = (expires_at - time.time()) / 86400.0
         needs_alert = days_left <= 5.0
-        return needs_alert, days_left, expiry_dt, date_str
+        return needs_alert, days_left, expiry_dt, str(store.get("token_updated_at") or "")
 
-    except Exception as e:
-        print(f"Error checking token expiry: {e}")
+    except Exception:
+        logger.exception("Error checking Salla token expiry")
         return False, 14.0, None, ""
 
 def update_store_tokens(
@@ -1482,43 +1493,35 @@ def update_store_tokens(
     if not merchant_id or not access_token or not refresh_token:
         return False
 
-    with token_refresh_lock:
-        try:
-            with open(STORES_FILE, "r", encoding="utf-8") as f:
-                stores = json.load(f)
+    try:
+        existing = get_salla_store(merchant_id)
+        if expires_at is None:
+            expires_at = int(time.time()) + 14 * 24 * 60 * 60
+        else:
+            expires_at = int(expires_at)
 
-            store_idx = next(
-                (
-                    i for i, store in enumerate(stores)
-                    if str(store.get("merchant_id", "")).strip() == merchant_id
-                ),
-                None,
-            )
+        now = datetime.now(timezone.utc).isoformat()
+        row = {
+            "merchant_id": merchant_id,
+            "store_name": (existing or {}).get("store_name") or f"متجر {merchant_id}",
+            "access_token": access_token,
+            "refresh_token": refresh_token,
+            "expires_at": expires_at,
+            "installed_at": (existing or {}).get("installed_at") or now,
+            "token_updated_at": now,
+        }
+        (
+            get_supabase_client()
+            .table("salla_stores")
+            .upsert(row, on_conflict="merchant_id")
+            .execute()
+        )
 
-            # لا تحدّث أول متجر أو متجر "بلسم" عند عدم وجود تطابق.
-            if store_idx is None:
-                return False
+        if str(st.session_state.get("merchant_id", "")) == merchant_id:
+            st.session_state["access_token"] = access_token
+            st.session_state["sync_after_token_save"] = True
+        return True
 
-            if expires_at is None:
-                expires_at = int(time.time()) + 14 * 24 * 60 * 60
-            else:
-                expires_at = int(expires_at)
-
-            stores[store_idx]["access_token"] = new_access_token.strip()
-            stores[store_idx]["refresh_token"] =new_refresh_token.strip()
-            stores[store_idx]["expires_at"] = int(
-                expires_at or (time.time() + 14 * 24 * 60 * 60)
-            )
-
-            _save_stores_atomically(stores)
-
-            if str(st.session_state.get("merchant_id", "")) == merchant_id:
-                st.session_state["access_token"] = access_token
-                st.session_state["sync_after_token_save"] = True
-                st.rerun()
-
-            return True
-
-        except Exception:
-            logger.exception("Failed to save Salla tokens")
-            return False
+    except Exception:
+        logger.exception("Failed to save Salla tokens to Supabase")
+        return False
