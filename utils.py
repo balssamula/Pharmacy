@@ -1514,6 +1514,8 @@ def update_store_tokens(
 
             if str(st.session_state.get("merchant_id", "")) == merchant_id:
                 st.session_state["access_token"] = access_token
+                st.session_state["sync_after_token_save"] = True
+                st.rerun()
 
             return True
 
