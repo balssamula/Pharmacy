@@ -1469,7 +1469,6 @@ def check_token_expiry_info(merchant_id=None):
         print(f"Error checking token expiry: {e}")
         return False, 14.0, None, ""
 
-
 def update_store_tokens(
     new_access_token: str,
     new_refresh_token: str,
@@ -1505,11 +1504,10 @@ def update_store_tokens(
             else:
                 expires_at = int(expires_at)
 
-            stores[store_idx]["access_token"] = access_token
-            stores[store_idx]["refresh_token"] = refresh_token
-            stores[store_idx]["expires_at"] = expires_at
-            stores[store_idx]["token_updated_at"] = datetime.now().strftime(
-                "%Y-%m-%d %H:%M:%S"
+            stores[store_idx]["access_token"] = new_access_token.strip()
+            stores[store_idx]["refresh_token"] =new_refresh_token.strip()
+            stores[store_idx]["expires_at"] = int(
+                expires_at or (time.time() + 14 * 24 * 60 * 60)
             )
 
             _save_stores_atomically(stores)
