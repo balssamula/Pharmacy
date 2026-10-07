@@ -79,7 +79,24 @@ def refresh_salla_token(merchant_id, force=False):
             )
 
             if response.status_code != 200:
-                logger.error("Salla token refresh failed: HTTP %s", response.status_code)
+                try:
+                    error_data = response.json()
+                except ValueError:
+                    error_data = {}
+
+                if isinstance(error_data.get("error"), dict):
+                    error_code = error_data["error"].get("code")
+                    error_description = error_data["error"].get("message")
+                else:
+                    error_code = error_data.get("error")
+                    error_description = error_data.get("error_description")
+
+                logger.error(
+                    "Salla refresh failed: HTTP %s, code=%s, description=%s",
+                    response.status_code,
+                    error_code,
+                    error_description,
+                )
                 return False
 
             result = response.json()
@@ -202,50 +219,44 @@ def get_flat_price(price_field: Any) -> float:
     return safe_float(price_field)
 
 def safe_api_request(method, url, headers, json=None, **kwargs):
-    """دالة إرسال الطلبات مع ميزة التجديد التلقائي للتوكن (Auto-Retry) وتوافقية المتغيرات"""
     try:
-        # لاحظ هنا استخدمنا json=json لدعم كافة طلبات التطبيق
-        response = requests.request(method, url, headers=headers, json=json, **kwargs)
+        headers = dict(headers or {})
         merchant_id = st.session_state.get("merchant_id")
+
         if merchant_id:
             token = refresh_salla_token(merchant_id)
             if token:
-                headers = dict(headers or {})
                 headers["Authorization"] = f"Bearer {token}"
-        
-        # 🔄 التقاط خطأ انتهاء صلاحية التوكن (401)
-        if response.status_code == 401:
-            # استخراج معرف التاجر الحالي من الذاكرة
-            current_merchant_id = st.session_state.get('merchant_id')
-            
-            if current_merchant_id:
-                print("انتهت صلاحية التوكن. جاري التجديد التلقائي...")
-                new_token = refresh_salla_token(current_merchant_id, force=True)
-                
-                if new_token:
-                    # تحديث الهيدر بالتوكن الجديد
-                    headers['Authorization'] = f"Bearer {new_token}"
-                    
-                    # إعادة إرسال الطلب الذي فشل مسبقاً (Retry)
-                    retry_response = requests.request(method, url, headers=headers, json=json, **kwargs)
-                    if retry_response.status_code < 400:
-                        return retry_response.json()
-                    else:
-                        print(f"فشل الطلب بعد التجديد: {retry_response.text}")
-                        return None
-                else:
-                    st.error("⚠️ انتهت صلاحية الجلسة بالكامل. يرجى إعادة تسجيل الدخول للمتجر.")
-                    return None
-                    
-        # معالجة الردود العادية
+
+        response = requests.request(
+            method,
+            url,
+            headers=headers,
+            json=json,
+            **kwargs,
+        )
+
+        if response.status_code == 401 and merchant_id:
+            new_token = refresh_salla_token(merchant_id, force=True)
+
+            if new_token:
+                headers["Authorization"] = f"Bearer {new_token}"
+                response = requests.request(
+                    method,
+                    url,
+                    headers=headers,
+                    json=json,
+                    **kwargs,
+                )
+
         if response.status_code < 400:
             return response.json()
-        else:
-            print(f"API Error ({response.status_code}): {response.text}")
-            return None
-            
-    except Exception as e:
-        print(f"Request Exception: {str(e)}")
+
+        logger.error("Salla API request failed: HTTP %s", response.status_code)
+        return None
+
+    except Exception:
+        logger.exception("Salla API request exception")
         return None
 
 def style_excel_file(ws, is_template=True, header_color="0F1C2E"):
@@ -1459,47 +1470,55 @@ def check_token_expiry_info(merchant_id=None):
         return False, 14.0, None, ""
 
 
-def update_store_tokens(new_access_token: str, new_refresh_token: str = None, merchant_id = None) -> bool:
-    """تحديث access_token و refresh_token معاً في stores.json وتصفير عداد الصلاحية"""
-    STORES_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "stores.json")
-    new_access_token = str(new_access_token).strip()
-    if not new_access_token:
+def update_store_tokens(
+    new_access_token: str,
+    new_refresh_token: str,
+    merchant_id: str,
+    expires_at=None,
+) -> bool:
+    merchant_id = str(merchant_id or "").strip()
+    access_token = str(new_access_token or "").strip()
+    refresh_token = str(new_refresh_token or "").strip()
+
+    if not merchant_id or not access_token or not refresh_token:
         return False
 
     with token_refresh_lock:
-        if not os.path.exists(STORES_FILE):
-            return False
-
         try:
-            with open(STORES_FILE, 'r', encoding='utf-8') as f:
+            with open(STORES_FILE, "r", encoding="utf-8") as f:
                 stores = json.load(f)
 
-            store_idx = None
-            if merchant_id:
-                store_idx = next((i for i, s in enumerate(stores) if str(s.get('merchant_id')) == str(merchant_id)), None)
-            if store_idx is None:
-                store_idx = next((i for i, s in enumerate(stores) if "بلسم" in str(s.get('store_name', ''))), 0 if stores else None)
+            store_idx = next(
+                (
+                    i for i, store in enumerate(stores)
+                    if str(store.get("merchant_id", "")).strip() == merchant_id
+                ),
+                None,
+            )
 
+            # لا تحدّث أول متجر أو متجر "بلسم" عند عدم وجود تطابق.
             if store_idx is None:
                 return False
 
-            now_str = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
-            stores[store_idx]['access_token'] = new_access_token
-            if new_refresh_token:
-                stores[store_idx]['refresh_token'] = str(new_refresh_token).strip()
-            stores[store_idx]['token_updated_at'] = now_str
+            if expires_at is None:
+                expires_at = int(time.time()) + 14 * 24 * 60 * 60
+            else:
+                expires_at = int(expires_at)
 
-            with open(STORES_FILE, 'w', encoding='utf-8') as f:
-                json.dump(stores, f, ensure_ascii=False, indent=4)
+            stores[store_idx]["access_token"] = access_token
+            stores[store_idx]["refresh_token"] = refresh_token
+            stores[store_idx]["expires_at"] = expires_at
+            stores[store_idx]["token_updated_at"] = datetime.now().strftime(
+                "%Y-%m-%d %H:%M:%S"
+            )
 
-            # تحديث الذاكرة اللحظية للتطبيق
-            if 'access_token' in st.session_state:
-                st.session_state['access_token'] = new_access_token
-            if 'headers' in st.session_state:
-                st.session_state['headers']['Authorization'] = f"Bearer {new_access_token}"
+            _save_stores_atomically(stores)
+
+            if str(st.session_state.get("merchant_id", "")) == merchant_id:
+                st.session_state["access_token"] = access_token
 
             return True
 
-        except Exception as e:
-            print(f"Error updating tokens: {e}")
+        except Exception:
+            logger.exception("Failed to save Salla tokens")
             return False
