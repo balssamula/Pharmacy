@@ -21,63 +21,100 @@ SALLA_CLIENT_SECRET = "e84d33ca4ecd7399a1a76292bae92bdd97a438d4c48caf935fa17a8f1
 
 # قفل أمني لمنع الاستخدام المزدوج للتوكن (Race Condition) كما تشترط سلة
 token_refresh_lock = threading.Lock()
+STORES_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "stores.json")
 
-def refresh_salla_token(merchant_id):
-    """دالة تقوم بتجديد الـ Access Token بصمت وتحديث ملف stores.json"""
-    STORES_FILE = 'stores.json'
-    
+def _save_stores_atomically(stores):
+    temp_file = STORES_FILE + ".tmp"
+    with open(temp_file, "w", encoding="utf-8") as f:
+        json.dump(stores, f, ensure_ascii=False, indent=4)
+        f.flush()
+        os.fsync(f.fileno())
+    os.replace(temp_file, STORES_FILE)
+
+
+def refresh_salla_token(merchant_id, force=False):
+    """يجدد رمز متجر محدد ويحفظ access_token و refresh_token الجديدين."""
+    merchant_id = str(merchant_id or "").strip()
+    if not merchant_id or not os.path.exists(STORES_FILE):
+        return False
+
     with token_refresh_lock:
-        if not os.path.exists(STORES_FILE):
-            return False
-            
-        with open(STORES_FILE, 'r', encoding='utf-8') as f:
-            stores = json.load(f)
-            
-        store_idx = next((i for i, s in enumerate(stores) if str(s.get('merchant_id')) == str(merchant_id)), None)
-        if store_idx is None:
-            return False
-            
-        current_refresh_token = stores[store_idx].get('refresh_token')
-        if not current_refresh_token:
-            return False
-
-        # تجهيز طلب التجديد حسب معايير سلة
-        token_url = "https://accounts.salla.sa/oauth2/token"
-        payload = {
-            "client_id": SALLA_CLIENT_ID,
-            "client_secret": SALLA_CLIENT_SECRET,
-            "grant_type": "refresh_token",
-            "refresh_token": current_refresh_token
-        }
-        headers = {
-            "Content-Type": "application/x-www-form-urlencoded"
-        }
-
         try:
-            response = requests.post(token_url, data=payload, headers=headers)
-            if response.status_code == 200:
-                new_tokens = response.json()
-                
-                # 1. تحديث الرموز في المصفوفة
-                stores[store_idx]['access_token'] = new_tokens['access_token']
-                stores[store_idx]['refresh_token'] = new_tokens['refresh_token']
-                
-                # 2. حفظ التحديثات فوراً في ملف stores.json
-                with open(STORES_FILE, 'w', encoding='utf-8') as f:
-                    json.dump(stores, f, ensure_ascii=False, indent=4)
-                    
-                # 3. تحديث الذاكرة المؤقتة للتطبيق (Session State) ليعمل مباشرة
-                if 'access_token' in st.session_state:
-                    st.session_state['access_token'] = new_tokens['access_token']
-                if 'headers' in st.session_state:
-                    st.session_state['headers']['Authorization'] = f"Bearer {new_tokens['access_token']}"
-                    
-                return new_tokens['access_token']
-            else:
-                print(f"فشل تجديد التوكن: {response.text}")
+            with open(STORES_FILE, "r", encoding="utf-8") as f:
+                stores = json.load(f)
+
+            store_idx = next(
+                (
+                    i for i, store in enumerate(stores)
+                    if str(store.get("merchant_id", "")).strip() == merchant_id
+                ),
+                None
+            )
+
+            # لا نخمن المتجر ولا نحدّث أول سجل عند غياب المعرّف.
+            if store_idx is None:
                 return False
-        except Exception as e:
-            print(f"خطأ أثناء التجديد: {str(e)}")
+
+            store = stores[store_idx]
+            expires_at = int(store.get("expires_at") or 0)
+
+            # جدّد قبل الانتهاء بـ 48 ساعة.
+            if not force and expires_at and expires_at > int(time.time()) + 48 * 3600:
+                return store.get("access_token")
+
+            refresh_token = store.get("refresh_token")
+            if not refresh_token:
+                return False
+
+            response = requests.post(
+                "https://accounts.salla.sa/oauth2/token",
+                data={
+                    "client_id": SALLA_CLIENT_ID,
+                    "client_secret": SALLA_CLIENT_SECRET,
+                    "grant_type": "refresh_token",
+                    "refresh_token": refresh_token,
+                },
+                headers={"Content-Type": "application/x-www-form-urlencoded"},
+                timeout=20,
+            )
+
+            if response.status_code != 200:
+                logger.error("Salla token refresh failed: HTTP %s", response.status_code)
+                return False
+
+            result = response.json()
+            new_access = result.get("access_token")
+            new_refresh = result.get("refresh_token")
+
+            # لا نستبدل الرمز القديم برمز جديد ناقص.
+            if not new_access or not new_refresh:
+                logger.error("Salla refresh response did not contain both tokens")
+                return False
+
+            expires_value = result.get("expires")
+            if expires_value:
+                new_expires_at = int(expires_value)
+            else:
+                new_expires_at = int(time.time()) + int(
+                    result.get("expires_in", 14 * 24 * 3600)
+                )
+
+            stores[store_idx]["access_token"] = new_access
+            stores[store_idx]["refresh_token"] = new_refresh
+            stores[store_idx]["expires_at"] = new_expires_at
+            stores[store_idx]["token_updated_at"] = datetime.now().strftime(
+                "%Y-%m-%d %H:%M:%S"
+            )
+
+            _save_stores_atomically(stores)
+
+            if str(st.session_state.get("merchant_id", "")) == merchant_id:
+                st.session_state["access_token"] = new_access
+
+            return new_access
+
+        except Exception:
+            logger.exception("Error refreshing Salla token")
             return False
             
 logging.basicConfig(level=logging.INFO)
@@ -169,6 +206,12 @@ def safe_api_request(method, url, headers, json=None, **kwargs):
     try:
         # لاحظ هنا استخدمنا json=json لدعم كافة طلبات التطبيق
         response = requests.request(method, url, headers=headers, json=json, **kwargs)
+        merchant_id = st.session_state.get("merchant_id")
+        if merchant_id:
+            token = refresh_salla_token(merchant_id)
+            if token:
+                headers = dict(headers or {})
+                headers["Authorization"] = f"Bearer {token}"
         
         # 🔄 التقاط خطأ انتهاء صلاحية التوكن (401)
         if response.status_code == 401:
@@ -177,7 +220,7 @@ def safe_api_request(method, url, headers, json=None, **kwargs):
             
             if current_merchant_id:
                 print("انتهت صلاحية التوكن. جاري التجديد التلقائي...")
-                new_token = refresh_salla_token(current_merchant_id)
+                new_token = refresh_salla_token(current_merchant_id, force=True)
                 
                 if new_token:
                     # تحديث الهيدر بالتوكن الجديد
@@ -1377,7 +1420,7 @@ def check_token_expiry_info(merchant_id=None):
     فحص صلاحية التوكن وحساب الأيام المتبقية لدورة الـ 14 يوماً
     تُرجع: (needs_alert: bool, days_left: float, expiry_date: datetime, last_updated_str: str)
     """
-    STORES_FILE = 'stores.json'
+    STORES_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "stores.json")
     if not os.path.exists(STORES_FILE):
         return False, 14.0, None, ""
 
@@ -1418,7 +1461,7 @@ def check_token_expiry_info(merchant_id=None):
 
 def update_store_tokens(new_access_token: str, new_refresh_token: str = None, merchant_id = None) -> bool:
     """تحديث access_token و refresh_token معاً في stores.json وتصفير عداد الصلاحية"""
-    STORES_FILE = 'stores.json'
+    STORES_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "stores.json")
     new_access_token = str(new_access_token).strip()
     if not new_access_token:
         return False
