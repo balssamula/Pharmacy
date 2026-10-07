@@ -6,7 +6,7 @@ import base64
 import time
 from datetime import datetime, timedelta
 from orders_page import render_orders_page
-from utils import get_headers, safe_api_request, get_branches_list, check_token_expiry_info, update_store_access_token
+from utils import get_headers, safe_api_request, get_branches_list
 import logging
 logging.getLogger('streamlit').setLevel(logging.ERROR)
 
@@ -486,53 +486,3 @@ if page == "مركز إدارة المنتجات": render_products_page()
 elif page == "لوحة إدارة العروض الخاصة الحالية": render_offers_page()
 elif page == "تفاصيل طلبات المتجر": render_orders_page()
 elif page == "مركز إدارة العملاء والمجموعات": render_customers_page()
-
-def render_token_expiry_banner():
-    """عرض إنذار التذكير وخانة تجديد التوكن في الواجهة"""
-    curr_m_id = st.session_state.get('merchant_id')
-    needs_alert, days_left, expiry_dt, last_dt_str = check_token_expiry_info(curr_m_id)
-
-    # إذا كان متبقي 5 أيام أو أقل، يظهر شريط التنبيه التفاعلي
-    if needs_alert:
-        if days_left <= 0:
-            status_title = "🚨 تحذير عاجل: انتهت صلاحية رمز الربط (Access Token)!"
-            msg_color = "#E11D48"
-            bg_color = "linear-gradient(135deg, #FFF1F2 0%, #FFE4E6 100%)"
-            border_color = "#FDA4AF"
-            time_txt = f"انتهت الصلاحية منذ {abs(int(days_left))} يوم. قد تتوقف عمليات المزامنة مع سلة فوراً."
-        else:
-            hours_left = int((days_left - int(days_left)) * 24)
-            status_title = "⚠️ تنبيه تذكيري: موعد تجديد رمز الربط (Access Token) اقترب!"
-            msg_color = "#B45309"
-            bg_color = "linear-gradient(135deg, #FFFBEB 0%, #FEF3C7 100%)"
-            border_color = "#FCD34D"
-            time_txt = f"متبقي <b>{int(days_left)} أيام و {hours_left} ساعة</b> على انتهاء مهلة الـ 14 يوماً (تاريخ الانتهاء: <code>{expiry_dt.strftime('%Y-%m-%d')}</code>)."
-
-        with st.container():
-            st.markdown(f"""
-            <div style="background: {bg_color}; border: 1px solid {border_color}; border-right: 6px solid {msg_color}; border-radius: 10px; padding: 14px 18px; margin-bottom: 15px;">
-                <h4 style="color: {msg_color}; margin: 0 0 6px 0; font-size: 15px;">{status_title}</h4>
-                <div style="color: #4B5563; font-size: 13px;">{time_txt} يرجى إدخال الرمز الجديد أدناه لتحديثه تلقائياً.</div>
-            </div>
-            """, unsafe_allow_html=True)
-
-            col_inp, col_btn = st.columns([4, 1.2])
-            with col_inp:
-                new_tok_input = st.text_input(
-                    "أدخل رمز Access Token الجديد:", 
-                    placeholder="ory_at_...", 
-                    type="password", 
-                    key="quick_renew_token_input",
-                    label_visibility="collapsed"
-                )
-            with col_btn:
-                if st.button("💾 تحديث الرمز الآن", type="primary", use_container_width=True, key="btn_save_renew_token"):
-                    if not new_tok_input or not new_tok_input.strip().startswith("ory_at_"):
-                        st.error("⚠️ يرجى التأكد من نسخ الرمز بشكل صحيح (يبدأ بـ ory_at_).")
-                    else:
-                        if update_store_access_token(new_tok_input.strip(), curr_m_id):
-                            st.success("✅ تم تحديث التوكن في stores.json وتجديد دورة الـ 14 يوماً بنجاح!")
-                            time.sleep(1.5)
-                            st.rerun()
-                        else:
-                            st.error("❌ حدث خطأ أثناء الكتابة في ملف stores.json.")
