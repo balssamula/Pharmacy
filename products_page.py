@@ -756,11 +756,17 @@ def render_token_expiry_banner():
                 if json_raw:
                     try:
                         parsed = json.loads(json_raw)
-                        p_data = parsed.get("data", parsed)
-                        acc_tok = p_data.get("access_token", "")
-                        ref_tok = p_data.get("refresh_token", "")
-                        if acc_tok:
-                            st.success(f"🔍 تم التعرف على الرموز بنجاح للمتجر ID: {parsed.get('merchant', curr_m_id)}")
+
+                        if parsed.get("event") != "app.store.authorize":
+                            st.error("الرسالة ليست حدث تفويض من سلة.")
+                        else:
+                            token_data = parsed.get("data") or {}
+                            target_merchant_id = str(parsed.get("merchant", "")).strip()
+                            acc_tok = token_data.get("access_token", "").strip()
+                            ref_tok = token_data.get("refresh_token", "").strip()
+                            expires_at = parsed.get("expires")
+                            if acc_tok:
+                                st.success(f"🔍 تم التعرف على الرموز بنجاح للمتجر ID: {parsed.get('merchant', curr_m_id)}")
                     except Exception:
                         st.error("⚠️ النص المدخل ليس بصيغة JSON صحيحة.")
             else:
@@ -774,7 +780,7 @@ def render_token_expiry_banner():
                 if not acc_tok or not acc_tok.startswith("ory_at_"):
                     st.error("⚠️ يرجى التأكد من توفر رمز Access Token صحيح (يبدأ بـ ory_at_).")
                 else:
-                    if update_store_tokens(acc_tok, ref_tok, curr_m_id):
+                    if update_store_tokens(acc_tok, ref_tok):
                         st.success("✅ تم تحديث الرموز في stores.json وتجديد دورة الـ 14 يوماً بنجاح!")
                         
                         # 🔄 الحل الجذري لتحديث الصفحة: مسح الكاش لإجبار التطبيق على السحب الحي فوراً
