@@ -21,7 +21,7 @@ from utils import (
     remove_product_from_group, add_product_to_group, get_product_details, get_group_products,
     update_group_product_quantity, generate_promotions_template, process_promotions_bulk,
     SCHEDULE_DIR, load_schedules, save_schedules, init_background_scheduler,
-    check_token_expiry_info, update_store_access_token
+    check_token_expiry_info, update_store_tokens
 )
 
 TAX_EXEMPTION_CAUSES = ["الخدمات المالية", "عقد تأمين على الحياة", "التوريدات العقارية المعفاة", "صادرات السلع من المملكة", "صادرات الخدمات من المملكة", "النقل الدولي للسلع", "النقل الدولي للركاب", "توريد وسائل النقل", "الأدوية والمعدات الطبية"]
@@ -719,7 +719,7 @@ def generate_anomalies_excel(anomalies):
     return buf.getvalue()
 
 def render_token_expiry_banner():
-    """عرض إنذار التذكير وخانة تجديد التوكن في الواجهة"""
+    """عرض إنذار التذكير وخانة تجديد التوكنات مع دعم اللصق الذكي للـ JSON وتفريغ الكاش"""
     curr_m_id = st.session_state.get('merchant_id')
     needs_alert, days_left, expiry_dt, last_dt_str = check_token_expiry_info(curr_m_id)
 
@@ -742,30 +742,53 @@ def render_token_expiry_banner():
             st.markdown(f"""
             <div style="background: {bg_color}; border: 1px solid {border_color}; border-right: 6px solid {msg_color}; border-radius: 10px; padding: 14px 18px; margin-bottom: 15px;">
                 <h4 style="color: {msg_color}; margin: 0 0 6px 0; font-size: 15px;">{status_title}</h4>
-                <div style="color: #4B5563; font-size: 13px;">{time_txt} يرجى إدخال الرمز الجديد أدناه لتحديثه تلقائياً.</div>
+                <div style="color: #4B5563; font-size: 13px;">{time_txt} يمكنك لصق رسالة الـ JSON كاملة بالأسفل أو إدخال الرموز لتحديث المتجر فوراً.</div>
             </div>
             """, unsafe_allow_html=True)
 
-            col_inp, col_btn = st.columns([4, 1.2])
-            with col_inp:
-                new_tok_input = st.text_input(
-                    "أدخل رمز Access Token الجديد:", 
-                    placeholder="ory_at_...", 
-                    type="password", 
-                    key="quick_renew_token_input",
-                    label_visibility="collapsed"
-                )
-            with col_btn:
-                if st.button("💾 تحديث الرمز الآن", type="primary", use_container_width=True, key="btn_save_renew_token"):
-                    if not new_tok_input or not new_tok_input.strip().startswith("ory_at_"):
-                        st.error("⚠️ يرجى التأكد من نسخ الرمز بشكل صحيح (يبدأ بـ ory_at_).")
+            renew_mode = st.radio("طريقة الإدخال:", ["📋 لصق رسالة الـ JSON كاملة (الأسرع)", "✏️ إدخال الرموز يدوياً"], horizontal=True, key="tok_mode")
+
+            acc_tok = ""
+            ref_tok = ""
+
+            if renew_mode == "📋 لصق رسالة الـ JSON كاملة (الأسرع)":
+                json_raw = st.text_area("الصق محتوى الرسالة بالكامل هنا:", placeholder='{"event": "app.store.authorize", ...}', height=100, key="raw_json_tok_input")
+                if json_raw:
+                    try:
+                        parsed = json.loads(json_raw)
+                        p_data = parsed.get("data", parsed)
+                        acc_tok = p_data.get("access_token", "")
+                        ref_tok = p_data.get("refresh_token", "")
+                        if acc_tok:
+                            st.success(f"🔍 تم التعرف على الرموز بنجاح للمتجر ID: {parsed.get('merchant', curr_m_id)}")
+                    except Exception:
+                        st.error("⚠️ النص المدخل ليس بصيغة JSON صحيحة.")
+            else:
+                col_i1, col_i2 = st.columns(2)
+                with col_i1:
+                    acc_tok = st.text_input("رمز Access Token الجديد:", placeholder="ory_at_...", type="password", key="manual_acc_tok")
+                with col_i2:
+                    ref_tok = st.text_input("رمز Refresh Token الجديد:", placeholder="ory_rt_...", type="password", key="manual_ref_tok")
+
+            if st.button("💾 حفظ الرموز وتحديث بيانات المتجر فوراً", type="primary", use_container_width=True, key="btn_save_all_tokens"):
+                if not acc_tok or not acc_tok.startswith("ory_at_"):
+                    st.error("⚠️ يرجى التأكد من توفر رمز Access Token صحيح (يبدأ بـ ory_at_).")
+                else:
+                    if update_store_tokens(acc_tok, ref_tok, curr_m_id):
+                        st.success("✅ تم تحديث الرموز في stores.json وتجديد دورة الـ 14 يوماً بنجاح!")
+                        
+                        # 🔄 الحل الجذري لتحديث الصفحة: مسح الكاش لإجبار التطبيق على السحب الحي فوراً
+                        if "all_products_fetched" in st.session_state:
+                            del st.session_state["all_products_fetched"]
+                        if "all_products" in st.session_state:
+                            del st.session_state["all_products"]
+                        if "product_cache" in st.session_state:
+                            st.session_state["product_cache"] = {}
+
+                        time.sleep(1.5)
+                        st.rerun()
                     else:
-                        if update_store_access_token(new_tok_input.strip(), curr_m_id):
-                            st.success("✅ تم تحديث التوكن في stores.json وتجديد دورة الـ 14 يوماً بنجاح!")
-                            time.sleep(1.5)
-                            st.rerun()
-                        else:
-                            st.error("❌ حدث خطأ أثناء الكتابة في ملف stores.json.")
+                        st.error("❌ حدث خطأ أثناء الحفظ في stores.json.")
                             
 def render_products_page():
     import time
