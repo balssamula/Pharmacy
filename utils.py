@@ -1416,11 +1416,11 @@ def check_token_expiry_info(merchant_id=None):
         return False, 14.0, None, ""
 
 
-def update_store_access_token(new_token: str, merchant_id=None) -> bool:
-    """استبدال Access Token لمتجر محدد وحفظه في stores.json مع تصفير العداد"""
+def update_store_tokens(new_access_token: str, new_refresh_token: str = None, merchant_id = None) -> bool:
+    """تحديث access_token و refresh_token معاً في stores.json وتصفير عداد الصلاحية"""
     STORES_FILE = 'stores.json'
-    new_token = str(new_token).strip()
-    if not new_token:
+    new_access_token = str(new_access_token).strip()
+    if not new_access_token:
         return False
 
     with token_refresh_lock:
@@ -1441,20 +1441,22 @@ def update_store_access_token(new_token: str, merchant_id=None) -> bool:
                 return False
 
             now_str = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
-            stores[store_idx]['access_token'] = new_token
+            stores[store_idx]['access_token'] = new_access_token
+            if new_refresh_token:
+                stores[store_idx]['refresh_token'] = str(new_refresh_token).strip()
             stores[store_idx]['token_updated_at'] = now_str
 
             with open(STORES_FILE, 'w', encoding='utf-8') as f:
                 json.dump(stores, f, ensure_ascii=False, indent=4)
 
-            # تحديث الذاكرة المؤقتة للتطبيق فوراً
+            # تحديث الذاكرة اللحظية للتطبيق
             if 'access_token' in st.session_state:
-                st.session_state['access_token'] = new_token
+                st.session_state['access_token'] = new_access_token
             if 'headers' in st.session_state:
-                st.session_state['headers']['Authorization'] = f"Bearer {new_token}"
+                st.session_state['headers']['Authorization'] = f"Bearer {new_access_token}"
 
             return True
 
         except Exception as e:
-            print(f"Error updating access token: {e}")
+            print(f"Error updating tokens: {e}")
             return False
