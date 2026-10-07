@@ -6,7 +6,7 @@ import base64
 import time
 from datetime import datetime, timedelta
 from orders_page import render_orders_page
-from utils import get_headers, safe_api_request, get_branches_list
+from utils import get_headers, safe_api_request, get_branches_list, list_salla_stores
 import logging
 logging.getLogger('streamlit').setLevel(logging.ERROR)
 
@@ -29,15 +29,6 @@ def get_global_store_cache():
     """مخزن ذاكرة السيرفر المركزي (يعيش حتى عند تحديث الصفحة أو إغلاق المتصفح)"""
     return {}
     
-if st.session_state.pop("sync_after_token_save", False):
-    token = st.session_state.get("access_token")
-    if token:
-        cache = get_global_store_cache()
-        cache.pop(token, None)
-        perform_initial_sync_with_ui({
-            "Authorization": f"Bearer {token}"
-        })
-        
 def fetch_store_data_fast(token, headers):
     cache = get_global_store_cache()
     now = datetime.now()
@@ -178,6 +169,14 @@ def perform_initial_sync_with_ui(headers):
         st.session_state["last_sync_time"] = datetime.now().strftime("%Y-%m-%d %I:%M %p")
     placeholder.empty()
 
+# Run this only after perform_initial_sync_with_ui has been defined.
+if st.session_state.pop("sync_after_token_save", False):
+    token = st.session_state.get("access_token")
+    if token:
+        cache = get_global_store_cache()
+        cache.pop(token, None)
+        perform_initial_sync_with_ui({"Authorization": f"Bearer {token}"})
+
 # ==========================================
 # 🎨 CSS
 # ==========================================
@@ -242,14 +241,13 @@ if st.session_state["is_admin_logged_in"] and not st.session_state["logged_in"]:
     </div>
     """, unsafe_allow_html=True)
     
-    # 1. قراءة المتاجر المربوطة من قاعدة البيانات (أو ملف JSON)
-    stores_db_path = "stores.json"
-    if os.path.exists(stores_db_path):
-        with open(stores_db_path, "r", encoding="utf-8") as f:
-            connected_stores = json.load(f)
-    else:
+    # Load store records and tokens from persistent Supabase storage.
+    try:
+        connected_stores = list_salla_stores()
+    except Exception:
+        logging.exception("Could not load stores from Supabase")
         connected_stores = []
-        st.warning("⚠️ ملف قاعدة بيانات المتاجر (stores.json) غير موجود!")
+        st.error("تعذر الاتصال بمخزن المتاجر. تحقق من إعدادات Supabase Secrets.")
 
     # 2. عرض المتاجر كبطاقات إدارية
     if connected_stores:
@@ -274,18 +272,21 @@ if st.session_state["is_admin_logged_in"] and not st.session_state["logged_in"]:
                     ):
                         st.session_state["merchant_id"] = str(store.get("merchant_id"))
                         st.session_state["store_name"] = store.get("store_name")
-                        st.session_state["access_token"] = store.get("access_token")
+                        st.session_state["access_token"] = store.get("access_token") or ""
                         ksa_time = datetime.now() + timedelta(hours=3)
                         st.session_state["logged_in"] = True
 
-                        headers = {"Authorization": f"Bearer {st.session_state['access_token']}"}
-                        perform_initial_sync_with_ui(headers)
+                        if st.session_state["access_token"]:
+                            headers = {"Authorization": f"Bearer {st.session_state['access_token']}"}
+                            perform_initial_sync_with_ui(headers)
+                        else:
+                            st.info("المتجر جاهز. الصق رسالة التفويض الجديدة لحفظ الرموز أولاً.")
 
                         st.session_state["login_time"] = datetime.now().strftime("%Y-%m-%d %I:%M %p")
                         st.rerun()
 
     else:
-        st.info("لم يقم أي تاجر بتثبيت التطبيق حتى الآن.")
+        st.info("لا توجد متاجر محفوظة بعد. أعد تفويض التطبيق أو تحقق من اتصال Supabase.")
 
     # زر تسجيل الخروج للمدير
     st.divider()
