@@ -721,6 +721,8 @@ def generate_anomalies_excel(anomalies):
 def render_token_expiry_banner():
     """عرض إنذار التذكير وخانة تجديد التوكنات مع دعم اللصق الذكي للـ JSON وتفريغ الكاش"""
     curr_m_id = st.session_state.get('merchant_id')
+    target_merchant_id = str(curr_m_id or "").strip()
+    expires_at = None
     needs_alert, days_left, expiry_dt, last_dt_str = check_token_expiry_info(curr_m_id)
 
     if needs_alert:
@@ -770,6 +772,9 @@ def render_token_expiry_banner():
                     except Exception:
                         st.error("⚠️ النص المدخل ليس بصيغة JSON صحيحة.")
             else:
+                target_merchant_id = str(curr_m_id or "").strip()
+                expires_at = int(time.time()) + 14 * 24 * 60 * 60
+                
                 col_i1, col_i2 = st.columns(2)
                 with col_i1:
                     acc_tok = st.text_input("رمز Access Token الجديد:", placeholder="ory_at_...", type="password", key="manual_acc_tok")
@@ -779,9 +784,15 @@ def render_token_expiry_banner():
             if st.button("💾 حفظ الرموز وتحديث بيانات المتجر فوراً", type="primary", use_container_width=True, key="btn_save_all_tokens"):
                 if not acc_tok or not acc_tok.startswith("ory_at_"):
                     st.error("⚠️ يرجى التأكد من توفر رمز Access Token صحيح (يبدأ بـ ory_at_).")
-                else:
-                    if update_store_tokens(acc_tok, ref_tok):
-                        st.success("✅ تم تحديث الرموز في stores.json وتجديد دورة الـ 14 يوماً بنجاح!")
+                if not target_merchant_id:
+                    st.error("تعذر تحديد المتجر. سجّل الدخول إلى المتجر المطلوب أولاً.")
+                elif not acc_tok or not ref_tok:
+                    st.error("أدخل Access Token و Refresh Token معاً.")
+                elif update_store_tokens(acc_tok, ref_tok, target_merchant_id, expires_at):
+                        st.success("تم تحديث رموز المتجر وتاريخ الانتهاء.")
+                        st.rerun()
+                    else:
+                        st.error("تعذر حفظ الرموز لهذا المتجر. تحقق من رقم التاجر في stores.json.")
                         
                         # 🔄 الحل الجذري لتحديث الصفحة: مسح الكاش لإجبار التطبيق على السحب الحي فوراً
                         if "all_products_fetched" in st.session_state:
