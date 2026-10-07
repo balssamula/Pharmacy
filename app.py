@@ -28,7 +28,16 @@ from customers_page import render_customers_page
 def get_global_store_cache():
     """مخزن ذاكرة السيرفر المركزي (يعيش حتى عند تحديث الصفحة أو إغلاق المتصفح)"""
     return {}
-
+    
+if st.session_state.pop("sync_after_token_save", False):
+    token = st.session_state.get("access_token")
+    if token:
+        cache = get_global_store_cache()
+        cache.pop(token, None)
+        perform_initial_sync_with_ui({
+            "Authorization": f"Bearer {token}"
+        })
+        
 def fetch_store_data_fast(token, headers):
     cache = get_global_store_cache()
     now = datetime.now()
