@@ -257,22 +257,24 @@ if st.session_state["is_admin_logged_in"] and not st.session_state["logged_in"]:
                     """, unsafe_allow_html=True)
                     
                     # زر تسجيل الدخول التلقائي لهذا المتجر بالذات
-                    if st.button(f"🔑 إدارة هذا المتجر", key=f"login_store_{store.get('merchant_id')}", use_container_width=True, type="primary"):
-                        # تعيين التوكن في الجلسة المخفية
-                        token = store.get("access_token")
-                        headers = {"Authorization": f"Bearer {token}"}
-                        
-                        # 🚀 استدعاء المزامنة الحية المدمجة لتهيئة البيانات
-                        perform_initial_sync_with_ui(headers)
-                        
-                        # تفعيل حالة الدخول للانتقال للتطبيق
-                        st.session_state["store_name"] = store.get('store_name')
-                        st.session_state["logged_in"] = True
-                        st.session_state["access_token"] = token
+                    if st.button(
+                        f"🔑 إدارة هذا المتجر",
+                        key=f"login_store_{store.get('merchant_id')}",
+                        use_container_width=True,
+                        type="primary",
+                    ):
+                        st.session_state["merchant_id"] = str(store.get("merchant_id"))
+                        st.session_state["store_name"] = store.get("store_name")
+                        st.session_state["access_token"] = store.get("access_token")
                         ksa_time = datetime.now() + timedelta(hours=3)
-                        st.session_state["login_time"] = ksa_time.strftime("%Y-%m-%d %I:%M %p")
-                        
+                        st.session_state["logged_in"] = True
+
+                        headers = {"Authorization": f"Bearer {st.session_state['access_token']}"}
+                        perform_initial_sync_with_ui(headers)
+
+                        st.session_state["login_time"] = datetime.now().strftime("%Y-%m-%d %I:%M %p")
                         st.rerun()
+
     else:
         st.info("لم يقم أي تاجر بتثبيت التطبيق حتى الآن.")
 
