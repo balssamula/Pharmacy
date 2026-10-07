@@ -735,6 +735,9 @@ def render_products_page():
     # ✅ عرض تنبيهات التخفيضات المنتهية
     render_discount_expiry_alerts(headers)
 
+    # 🔑 عرض إنذار تجديد التوكن وخانة الإدخال السريع
+    render_token_expiry_banner()
+    
     def get_remaining_time_str(run_at_str):
         """حساب الوقت المتبقي لبدء الجدولة بدقة بتوقيت السعودية"""
         saudi_now = datetime.now(timezone(timedelta(hours=3))).replace(tzinfo=None)
