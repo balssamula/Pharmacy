@@ -5,7 +5,6 @@ import os
 import base64
 import time
 from datetime import datetime, timedelta
-from orders_page import render_orders_page
 from utils import get_headers, safe_api_request, get_branches_list
 import logging
 logging.getLogger('streamlit').setLevel(logging.ERROR)
@@ -20,6 +19,7 @@ st.set_page_config(
 from offers_page import render_offers_page
 from products_page import render_products_page
 from customers_page import render_customers_page
+from orders_page import render_orders_page
 
 # ==========================================
 # 🔄 المزامنة الحية فائقة السرعة (مع شريط التقدم الذكي)
