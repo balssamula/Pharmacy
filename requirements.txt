@@ -6,4 +6,3 @@ plotly
 pymysql
 requests
 flask
-supabase>=2.0,<3.0
