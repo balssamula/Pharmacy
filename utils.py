@@ -35,8 +35,13 @@ def get_supabase_client():
     key = _get_secret("SUPABASE_SECRET_KEY")
     if not url or not key:
         raise RuntimeError("Configure SUPABASE_URL and SUPABASE_SECRET_KEY in Streamlit Secrets.")
-    return create_client(url, key)
-
+    
+    # 🧹 تنظيف الرابط تلقائياً وإزالة /rest/v1 أو أي شرطات زائدة في النهاية
+    clean_url = str(url).strip().rstrip("/")
+    if clean_url.endswith("/rest/v1"):
+        clean_url = clean_url[:-len("/rest/v1")].rstrip("/")
+        
+    return create_client(clean_url, key)
 
 def get_salla_store(merchant_id):
     merchant_id = str(merchant_id or "").strip()
