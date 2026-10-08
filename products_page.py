@@ -719,79 +719,75 @@ def generate_anomalies_excel(anomalies):
     return buf.getvalue()
 
 def render_token_expiry_banner():
-    """عرض إنذار التذكير وخانة تجديد التوكنات مع دعم اللصق الذكي للـ JSON وتفريغ الكاش"""
-    curr_m_id = st.session_state.get('merchant_id')
-    target_merchant_id = str(curr_m_id or "").strip()
-    expires_at = None
+    """عرض إنذار التذكير وخانة تجديد التوكنات عبر Supabase (متاحة دائماً للصق الـ JSON في أي وقت)"""
+    curr_m_id = st.session_state.get('merchant_id') or "1450057019"
     needs_alert, days_left, expiry_dt, last_dt_str = check_token_expiry_info(curr_m_id)
 
+    # 1. إظهار شريط التحذير العاجل فقط إذا اقتربت نهاية المدة أو كان التوكن منتهياً
     if needs_alert:
         if days_left <= 0:
-            status_title = "🚨 تحذير عاجل: انتهت صلاحية رمز الربط (Access Token)!"
+            status_title = "🚨 تحذير عاجل: انتهت صلاحية رمز الربط (Access Token) أو غير مدخل بعد!"
             msg_color = "#E11D48"
             bg_color = "linear-gradient(135deg, #FFF1F2 0%, #FFE4E6 100%)"
             border_color = "#FDA4AF"
-            time_txt = f"انتهت الصلاحية منذ {abs(int(days_left))} يوم. قد تتوقف عمليات المزامنة مع سلة فوراً."
+            time_txt = "التطبيق بانتظار إدخال رمز الربط الجديد لتفعيل المزامنة مع سلة."
         else:
             hours_left = int((days_left - int(days_left)) * 24)
             status_title = "⚠️ تنبيه تذكيري: موعد تجديد رمز الربط (Access Token) اقترب!"
             msg_color = "#B45309"
             bg_color = "linear-gradient(135deg, #FFFBEB 0%, #FEF3C7 100%)"
             border_color = "#FCD34D"
-            time_txt = f"متبقي <b>{int(days_left)} أيام و {hours_left} ساعة</b> على انتهاء مهلة الـ 14 يوماً (تاريخ الانتهاء: <code>{expiry_dt.strftime('%Y-%m-%d')}</code>)."
+            exp_str = expiry_dt.strftime('%Y-%m-%d %H:%M') if expiry_dt else "قريباً"
+            time_txt = f"متبقي <b>{int(days_left)} أيام و {hours_left} ساعة</b> على انتهاء مهلة الـ 14 يوماً (تاريخ الانتهاء: <code>{exp_str}</code>)."
 
-        with st.container():
-            st.markdown(f"""
-            <div style="background: {bg_color}; border: 1px solid {border_color}; border-right: 6px solid {msg_color}; border-radius: 10px; padding: 14px 18px; margin-bottom: 15px;">
-                <h4 style="color: {msg_color}; margin: 0 0 6px 0; font-size: 15px;">{status_title}</h4>
-                <div style="color: #4B5563; font-size: 13px;">{time_txt} يمكنك لصق رسالة الـ JSON كاملة بالأسفل أو إدخال الرموز لتحديث المتجر فوراً.</div>
-            </div>
-            """, unsafe_allow_html=True)
+        st.markdown(f"""
+        <div style="background: {bg_color}; border: 1px solid {border_color}; border-right: 6px solid {msg_color}; border-radius: 10px; padding: 14px 18px; margin-bottom: 15px;">
+            <h4 style="color: {msg_color}; margin: 0 0 6px 0; font-size: 15px;">{status_title}</h4>
+            <div style="color: #4B5563; font-size: 13px;">{time_txt} يرجى لصق رسالة الـ JSON الجديدة أدناه لتحديث قاعدة البيانات في Supabase فوراً.</div>
+        </div>
+        """, unsafe_allow_html=True)
 
-            renew_mode = st.radio("طريقة الإدخال:", ["📋 لصق رسالة الـ JSON كاملة (الأسرع)", "✏️ إدخال الرموز يدوياً"], horizontal=True, key="tok_mode")
+    # 2. خانة إدخال كود JSON (متاحة دائماً ومفتوحة تلقائياً عند وجود تنبيه أو عدم وجود توكن)
+    with st.expander("🔑 تجديد وتحديث رمز الربط (Access Token) - لصق رسالة JSON في Supabase", expanded=needs_alert):
+        st.markdown("💡 الصق رسالة تفويض سلة بالكامل هنا لتحديث قاعدة بيانات `Supabase` تلقائياً:")
+        
+        renew_mode = st.radio("طريقة الإدخال:", ["📋 لصق رسالة الـ JSON كاملة (الأسرع)", "✏️ إدخال الرموز يدوياً"], horizontal=True, key="tok_mode")
 
-            acc_tok = ""
-            ref_tok = ""
+        acc_tok = ""
+        ref_tok = ""
+        target_merchant_id = str(curr_m_id).strip()
+        expires_at = None
 
-            if renew_mode == "📋 لصق رسالة الـ JSON كاملة (الأسرع)":
-                json_raw = st.text_area("الصق محتوى الرسالة بالكامل هنا:", placeholder='{"event": "app.store.authorize", ...}', height=100, key="raw_json_tok_input")
-                if json_raw:
-                    try:
-                        parsed = json.loads(json_raw)
+        if renew_mode == "📋 لصق رسالة الـ JSON كاملة (الأسرع)":
+            json_raw = st.text_area("الصق محتوى الرسالة بالكامل هنا:", placeholder='{"event": "app.store.authorize", ...}', height=130, key="raw_json_tok_input")
+            if json_raw:
+                try:
+                    parsed = json.loads(json_raw)
+                    token_data = parsed.get("data") or parsed
+                    target_merchant_id = str(parsed.get("merchant") or curr_m_id or "1450057019").strip()
+                    acc_tok = token_data.get("access_token", "").strip()
+                    ref_tok = token_data.get("refresh_token", "").strip()
+                    # قراءة وقت الانتهاء الدقيق من داخل data
+                    expires_at = token_data.get("expires") or parsed.get("expires")
+                    if acc_tok:
+                        st.success(f"🔍 تم استخراج الرموز بنجاح للمتجر ID: {target_merchant_id}")
+                except Exception:
+                    st.error("⚠️ النص المدخل ليس بصيغة JSON صحيحة.")
+        else:
+            col_i1, col_i2 = st.columns(2)
+            with col_i1:
+                acc_tok = st.text_input("رمز Access Token الجديد:", placeholder="ory_at_...", type="password", key="manual_acc_tok")
+            with col_i2:
+                ref_tok = st.text_input("رمز Refresh Token الجديد:", placeholder="ory_rt_...", type="password", key="manual_ref_tok")
 
-                        if parsed.get("event") != "app.store.authorize":
-                            st.error("الرسالة ليست حدث تفويض من سلة.")
-                        else:
-                            token_data = parsed.get("data") or {}
-                            target_merchant_id = str(parsed.get("merchant", "")).strip()
-                            acc_tok = token_data.get("access_token", "").strip()
-                            ref_tok = token_data.get("refresh_token", "").strip()
-                            expires_at = parsed.get("expires")
-                            if acc_tok:
-                                st.success(f"🔍 تم التعرف على الرموز بنجاح للمتجر ID: {parsed.get('merchant', curr_m_id)}")
-                    except Exception:
-                        st.error("⚠️ النص المدخل ليس بصيغة JSON صحيحة.")
+        if st.button("💾 حفظ الرموز وتحديث Supabase وبيانات المتجر فوراً", type="primary", use_container_width=True, key="btn_save_all_tokens"):
+            if not acc_tok or not acc_tok.startswith("ory_at_"):
+                st.error("⚠️ يرجى التأكد من توفر رمز Access Token صحيح (يبدأ بـ ory_at_).")
             else:
-                target_merchant_id = str(curr_m_id or "").strip()
-                expires_at = int(time.time()) + 14 * 24 * 60 * 60
-                
-                col_i1, col_i2 = st.columns(2)
-                with col_i1:
-                    acc_tok = st.text_input("رمز Access Token الجديد:", placeholder="ory_at_...", type="password", key="manual_acc_tok")
-                with col_i2:
-                    ref_tok = st.text_input("رمز Refresh Token الجديد:", placeholder="ory_rt_...", type="password", key="manual_ref_tok")
+                if update_store_tokens(acc_tok, ref_tok, target_merchant_id, expires_at):
+                    st.success("✅ تم تحديث الرموز في Supabase وتجديد دورة الـ 14 يوماً بنجاح!")
 
-            if st.button("💾 حفظ الرموز وتحديث بيانات المتجر فوراً", type="primary", use_container_width=True, key="btn_save_all_tokens"):
-                if not acc_tok or not acc_tok.startswith("ory_at_"):
-                    st.error("⚠️ يرجى التأكد من توفر رمز Access Token صحيح (يبدأ بـ ory_at_).")
-                elif not target_merchant_id:
-                    st.error("تعذر تحديد المتجر. سجّل الدخول إلى المتجر المطلوب أولاً.")
-                elif not acc_tok or not ref_tok:
-                    st.error("أدخل Access Token و Refresh Token معاً.")
-                elif update_store_tokens(acc_tok, ref_tok, target_merchant_id, expires_at):
-                    st.success("تم تحديث رموز المتجر وتاريخ الانتهاء.")
-
-                    # امسح بيانات الجلسة القديمة حتى لا تعرض منتجات مخزنة مؤقتاً.
+                    # مسح الذاكرة المؤقتة القديمة لجلب البيانات فوراً بالرمز الجديد
                     st.session_state.pop("all_products_fetched", None)
                     st.session_state.pop("all_products", None)
                     st.session_state.pop("all_offers", None)
@@ -799,30 +795,35 @@ def render_token_expiry_banner():
                     st.session_state.pop("product_offers_map", None)
                     st.session_state["product_cache"] = {}
 
+                    time.sleep(1.5)
                     st.rerun()
                 else:
-                    st.error("تعذر حفظ الرموز لهذا المتجر. تحقق من رقم التاجر في stores.json.")
-                            
+                    st.error("❌ تعذر حفظ الرموز في Supabase. تحقق من إعدادات SUPABASE_SECRET_KEY.")
+
+
 def render_products_page():
     import time
     import os
     import json
     
     initialize_session()
+
+    # 🔑 الخطوة الجوهرية: استدعاء خانة التوكن أولاً قبل فحص الـ headers!
+    render_token_expiry_banner()
+
     headers = get_headers()
-    if not headers: return
-    
+    if not headers:
+        st.info("💡 بانتظار لصق رسالة الـ JSON وحفظ الرمز أعلاه للبدء في سحب وعرض بيانات المتجر.")
+        return
+
     st.markdown("""
     <div style="background: linear-gradient(135deg, #0F1C2E 0%, #00EBCF 100%); padding: 15px 25px; border-radius: 12px; color: white; margin-bottom: 20px; box-shadow: 0 4px 6px rgba(0,0,0,0.1);">
         <h2 style="color: white; margin: 0;">📦 مركز إدارة المنتجات المتقدم</h2>
     </div>
     """, unsafe_allow_html=True)
     
-    # ✅ عرض تنبيهات التخفيضات المنتهية
+    # عرض تنبيهات التخفيضات المنتهية
     render_discount_expiry_alerts(headers)
-
-    # 🔑 عرض إنذار تجديد التوكن وخانة الإدخال السريع
-    render_token_expiry_banner()
     
     def get_remaining_time_str(run_at_str):
         """حساب الوقت المتبقي لبدء الجدولة بدقة بتوقيت السعودية"""
