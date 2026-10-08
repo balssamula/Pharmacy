@@ -258,20 +258,19 @@ if st.session_state["is_admin_logged_in"] and not st.session_state["logged_in"]:
                     
                     # زر تسجيل الدخول التلقائي لهذا المتجر بالذات
                     if st.button(f"🔑 إدارة هذا المتجر", key=f"login_store_{store.get('merchant_id')}", use_container_width=True, type="primary"):
-                        # تعيين التوكن في الجلسة المخفية
                         token = store.get("access_token")
                         headers = {"Authorization": f"Bearer {token}"}
                         
-                        # 🚀 استدعاء المزامنة الحية المدمجة لتهيئة البيانات
-                        perform_initial_sync_with_ui(headers)
-                        
-                        # تفعيل حالة الدخول للانتقال للتطبيق
+                        # تفعيل حالة الدخول وتخزين معرف المتجر
+                        st.session_state["merchant_id"] = str(store.get('merchant_id'))  # ✅ ضروري جداً
                         st.session_state["store_name"] = store.get('store_name')
                         st.session_state["logged_in"] = True
                         st.session_state["access_token"] = token
                         ksa_time = datetime.now() + timedelta(hours=3)
                         st.session_state["login_time"] = ksa_time.strftime("%Y-%m-%d %I:%M %p")
                         
+                        # 🚀 استدعاء المزامنة الحية
+                        perform_initial_sync_with_ui(headers)
                         st.rerun()
     else:
         st.info("لم يقم أي تاجر بتثبيت التطبيق حتى الآن.")
@@ -469,13 +468,29 @@ page = st.sidebar.radio("القائمة الرئيسية", ["مركز إدارة
 st.sidebar.divider()
 
 if st.sidebar.button("🔄 إعادة مزامنة البيانات", type="primary", use_container_width=True):
-    # ⚡ مسح الذاكرة المخبأة لهذا المتجر تحديداً لإجبار النظام على إظهار شريط التقدم وسحب البيانات الجديدة
+    # 1. إعادة قراءة أحدث توكن من stores.json مباشرة
+    if os.path.exists("stores.json"):
+        try:
+            with open("stores.json", "r", encoding="utf-8") as f:
+                s_data = json.load(f)
+            curr_m = str(st.session_state.get("merchant_id", "1450057019"))
+            matched_store = next((s for s in s_data if str(s.get("merchant_id")) == curr_m), s_data[0] if s_data else None)
+            if matched_store and matched_store.get("access_token"):
+                st.session_state["access_token"] = matched_store["access_token"]
+        except Exception:
+            pass
+
+    # 2. تفريغ كاش المتجر والباقة
     cache = get_global_store_cache()
-    token = st.session_state['access_token']
+    token = st.session_state.get('access_token', '')
     if token in cache:
         del cache[token]
+    st.session_state.pop("app_subscription_data", None)
+    st.session_state.pop("all_products_fetched", None)
+    st.session_state.pop("all_products", None)
         
-    perform_initial_sync_with_ui({"Authorization": f"Bearer {token}"})
+    if token:
+        perform_initial_sync_with_ui({"Authorization": f"Bearer {token}"})
     st.rerun()
 
 if st.sidebar.button("🚪 تسجيل الخروج", use_container_width=True, type="primary"):
