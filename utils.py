@@ -1459,26 +1459,50 @@ init_background_scheduler()
 
 def check_token_expiry_info(merchant_id=None):
     """
-    فحص صلاحية التوكن وحساب الأيام المتبقية لدورة الـ 14 يوماً
+    فحص صلاحية التوكن وحساب الأيام المتبقية لدورة الـ 14 يوماً من Supabase
     تُرجع: (needs_alert: bool, days_left: float, expiry_date: datetime, last_updated_str: str)
     """
     try:
-        store = get_salla_store(merchant_id)
+        merchant_id_str = str(merchant_id or "").strip()
+        store = None
+        if merchant_id_str:
+            store = get_salla_store(merchant_id_str)
+        
+        # إذا لم يُحدد معرف المتجر، نبحث عن أول متجر متاح في Supabase
         if not store:
-            return False, 14.0, None, ""
+            stores = list_salla_stores()
+            store = next((s for s in stores if "بلسم" in str(s.get('store_name', ''))), stores[0] if stores else None)
 
-        expires_at = int(store.get("expires_at") or 0)
-        if not expires_at:
+        # إذا لم نجد المتجر أو كان التوكن فارغاً، نحتاج إلى إدخال الرمز فوراً
+        if not store or not store.get("access_token"):
             return True, 0.0, None, ""
 
-        expiry_dt = datetime.fromtimestamp(expires_at, tz=timezone.utc).astimezone()
-        days_left = (expires_at - time.time()) / 86400.0
+        expires_at = int(store.get("expires_at") or 0)
+        now_ts = time.time()
+
+        if not expires_at or expires_at == 0:
+            date_str = store.get("token_updated_at") or store.get("installed_at")
+            if date_str:
+                try:
+                    dt = pd.to_datetime(date_str).to_pydatetime()
+                    if dt.tzinfo:
+                        dt = dt.astimezone().replace(tzinfo=None)
+                    expiry_dt = dt + timedelta(days=14)
+                    days_left = (expiry_dt - datetime.now()).total_seconds() / 86400.0
+                    return (days_left <= 5.0), days_left, expiry_dt, str(date_str)
+                except Exception:
+                    pass
+            return True, 0.0, None, ""
+
+        expiry_dt = datetime.fromtimestamp(expires_at, tz=timezone.utc).astimezone().replace(tzinfo=None)
+        days_left = (expires_at - now_ts) / 86400.0
         needs_alert = days_left <= 5.0
         return needs_alert, days_left, expiry_dt, str(store.get("token_updated_at") or "")
 
-    except Exception:
-        logger.exception("Error checking Salla token expiry")
-        return False, 14.0, None, ""
+    except Exception as e:
+        logger.error(f"Error checking token expiry from Supabase: {e}")
+        return True, 0.0, None, ""
+
 
 def update_store_tokens(
     new_access_token: str,
@@ -1486,42 +1510,51 @@ def update_store_tokens(
     merchant_id: str,
     expires_at=None,
 ) -> bool:
+    """تحديث access_token و refresh_token في جدول salla_stores بـ Supabase وتصفير العداد"""
     merchant_id = str(merchant_id or "").strip()
     access_token = str(new_access_token or "").strip()
     refresh_token = str(new_refresh_token or "").strip()
 
-    if not merchant_id or not access_token or not refresh_token:
+    if not access_token:
         return False
 
     try:
-        existing = get_salla_store(merchant_id)
-        if expires_at is None:
-            expires_at = int(time.time()) + 14 * 24 * 60 * 60
-        else:
-            expires_at = int(expires_at)
+        if not merchant_id:
+            merchant_id = str(st.session_state.get("merchant_id") or "1450057019").strip()
 
-        now = datetime.now(timezone.utc).isoformat()
+        existing = get_salla_store(merchant_id)
+        
+        # إذا لم يتوفر تاريخ الانتهاء، نحسب 14 يوماً من الآن افتراضياً
+        if not expires_at or int(expires_at) == 0:
+            calc_expires_at = int(time.time()) + 14 * 24 * 60 * 60
+        else:
+            calc_expires_at = int(expires_at)
+
+        now_iso = datetime.now(timezone.utc).isoformat()
+        
         row = {
             "merchant_id": merchant_id,
-            "store_name": (existing or {}).get("store_name") or f"متجر {merchant_id}",
+            "store_name": (existing or {}).get("store_name") or "صيدليات بلسم العلا",
             "access_token": access_token,
-            "refresh_token": refresh_token,
-            "expires_at": expires_at,
-            "installed_at": (existing or {}).get("installed_at") or now,
-            "token_updated_at": now,
+            "expires_at": calc_expires_at,
+            "token_updated_at": now_iso,
         }
-        (
-            get_supabase_client()
-            .table("salla_stores")
-            .upsert(row, on_conflict="merchant_id")
-            .execute()
-        )
+        if refresh_token:
+            row["refresh_token"] = refresh_token
+        if not existing:
+            row["installed_at"] = now_iso
 
-        if str(st.session_state.get("merchant_id", "")) == merchant_id:
-            st.session_state["access_token"] = access_token
-            st.session_state["sync_after_token_save"] = True
+        # الحفظ المباشر في Supabase
+        get_supabase_client().table("salla_stores").upsert(row, on_conflict="merchant_id").execute()
+
+        # تحديث الجلسة الحالية
+        st.session_state["merchant_id"] = merchant_id
+        st.session_state["access_token"] = access_token
+        if "headers" in st.session_state:
+            st.session_state["headers"]["Authorization"] = f"Bearer {access_token}"
+        st.session_state["sync_after_token_save"] = True
         return True
 
-    except Exception:
+    except Exception as e:
         logger.exception("Failed to save Salla tokens to Supabase")
         return False
