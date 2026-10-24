@@ -751,6 +751,7 @@ def render_token_expiry_banner():
 
             acc_tok = ""
             ref_tok = ""
+            pasted_merchant_mismatch = False
 
             if renew_mode == "📋 لصق رسالة الـ JSON كاملة (الأسرع)":
                 json_raw = st.text_area("الصق محتوى الرسالة بالكامل هنا:", placeholder='{"event": "app.store.authorize", ...}', height=100, key="raw_json_tok_input")
@@ -758,10 +759,15 @@ def render_token_expiry_banner():
                     try:
                         parsed = json.loads(json_raw)
                         p_data = parsed.get("data", parsed)
-                        acc_tok = p_data.get("access_token", "")
-                        ref_tok = p_data.get("refresh_token", "")
-                        if acc_tok:
-                            st.success(f"🔍 تم التعرف على الرموز بنجاح للمتجر ID: {parsed.get('merchant', curr_m_id)}")
+                        message_merchant = str(parsed.get("merchant") or parsed.get("merchant_id") or "").strip()
+                        pasted_merchant_mismatch = bool(message_merchant and message_merchant != str(curr_m_id))
+                        if pasted_merchant_mismatch:
+                            st.error("معرف المتجر في JSON مختلف عن المتجر المحدد حاليًا؛ تم منع استخدام هذه الرموز.")
+                        else:
+                            acc_tok = p_data.get("access_token", "")
+                            ref_tok = p_data.get("refresh_token", "")
+                            if acc_tok:
+                                st.success(f"✅ تم التعرف على بيانات رمز المتجر المحدد: {curr_m_id}")
                     except Exception:
                         st.error("⚠️ النص المدخل ليس بصيغة JSON صحيحة.")
             else:
@@ -772,7 +778,9 @@ def render_token_expiry_banner():
                     ref_tok = st.text_input("رمز Refresh Token الجديد:", placeholder="ory_rt_...", type="password", key="manual_ref_tok")
 
             if st.button("💾 حفظ الرموز وتحديث بيانات المتجر فوراً", type="primary", use_container_width=True, key="btn_save_all_tokens"):
-                if not acc_tok or not acc_tok.startswith("ory_at_"):
+                if pasted_merchant_mismatch or not curr_m_id:
+                    st.error("تأكد أن رسالة JSON تخص المتجر المحدد؛ لا يمكن حفظ الرموز لمتجر غير معروف.")
+                elif not acc_tok or not acc_tok.startswith("ory_at_"):
                     st.error("⚠️ يرجى التأكد من توفر رمز Access Token صحيح (يبدأ بـ ory_at_).")
                 else:
                     if update_store_tokens(acc_tok, ref_tok, curr_m_id):
@@ -1139,8 +1147,7 @@ def render_products_page():
                 st.checkbox("✅ تفعيل التوصيات في المتجر", value=True)
                 st.checkbox("🤝 تشترى معًا", value=True)
                 st.selectbox("🛒 عرض زر إضافة للسلة:", ["في صفحة السلة فقط", "في جميع الصفحات"], index=0)
-                if st.button("💾 حفظ وتثبيت إعدادات التطبيقات", type="primary", use_container_width=True):
-                    st.success("✅ تم الحفظ بنجاح!")
+                st.info("هذه إعدادات تجريبية للواجهة فقط؛ لم يتم ربطها بعد بنقطة حفظ إعدادات معتمدة في API. لا يُرسل زر حفظ وهمي.")
                     
             elif st.session_state.qa_action_prod == "salla_matching":
                 render_matching_panel(headers)
