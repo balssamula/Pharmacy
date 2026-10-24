@@ -1,6 +1,9 @@
 from flask import Flask, request, jsonify
 import json
 import os
+import hmac
+import hashlib
+import tempfile
 from datetime import datetime
 
 app = Flask(__name__)
@@ -11,7 +14,14 @@ STORES_FILE = 'stores.json'
 @app.route('/salla-webhook', methods=['POST'])
 def salla_webhook():
     # سلة تقوم بإرسال البيانات بصيغة JSON عند حدوث أي حدث
-    data = request.json
+    webhook_secret = os.environ.get("SALLA_WEBHOOK_SECRET", "").strip()
+    if not webhook_secret:
+        return jsonify({"error": "Webhook verification not configured"}), 503
+    sent = request.headers.get("X-Salla-Signature", "")
+    calculated = hmac.new(webhook_secret.encode("utf-8"), request.get_data(), hashlib.sha256).hexdigest()
+    if not sent or not hmac.compare_digest(sent.lower(), calculated):
+        return jsonify({"error": "Invalid Salla signature"}), 401
+    data = request.get_json(silent=True)
     
     if not data:
         return jsonify({"error": "No data received"}), 400
@@ -52,8 +62,19 @@ def salla_webhook():
                 })
 
             # 5. حفظ البيانات الجديدة
-            with open(STORES_FILE, 'w', encoding='utf-8') as f:
-                json.dump(stores, f, ensure_ascii=False, indent=4)
+            # Atomic replace prevents truncated JSON on interrupted writes.
+            temporary = None
+            try:
+                fd, temporary = tempfile.mkstemp(prefix=".webhook-", suffix=".tmp", dir=os.path.dirname(os.path.abspath(STORES_FILE)))
+                os.fchmod(fd, 0o600)
+                with os.fdopen(fd, "w", encoding="utf-8") as f:
+                    json.dump(stores, f, ensure_ascii=False, indent=2)
+                    f.flush()
+                    os.fsync(f.fileno())
+                os.replace(temporary, STORES_FILE)
+            finally:
+                if temporary and os.path.exists(temporary):
+                    os.unlink(temporary)
 
             print(f"✅ تم استقبال وحفظ Token جديد للمتجر: {merchant_id}")
             return jsonify({"status": "success", "message": "Token saved"}), 200
