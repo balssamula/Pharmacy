@@ -13,7 +13,8 @@ import pandas as pd
 import requests
 import streamlit as st
 
-from matching_engine import compare_catalogs
+from matching_engine import compare_catalogs, normalize_sku
+from matching_export import build_full_reconciliation_excel, build_exclusion_template
 from utils import generate_salla_new_products_file
 
 _IMPORT_URL = "https://api.salla.dev/admin/v2/products/import"
@@ -22,6 +23,47 @@ _TAX_CAUSES = [
     "التوريدات العقارية المعفاة", "صادرات السلع من المملكة", "صادرات الخدمات من المملكة",
     "النقل الدولي للسلع", "النقل الدولي للركاب", "توريد وسائل النقل",
 ]
+
+
+
+EXCLUSION_LIMIT = 5 * 1024 * 1024
+
+def _read_exclusion_file(uploaded) -> set[str]:
+    """Only the SKU column is supported; name-only exclusions are unsafe."""
+    if uploaded is None:
+        return set()
+    data = uploaded.getvalue()
+    if len(data) > EXCLUSION_LIMIT:
+        raise ValueError("ملف الاستبعاد يزيد على 5 MB")
+    if uploaded.name.lower().endswith(".csv"):
+        frame = pd.read_csv(io.BytesIO(data), dtype="string", sep=None, engine="python", encoding="utf-8-sig")
+    else:
+        xl = pd.ExcelFile(io.BytesIO(data))
+        frame = None
+        for name in xl.sheet_names:
+            candidate = pd.read_excel(xl, sheet_name=name, dtype="string", nrows=40000)
+            columns = {str(c).strip().casefold() for c in candidate.columns}
+            if columns & {"sku", "رقم المنتج", "رمز المنتج", "كود المنتج"}:
+                frame = candidate
+                break
+        if frame is None:
+            raise ValueError("لا توجد ورقة تحتوي عمود SKU أو رقم المنتج")
+    field = next((c for c in frame.columns if str(c).strip().casefold() in
+                  {"sku", "رقم المنتج", "رمز المنتج", "كود المنتج"}), None)
+    if field is None:
+        raise ValueError("ملف الاستبعاد يجب أن يحتوي على عمود SKU")
+    return {sku for value in frame[field] if (sku := normalize_sku(value))}
+
+
+def _exclusion_widget(report_id: str, section: str):
+    st.markdown("**📤 استبعاد منتجات محددة من نتائج هذا التبويب فقط**")
+    st.caption("ارفع Excel أو CSV يحتوي عمود SKU أو رقم المنتج. الاسم وحده لا يكفي لاستبعاد آمن. لا يحذف الاستبعاد أي منتج من المتجر.")
+    st.download_button("📄 قالب ملف الاستبعاد", data=build_exclusion_template(),
+                       file_name=f"exclude_{section}_template.xlsx",
+                       mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                       key=f"ex_template_{section}_{report_id}")
+    st.file_uploader("رفع ملف أكواد SKU للاستبعاد", type=["xlsx", "csv"],
+                     key=f"matching_exclusion_{section}_{report_id}")
 
 
 def _csv_bytes(df: pd.DataFrame) -> bytes:
@@ -184,7 +226,7 @@ def _render_new_products(frame: pd.DataFrame, headers: dict, report_id: str) -> 
 
 def render_matching_panel(headers: dict) -> None:
     st.markdown("### 🔄 مطابقة منتجات سلة مع النظام الداخلي")
-    st.caption("المطابقة حسب SKU؛ اختلاف السعر والقيمة الضريبية يُراجع للمقارنة بنفس الأساس المحاسبي. التحليل لا يغيّر أي منتج.")
+    st.caption("المطابقة حسب SKU. الأسعار في الملفين غير شاملة الضريبة، ولا تُضيف المقارنة ضريبة 15% أو تحسب السعر الشامل. لا توجد تعديلات تلقائية على المتجر.")
     c1, c2 = st.columns([2, 1])
     with c1:
         excluded = st.text_input("🚫 استبعاد تصنيفات النظام (مفصولة بفاصلة)", placeholder="مثال: اكسسوارات", key="matching_exclude")
@@ -209,35 +251,77 @@ def render_matching_panel(headers: dict) -> None:
                 return
             salla = pd.read_excel(xl, sheet_name="salla", dtype={"رقم المنتج": "string"})
             system = pd.read_excel(xl, sheet_name="system", dtype={"رقم المنتج": "string"})
-            st.session_state["matching_report"] = compare_catalogs(salla, system, excluded, tolerance)
-            st.session_state["matching_report_id"] = report_id
+            st.session_state["matching_source"] = (salla, system)
+            st.session_state["matching_source_id"] = report_id
+            st.session_state["matching_exclusion_digest"] = ""
+            st.session_state["matching_excel_bytes"] = None
         except Exception as exc:
-            st.error(f"تعذرت قراءة الملف أو التحليل: {type(exc).__name__}: {exc}")
+            st.error(f"تعذرت قراءة الملف: {type(exc).__name__}: {exc}")
             return
-    if st.session_state.get("matching_report_id") != report_id:
+    if st.session_state.get("matching_source_id") != report_id:
         st.info("اضغط زر بدء المطابقة لعرض نتائج هذا الملف والإعدادات الحالية.")
+        return
+    try:
+        uploads = [st.session_state.get(f"matching_exclusion_{part}_{report_id}") for part in ("names", "prices")]
+        exclusions = [_read_exclusion_file(upload) for upload in uploads]
+        digest = hashlib.sha256("|".join(",".join(sorted(x)) for x in exclusions).encode("utf-8")).hexdigest()
+        cache_key = f"{report_id}_{digest}"
+        if st.session_state.get("matching_report_id") != cache_key:
+            source_salla, source_system = st.session_state["matching_source"]
+            st.session_state["matching_report"] = compare_catalogs(
+                source_salla, source_system, excluded, tolerance,
+                excluded_name_skus=exclusions[0], excluded_price_skus=exclusions[1]
+            )
+            st.session_state["matching_report_id"] = cache_key
+            st.session_state["matching_excel_bytes"] = None
+    except Exception as exc:
+        st.error(f"تعذر تطبيق ملفات الاستبعاد: {type(exc).__name__}: {exc}")
         return
     results = st.session_state["matching_report"]
     stats = results["summary"]
-    a,b,c,d = st.columns(4)
+    a, b, c, d = st.columns(4)
     a.metric("SKU مشتركة قابلة للمقارنة", f"{stats['comparable_common_skus']:,}")
     b.metric("منتجات جديدة", f"{stats['new_products']:,}")
-    c.metric("اختلافات السعر", f"{stats['different_prices']:,}")
-    d.metric("اختلافات الضريبة", f"{stats['different_taxes']:,}")
-    st.caption(f"اختلاف الاسم: {stats['different_names']:,} | موجودة بسلة فقط: {stats['salla_only']:,} | سجلات تتطلب مراجعة: {stats['problems']:,} | تصنيفات مستبعدة: {stats['excluded_system_rows']:,}")
+    c.metric("اختلافات السعر قبل الضريبة", f"{stats['different_prices']:,}")
+    d.metric("فروقات مقاس/عبوة محتملة", f"{stats['size_count_differences']:,}")
+    st.caption(f"اختلاف مقاس واضح بوصف العبوة: {stats['confirmed_size_count_differences']:,} | الحالات الأخرى مرشحة للمراجعة")
+    st.caption(
+        f"اختلاف أسماء: {stats['different_names']:,} | ضريبة: {stats['different_taxes']:,} | "
+        f"مشكلات البيانات: {stats['problems']:,} | استبعاد أسماء: {stats['name_exclusions_applied']:,} | "
+        f"استبعاد أسعار: {stats['price_exclusions_applied']:,}"
+    )
+    if st.button("📊 تجهيز تقرير Excel شامل لجميع التبويبات", type="secondary", use_container_width=True,
+                 key=f"prepare_full_excel_{cache_key}"):
+        try:
+            st.session_state["matching_excel_bytes"] = build_full_reconciliation_excel(results, tolerance)
+        except Exception as exc:
+            st.error(f"تعذر تجهيز التقرير: {type(exc).__name__}: {exc}")
+    if st.session_state.get("matching_excel_bytes") is not None:
+        st.download_button("📥 تحميل Excel شامل: جميع النتائج والاستبعادات (10 أوراق)",
+                           data=st.session_state["matching_excel_bytes"],
+                           file_name="Salla_Full_SKU_Reconciliation.xlsx",
+                           mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                           use_container_width=True, key=f"download_full_excel_{cache_key}")
     tabs = st.tabs([
         f"🆕 منتجات جديدة ({stats['new_products']:,})",
         f"🏷️ أسماء مختلفة ({stats['different_names']:,})",
+        f"📏 حجم/عدد وعبوة ({stats['size_count_differences']:,})",
         f"💰 أسعار مختلفة ({stats['different_prices']:,})",
         f"🧾 ضريبة مختلفة ({stats['different_taxes']:,})",
         f"⚠️ تكرار / بيانات ناقصة ({stats['problems']:,})",
         f"📦 سلة فقط ({stats['salla_only']:,})",
     ])
-    with tabs[0]: _render_new_products(results["new"], headers, report_id)
-    with tabs[1]: _report_section("اختلاف الأسماء", results["names"], "mismatched_names")
+    with tabs[0]: _render_new_products(results["new"], headers, cache_key)
+    with tabs[1]:
+        _exclusion_widget(report_id, "names")
+        _report_section("اختلاف الأسماء (حالات المقاس مميزة بالبرتقالي في Excel)", results["names"], "mismatched_names")
     with tabs[2]:
-        st.warning("تأكد أن سعر سلة وسعر النظام كلاهما شاملان للضريبة أو كلاهما غير شاملين، وأن السعر ليس سعر عرض ترويجي.")
-        _report_section("اختلاف الأسعار", results["prices"], "mismatched_prices")
-    with tabs[3]: _report_section("اختلاف الضريبة", results["taxes"], "mismatched_taxes")
-    with tabs[4]: _report_section("المشاكل", results["problems"], "duplicate_or_invalid_skus")
-    with tabs[5]: _report_section("موجودة في سلة فقط", results["salla_only"], "salla_only")
+        st.warning("تغيّر العدد أو الحجم أو الجرعة قد يدل على اختلاف المنتج نفسه. تحقق قبل أي تحديث أو استيراد.")
+        _report_section("اختلافات الحجم والعدد والتركيز", results["sizes"], "size_count_differences")
+    with tabs[3]:
+        _exclusion_widget(report_id, "prices")
+        st.info("الأسعار في المصدرين قبل الضريبة. يُقارن السعر الخام بفارق يتجاوز الهامش المحدد، دون ضربه في 1.15.")
+        _report_section("اختلاف الأسعار غير شاملة الضريبة", results["prices"], "mismatched_prices")
+    with tabs[4]: _report_section("اختلاف الضريبة", results["taxes"], "mismatched_taxes")
+    with tabs[5]: _report_section("المشاكل", results["problems"], "duplicate_or_invalid_skus")
+    with tabs[6]: _report_section("موجودة في سلة فقط", results["salla_only"], "salla_only")
