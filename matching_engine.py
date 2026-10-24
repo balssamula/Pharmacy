@@ -63,6 +63,118 @@ def parse_price(value: Any):
         return None
 
 
+
+# Package quantities are extracted only when an explicit unit is present.
+# Do not treat model numbers, strengths without units, or SKU as pack size.
+_SIZE_UNITS = {
+    "ml": ("حجم", "ml", "1"), "مل": ("حجم", "ml", "1"), "ملل": ("حجم", "ml", "1"),
+    "ملليلتر": ("حجم", "ml", "1"), "مليلتر": ("حجم", "ml", "1"),
+    "لتر": ("حجم", "ml", "1000"), "liter": ("حجم", "ml", "1000"), "litre": ("حجم", "ml", "1000"),
+    "l": ("حجم", "ml", "1000"),
+    "g": ("وزن", "g", "1"), "gr": ("وزن", "g", "1"), "gm": ("وزن", "g", "1"),
+    "جرام": ("وزن", "g", "1"), "جم": ("وزن", "g", "1"), "غرام": ("وزن", "g", "1"),
+    "kg": ("وزن", "g", "1000"), "كجم": ("وزن", "g", "1000"), "كيلو": ("وزن", "g", "1000"),
+    "كيلوجرام": ("وزن", "g", "1000"),
+    "mg": ("تركيز/جرعة", "mg", "1"), "مجم": ("تركيز/جرعة", "mg", "1"),
+    "ملجم": ("تركيز/جرعة", "mg", "1"), "ملغ": ("تركيز/جرعة", "mg", "1"),
+    "mcg": ("تركيز/جرعة", "mg", "0.001"), "ميكروجرام": ("تركيز/جرعة", "mg", "0.001"),
+    "حبة": ("عدد", "حبة", "1"), "حبات": ("عدد", "حبة", "1"), "حب": ("عدد", "حبة", "1"),
+    "قرص": ("عدد", "حبة", "1"), "اقراص": ("عدد", "حبة", "1"), "أقراص": ("عدد", "حبة", "1"),
+    "tablet": ("عدد", "حبة", "1"), "tablets": ("عدد", "حبة", "1"), "tabs": ("عدد", "حبة", "1"),
+    "كبسولة": ("عدد كبسولات", "كبسولة", "1"), "كبسولات": ("عدد كبسولات", "كبسولة", "1"),
+    "capsule": ("عدد كبسولات", "كبسولة", "1"), "capsules": ("عدد كبسولات", "كبسولة", "1"),
+    "قطعة": ("عدد قطع", "قطعة", "1"), "قطع": ("عدد قطع", "قطعة", "1"),
+    "pcs": ("عدد قطع", "قطعة", "1"), "pieces": ("عدد قطع", "قطعة", "1"),
+    "كيس": ("عدد أكياس", "كيس", "1"), "أكياس": ("عدد أكياس", "كيس", "1"),
+    "sachet": ("عدد أكياس", "كيس", "1"), "sachets": ("عدد أكياس", "كيس", "1"),
+    "شريط": ("عدد شرائط", "شريط", "1"), "شرائط": ("عدد شرائط", "شريط", "1"),
+    "عبوة": ("عدد عبوات", "عبوة", "1"), "عبوات": ("عدد عبوات", "عبوة", "1"),
+}
+_UNIT_PATTERN = "|".join(sorted((re.escape(k) for k in _SIZE_UNITS), key=len, reverse=True))
+# Match stand-alone digits in labels, not embedded into model identifiers such as X100ML2.
+_PACKAGE_PATTERN = re.compile(
+    r"(?<![\w])(?P<amount>[0-9]+(?:[.,٫][0-9]+)?)\s*(?P<unit>" + _UNIT_PATTERN + r")(?![\w])",
+    flags=re.IGNORECASE,
+)
+
+
+def _canonical_package_specs(name: Any):
+    label = unicodedata.normalize("NFKC", normalize_name(name)).translate(_ARABIC_DIGITS)
+    # Normalize the Arabic decimal mark and optional arabic comma for numbers.
+    label = label.replace("٫", ".")
+    found = []
+    spans = []
+    for match in _PACKAGE_PATTERN.finditer(label):
+        unit = match.group("unit").casefold()
+        kind, common_unit, factor = _SIZE_UNITS[unit]
+        try:
+            value = Decimal(match.group("amount").replace(",", ".")) * Decimal(factor)
+        except InvalidOperation:
+            continue
+        found.append((kind, common_unit, value))
+        spans.append(match.span())
+    remainder_parts = []
+    last = 0
+    for start, end in spans:
+        remainder_parts.append(label[last:start]); last = end
+    remainder_parts.append(label[last:])
+    remainder = re.sub(r"[^\w\u0600-\u06ff]+", " ", " ".join(remainder_parts))
+    remainder = re.sub(r"\s+", " ", remainder).strip()
+    return sorted(found), remainder
+
+
+def classify_pack_difference(system_name: Any, salla_name: Any) -> dict:
+    """Separate confirmed quantitative changes from incomplete package descriptions.
+
+    This is an explicit-units heuristic, not proof of product identity.
+    """
+    system_specs, system_rest = _canonical_package_specs(system_name)
+    salla_specs, salla_rest = _canonical_package_specs(salla_name)
+
+    def format_decimal(value):
+        normal = format(value, "f")
+        return normal.rstrip("0").rstrip(".") if "." in normal else normal
+
+    fmt = lambda specs: "، ".join(f"{format_decimal(v)} {unit}" for _, unit, v in specs)
+    ret = {
+        "الكمية/الحجم في النظام": fmt(system_specs),
+        "الكمية/الحجم في سلة": fmt(salla_specs),
+        "نوع اختلاف الاسم": "اختلاف نص الاسم", "درجة تأكيد المقاس": "—"
+    }
+    if system_specs and salla_specs:
+        from collections import defaultdict
+        def by_kind(specs):
+            groups = defaultdict(list)
+            for kind, unit, value in specs:
+                groups[(kind, unit)].append(value)
+            return {k: sorted(v) for k, v in groups.items()}
+        system_groups, salla_groups = by_kind(system_specs), by_kind(salla_specs)
+        common = system_groups.keys() & salla_groups.keys()
+        changed = [kind for kind in common if system_groups[kind] != salla_groups[kind]]
+        if changed:
+            kind = " / ".join(sorted({item[0] for item in changed}))
+            suffix = "فقط" if system_rest == salla_rest and system_groups.keys() == salla_groups.keys() else "مع اختلافات إضافية"
+            ret["نوع اختلاف الاسم"] = f"اختلاف {kind} {suffix}"
+            ret["درجة تأكيد المقاس"] = "مرتفع" if suffix == "فقط" else "مرشح — مراجعة"
+        elif not common and len(system_specs) == len(salla_specs) == 1:
+            kinds = " / ".join(sorted({item[0] for item in system_specs + salla_specs}))
+            ret["نوع اختلاف الاسم"] = f"اختلاف نوع الوحدة ({kinds}) — مراجعة"
+            ret["درجة تأكيد المقاس"] = "تحتاج مراجعة"
+        elif system_groups != salla_groups:
+            ret["نوع اختلاف الاسم"] = "وحدات/تفاصيل عبوة غير متطابقة — مراجعة"
+            ret["درجة تأكيد المقاس"] = "غير محسوم"
+    elif bool(system_specs) != bool(salla_specs):
+        ret["نوع اختلاف الاسم"] = "وجود مقدار بوصف واحد فقط — مراجعة"
+        ret["درجة تأكيد المقاس"] = "غير محسوم"
+    return ret
+
+
+def normalize_exclusion_skus(exclusions) -> set[str]:
+    """Accept an iterable of identifiers; never exclude on vague name matches."""
+    if exclusions is None:
+        return set()
+    return {normalized for item in exclusions if (normalized := normalize_sku(item))}
+
 def _prepare(df: pd.DataFrame, sheet: str) -> pd.DataFrame:
     missing = [field for field in REQUIRED_COLUMNS if field not in df.columns]
     if missing:
@@ -80,6 +192,8 @@ def compare_catalogs(
     system: pd.DataFrame,
     excluded_categories: str = "",
     price_tolerance: Any = "0.01",
+    excluded_name_skus=None,
+    excluded_price_skus=None,
 ) -> dict:
     """Produce auditable, side-by-side DataFrames, with no writes to any store."""
     tolerance = Decimal(str(price_tolerance))
@@ -119,11 +233,26 @@ def compare_catalogs(
     salla_only = joined.loc[joined["_merge"].eq("right_only")].copy()
     common = joined.loc[joined["_merge"].eq("both")].copy()
 
+    name_excluded = normalize_exclusion_skus(excluded_name_skus)
+    price_excluded = normalize_exclusion_skus(excluded_price_skus)
+
     # On common SKUs, ignore invalid values in a discrepancy claim; show them as issues instead.
-    different_name = common.loc[common["_name_system"].ne(common["_name_salla"])].copy()
+    different_name = common.loc[common["_name_system"].ne(common["_name_salla"]) & ~common["_sku"].isin(name_excluded)].copy()
+    if not different_name.empty:
+        variations = different_name.apply(
+            lambda r: classify_pack_difference(r["اسم المنتج_system"], r["اسم المنتج_salla"]), axis=1
+        ).tolist()
+        for field in ("نوع اختلاف الاسم", "الكمية/الحجم في النظام", "الكمية/الحجم في سلة", "درجة تأكيد المقاس"):
+            different_name[field] = [v[field] for v in variations]
+    else:
+        for field in ("نوع اختلاف الاسم", "الكمية/الحجم في النظام", "الكمية/الحجم في سلة", "درجة تأكيد المقاس"):
+            different_name[field] = pd.Series(dtype="string")
+    significant_name = different_name.loc[
+        different_name["نوع اختلاف الاسم"].ne("اختلاف نص الاسم")
+    ].copy()
     different_price = common.loc[common.apply(
         lambda row: row["_price_system"] is not None and row["_price_salla"] is not None
-        and abs(row["_price_system"] - row["_price_salla"]) > tolerance, axis=1
+        and abs(row["_price_system"] - row["_price_salla"]) > tolerance and row["_sku"] not in price_excluded, axis=1
     )].copy() if not common.empty else common.copy()
     if len(different_price):
         different_price["الفرق (النظام - سلة)"] = different_price.apply(
@@ -164,6 +293,7 @@ def compare_catalogs(
         cols = [c for c in names if c in paired.columns]
         if include_diff and "الفرق (النظام - سلة)" in paired.columns:
             cols += ["الفرق (النظام - سلة)"]
+        cols += [c for c in ("نوع اختلاف الاسم", "الكمية/الحجم في النظام", "الكمية/الحجم في سلة", "درجة تأكيد المقاس") if c in paired.columns]
         return paired.loc[:, cols].rename(columns=names).reset_index(drop=True)
 
     clean_new = b.loc[b["_sku"].isin(set(new["_sku"]))].copy()
@@ -193,11 +323,18 @@ def compare_catalogs(
             "different_names": len(different_name),
             "different_prices": len(different_price),
             "different_taxes": len(different_tax),
+            "size_count_differences": len(significant_name),
+            "confirmed_size_count_differences": int(significant_name["درجة تأكيد المقاس"].eq("مرتفع").sum()) if not significant_name.empty else 0,
+            "name_exclusions_applied": len(name_excluded & set(common["_sku"])),
+            "price_exclusions_applied": len(price_excluded & set(common["_sku"])),
             "problems": len(problems),
             "ambiguous_skus": len(ambiguities),
         },
         "new": clean_new.reset_index(drop=True),
         "names": display(different_name),
+        "sizes": display(significant_name),
+        "name_exclusions": pd.DataFrame({"SKU": sorted(name_excluded), "سبب الاستبعاد": "مستبعد من الأسماء فقط"}),
+        "price_exclusions": pd.DataFrame({"SKU": sorted(price_excluded), "سبب الاستبعاد": "مستبعد من الأسعار فقط"}),
         "prices": display(different_price, include_diff=True),
         "taxes": display(different_tax),
         "salla_only": display(salla_only),
