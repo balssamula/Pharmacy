@@ -63,5 +63,43 @@ class TestMatching(unittest.TestCase):
         self.assertEqual(out["summary"]["excluded_system_rows"],1)
         self.assertEqual(out["summary"]["salla_only"],0)
 
+
+class TestRequestedEnhancements(unittest.TestCase):
+    def test_pack_changes(self):
+        from matching_engine import classify_pack_difference
+        grams = classify_pack_difference('شامبو 100 جرام', 'شامبو 60 جم')
+        self.assertIn('اختلاف وزن فقط', grams['نوع اختلاف الاسم'])
+        count = classify_pack_difference('فيتامين 18 حبة', 'فيتامين 21 حبة')
+        self.assertIn('اختلاف عدد فقط', count['نوع اختلاف الاسم'])
+        liters = classify_pack_difference('غسول 1 لتر', 'غسول 1000 مل')
+        self.assertEqual(liters['نوع اختلاف الاسم'], 'اختلاف نص الاسم')
+        self.assertEqual(classify_pack_difference('منتج X100 MODEL', 'منتج X200 MODEL')['نوع اختلاف الاسم'], 'اختلاف نص الاسم')
+        dose = classify_pack_difference('قوة 100mg', 'قوة 200mg')
+        self.assertIn('تركيز/جرعة', dose['نوع اختلاف الاسم'])
+
+    def test_exclusion_is_tab_specific(self):
+        salla = frame([["001", "شامبو 60 مل", 10, "نعم"], ["002", "حلوى 21 حبة", 10, "نعم"]])
+        system = frame([["001", "شامبو 100 مل", 20, "لا"], ["002", "حلوى 18 حبة", 11, "نعم"]])
+        out = compare_catalogs(salla, system, excluded_name_skus=["001"], excluded_price_skus=["002"])
+        self.assertEqual(out['summary']['different_names'], 1)
+        self.assertEqual(out['summary']['size_count_differences'], 1)
+        self.assertEqual(out['summary']['different_prices'], 1)
+        self.assertEqual(out['summary']['different_taxes'], 1)
+        self.assertEqual(out['prices'].iloc[0]['SKU'], '001')
+        self.assertEqual(out['names'].iloc[0]['SKU'], '002')
+        self.assertEqual(out['summary']['name_exclusions_applied'], 1)
+        self.assertEqual(out['summary']['price_exclusions_applied'], 1)
+
+    def test_full_report_export(self):
+        import zipfile
+        from io import BytesIO
+        from matching_export import build_full_reconciliation_excel
+        out = compare_catalogs(frame([["001", "شامبو 60 مل", 10, "نعم"]]), frame([["001", "شامبو 100 مل", 15, "لا"]]))
+        binary = build_full_reconciliation_excel(out)
+        with zipfile.ZipFile(BytesIO(binary)) as z:
+            self.assertEqual(z.testzip(), None)
+            names = [n for n in z.namelist() if n.startswith('xl/worksheets/sheet') and n.endswith('.xml')]
+            self.assertEqual(len(names), 10)
+
 if __name__ == "__main__":
     unittest.main()
