@@ -16,8 +16,17 @@ from openpyxl.worksheet.datavalidation import DataValidation
 from openpyxl.utils import get_column_letter
 from streamlit.runtime.scriptrunner import add_script_run_ctx
 
-SALLA_CLIENT_ID = "92c8725e-8d39-4516-bb00-3908fe5339b3"
-SALLA_CLIENT_SECRET = "e84d33ca4ecd7399a1a76292bae92bdd97a438d4c48caf935fa17a8f18ef1ad2"
+def _configured_secret(name):
+    value = os.environ.get(name, "").strip()
+    if not value:
+        try:
+            value = str(st.secrets.get(name, "")).strip()
+        except (FileNotFoundError, KeyError, AttributeError):
+            pass
+    return value
+
+SALLA_CLIENT_ID = _configured_secret("SALLA_CLIENT_ID")
+SALLA_CLIENT_SECRET = _configured_secret("SALLA_CLIENT_SECRET")
 
 # قفل أمني لمنع الاستخدام المزدوج للتوكن (Race Condition) كما تشترط سلة
 token_refresh_lock = threading.Lock()
@@ -26,6 +35,9 @@ def refresh_salla_token(merchant_id):
     """دالة تقوم بتجديد الـ Access Token بصمت وتحديث ملف stores.json"""
     STORES_FILE = 'stores.json'
     
+    if not merchant_id or not SALLA_CLIENT_ID or not SALLA_CLIENT_SECRET:
+        logger.warning("Salla refresh blocked: missing merchant ID or OAuth credentials")
+        return False
     with token_refresh_lock:
         if not os.path.exists(STORES_FILE):
             return False
@@ -54,7 +66,7 @@ def refresh_salla_token(merchant_id):
         }
 
         try:
-            response = requests.post(token_url, data=payload, headers=headers)
+            response = requests.post(token_url, data=payload, headers=headers, timeout=(10, 30))
             if response.status_code == 200:
                 new_tokens = response.json()
                 
@@ -63,8 +75,7 @@ def refresh_salla_token(merchant_id):
                 stores[store_idx]['refresh_token'] = new_tokens['refresh_token']
                 
                 # 2. حفظ التحديثات فوراً في ملف stores.json
-                with open(STORES_FILE, 'w', encoding='utf-8') as f:
-                    json.dump(stores, f, ensure_ascii=False, indent=4)
+                _atomic_store_save(STORES_FILE, stores)
                     
                 # 3. تحديث الذاكرة المؤقتة للتطبيق (Session State) ليعمل مباشرة
                 if 'access_token' in st.session_state:
@@ -74,10 +85,10 @@ def refresh_salla_token(merchant_id):
                     
                 return new_tokens['access_token']
             else:
-                print(f"فشل تجديد التوكن: {response.text}")
+                logger.warning("Salla token refresh failed: HTTP %s for merchant %s", response.status_code, merchant_id)
                 return False
-        except Exception as e:
-            print(f"خطأ أثناء التجديد: {str(e)}")
+        except (requests.RequestException, ValueError, OSError, KeyError):
+            logger.exception("Unable to refresh Salla token; no token values logged")
             return False
             
 logging.basicConfig(level=logging.INFO)
@@ -165,45 +176,65 @@ def get_flat_price(price_field: Any) -> float:
     return safe_float(price_field)
 
 def safe_api_request(method, url, headers, json=None, **kwargs):
-    """دالة إرسال الطلبات مع ميزة التجديد التلقائي للتوكن (Auto-Retry) وتوافقية المتغيرات"""
-    try:
-        # لاحظ هنا استخدمنا json=json لدعم كافة طلبات التطبيق
-        response = requests.request(method, url, headers=headers, json=json, **kwargs)
-        
-        # 🔄 التقاط خطأ انتهاء صلاحية التوكن (401)
-        if response.status_code == 401:
-            # استخراج معرف التاجر الحالي من الذاكرة
-            current_merchant_id = st.session_state.get('merchant_id')
-            
-            if current_merchant_id:
-                print("انتهت صلاحية التوكن. جاري التجديد التلقائي...")
-                new_token = refresh_salla_token(current_merchant_id)
-                
-                if new_token:
-                    # تحديث الهيدر بالتوكن الجديد
-                    headers['Authorization'] = f"Bearer {new_token}"
-                    
-                    # إعادة إرسال الطلب الذي فشل مسبقاً (Retry)
-                    retry_response = requests.request(method, url, headers=headers, json=json, **kwargs)
-                    if retry_response.status_code < 400:
-                        return retry_response.json()
-                    else:
-                        print(f"فشل الطلب بعد التجديد: {retry_response.text}")
-                        return None
-                else:
-                    st.error("⚠️ انتهت صلاحية الجلسة بالكامل. يرجى إعادة تسجيل الدخول للمتجر.")
-                    return None
-                    
-        # معالجة الردود العادية
-        if response.status_code < 400:
-            return response.json()
-        else:
-            print(f"API Error ({response.status_code}): {response.text}")
+    """Bounded HTTP calls; refresh on 401, retry GET on 429; never log tokens.
+
+    Non-idempotent operations are never automatically repeated on rate limits or 401.
+    """
+    method = str(method).upper()
+    kwargs.setdefault("timeout", (10, 30))
+    request_headers = dict(headers or {})
+    for attempt in range(3):
+        try:
+            response = requests.request(method, url, headers=request_headers, json=json, **kwargs)
+        except requests.RequestException as exc:
+            logger.warning("Salla request transport failure: %s", type(exc).__name__)
             return None
-            
-    except Exception as e:
-        print(f"Request Exception: {str(e)}")
-        return None
+        if response.status_code == 401 and attempt == 0 and method == "GET":
+            current_merchant_id = st.session_state.get("merchant_id")
+            token = refresh_salla_token(current_merchant_id) if current_merchant_id else None
+            if token:
+                request_headers["Authorization"] = f"Bearer {token}"
+                continue
+            logger.warning("Salla API unauthorized; merchant must reconnect")
+            return None
+        if response.status_code == 429 and method == "GET" and attempt < 2:
+            try:
+                wait = max(0.0, min(8.0, float(response.headers.get("Retry-After", 1 + attempt * 2))))
+            except (TypeError, ValueError):
+                wait = 1.0 + attempt * 2
+            time.sleep(wait)
+            continue
+        if response.status_code >= 400:
+            logger.warning("Salla API HTTP %s (%s)", response.status_code, method)
+            return None
+        if response.status_code == 204 or not response.content:
+            return {}
+        try:
+            return response.json()
+        except ValueError:
+            logger.warning("Salla API returned non-JSON body (%s)", method)
+            return None
+    return None
+
+
+def _atomic_store_save(path, data):
+    """Local JSON compatibility only; a central DB is required for multi-instance hosting."""
+    import tempfile
+    target = os.path.abspath(path)
+    directory = os.path.dirname(target)
+    temp_path = None
+    try:
+        fd, temp_path = tempfile.mkstemp(prefix=".stores-", suffix=".tmp", dir=directory)
+        os.fchmod(fd, 0o600)
+        with os.fdopen(fd, "w", encoding="utf-8") as f:
+            json.dump(data, f, ensure_ascii=False, indent=2)
+            f.flush()
+            os.fsync(f.fileno())
+        os.replace(temp_path, target)
+    finally:
+        if temp_path and os.path.exists(temp_path):
+            os.unlink(temp_path)
+
 
 def style_excel_file(ws, is_template=True, header_color="0F1C2E"):
     header_fill = PatternFill(start_color=header_color, end_color=header_color, fill_type="solid")
@@ -1365,8 +1396,10 @@ def init_background_scheduler():
         
     daemon_thread.start()
 
-# بدء تشغيل الخيط
-init_background_scheduler()
+# Scheduler has side effects: do not start a background worker on every Streamlit import.
+# Prefer one external worker; optional local testing only.
+if os.environ.get("ENABLE_LOCAL_SCHEDULER", "0") == "1":
+    init_background_scheduler()
 
 # ==========================================
 # 🔑 إدارة صلاحية وتحديث Access Token للمتجر
@@ -1432,10 +1465,10 @@ def update_store_tokens(new_access_token: str, new_refresh_token: str = None, me
                 stores = json.load(f)
 
             store_idx = None
-            if merchant_id:
-                store_idx = next((i for i, s in enumerate(stores) if str(s.get('merchant_id')) == str(merchant_id)), None)
-            if store_idx is None:
-                store_idx = next((i for i, s in enumerate(stores) if "بلسم" in str(s.get('store_name', ''))), 0 if stores else None)
+            if not merchant_id:
+                logger.error("Token update blocked: explicit merchant_id is required")
+                return False
+            store_idx = next((i for i, s in enumerate(stores) if str(s.get('merchant_id')) == str(merchant_id)), None)
 
             if store_idx is None:
                 return False
@@ -1446,8 +1479,7 @@ def update_store_tokens(new_access_token: str, new_refresh_token: str = None, me
                 stores[store_idx]['refresh_token'] = str(new_refresh_token).strip()
             stores[store_idx]['token_updated_at'] = now_str
 
-            with open(STORES_FILE, 'w', encoding='utf-8') as f:
-                json.dump(stores, f, ensure_ascii=False, indent=4)
+            _atomic_store_save(STORES_FILE, stores)
 
             # تحديث الذاكرة اللحظية للتطبيق
             if 'access_token' in st.session_state:
@@ -1458,5 +1490,5 @@ def update_store_tokens(new_access_token: str, new_refresh_token: str = None, me
             return True
 
         except Exception as e:
-            print(f"Error updating tokens: {e}")
+            logger.error("Could not save new Salla credentials for selected merchant")
             return False
