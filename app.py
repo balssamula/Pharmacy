@@ -1,7 +1,9 @@
 import streamlit as st
+import os
+import hmac
+import hashlib
 import requests
 import json
-import os
 import base64
 import time
 from datetime import datetime, timedelta
@@ -33,7 +35,7 @@ def fetch_store_data_fast(token, headers):
     cache = get_global_store_cache()
     now = datetime.now()
     
-    if token in cache and (now - cache[token]['time']).total_seconds() < 86400:
+    if token in cache and (now - cache[token]['time']).total_seconds() < 900:
         return cache[token]['products'], cache[token]['offers'], cache[token]['po_map'], cache[token]['customers']
         
     status_text = st.empty()
@@ -71,7 +73,7 @@ def fetch_store_data_fast(token, headers):
     c_res = safe_api_request("GET", "https://api.salla.dev/admin/v2/customers?per_page=100&page=1", headers)
     if c_res:
         tp = c_res.get("pagination", {}).get("totalPages", 1)
-        tp_safe = min(tp, 100)
+        # Respect documented pagination for complete catalogues; do not impose an invisible truncation.
         customers.extend(c_res.get("data", []))
         for page in range(2, tp + 1):
             status_text.info(f"👥 جاري سحب العملاء: صفحة {page} من {tp} | (تم تحميل {len(customers)} عميل)")
@@ -107,8 +109,6 @@ def fetch_store_data_fast(token, headers):
     
     progress_bar.progress(1.0)
     status_text.success(f"✅ اكتمل التحميل! ({len(products)} منتج، {len(offers)} عرض، {len(customers)} عميل)")
-    time.sleep(1.5)
-    
     progress_bar.empty()
     status_text.empty()
     
@@ -200,8 +200,30 @@ st.markdown("""
 
 if "is_admin_logged_in" not in st.session_state: st.session_state["is_admin_logged_in"] = False
 if "logged_in" not in st.session_state: st.session_state["logged_in"] = False
-if "admin_username" not in st.session_state: st.session_state["admin_username"] = "admin"
-if "admin_password" not in st.session_state: st.session_state["admin_password"] = "admin123"
+def _admin_setting(key):
+    val = os.environ.get(key, "")
+    if not val:
+        try:
+            val = str(st.secrets.get(key, ""))
+        except (FileNotFoundError, KeyError, AttributeError):
+            pass
+    return val
+
+
+def _verify_admin_credentials(username, password):
+    stored_user = _admin_setting("ADMIN_USERNAME")
+    password_hash = _admin_setting("ADMIN_PASSWORD_HASH")
+    if not stored_user or not password_hash or not hmac.compare_digest(username, stored_user):
+        return False
+    # Format: pbkdf2_sha256$iterations$salt_hex$hash_hex
+    try:
+        algorithm, iterations, salt_hex, expected_hex = password_hash.split("$")
+        if algorithm != "pbkdf2_sha256" or not 200000 <= int(iterations) <= 2000000:
+            return False
+        calculated = hashlib.pbkdf2_hmac("sha256", password.encode(), bytes.fromhex(salt_hex), int(iterations))
+        return hmac.compare_digest(calculated, bytes.fromhex(expected_hex))
+    except (ValueError, TypeError):
+        return False
 
 # --- الشاشة الأولى: تسجيل دخول المدير ---
 if not st.session_state["is_admin_logged_in"]:
@@ -212,12 +234,15 @@ if not st.session_state["is_admin_logged_in"]:
         with st.container(border=True):
             st.markdown("<h2 style='text-align:center; color:#00EBCF; margin-bottom: 20px;'>👑 الإدارة المركزية للتطبيقات</h2>", unsafe_allow_html=True)
             
+            if not _admin_setting("ADMIN_USERNAME") or not _admin_setting("ADMIN_PASSWORD_HASH"):
+                st.error("إعداد حساب المدير غير مكتمل. اضبط ADMIN_USERNAME و ADMIN_PASSWORD_HASH في Streamlit secrets.")
+                st.stop()
             un = st.text_input("👤 اسم المستخدم الإداري:")
             pw = st.text_input("🔒 كلمة المرور:", type="password")
             
             st.markdown("<br>", unsafe_allow_html=True)
             if st.button("🚀 تسجيل الدخول للوحة التحكم", use_container_width=True, type="primary"):
-                if un == st.session_state["admin_username"] and pw == st.session_state["admin_password"]:
+                if _verify_admin_credentials(un, pw):
                     st.session_state["is_admin_logged_in"] = True
                     st.rerun()
                 else:
@@ -248,17 +273,24 @@ if st.session_state["is_admin_logged_in"] and not st.session_state["logged_in"]:
         for idx, store in enumerate(connected_stores):
             with cols[idx % 3]:
                 with st.container(border=True):
+                    from html import escape as escape_html
+                    safe_store_name = escape_html(str(store.get("store_name", "")))
+                    safe_merchant = escape_html(str(store.get("merchant_id", "")))
+                    safe_installed = escape_html(str(store.get("installed_at", "")))
                     st.markdown(f"""
-                    <h3 style='color:#00EBCF; margin-bottom:5px; text-align:center;'>🏪 {store.get('store_name')}</h3>
+                    <h3 style='color:#00EBCF; margin-bottom:5px; text-align:center;'>🏪 {safe_store_name}</h3>
                     <div style='text-align:center; font-size:13px; color:#94A3B8; margin-bottom:15px;'>
-                        <b>رقم التاجر:</b> {store.get('merchant_id')}<br>
-                        <b>تاريخ الربط:</b> {store.get('installed_at')}
+                        <b>رقم التاجر:</b> {safe_merchant}<br>
+                        <b>تاريخ الربط:</b> {safe_installed}
                     </div>
                     """, unsafe_allow_html=True)
                     
                     # زر تسجيل الدخول التلقائي لهذا المتجر بالذات
                     if st.button(f"🔑 إدارة هذا المتجر", key=f"login_store_{store.get('merchant_id')}", use_container_width=True, type="primary"):
                         token = store.get("access_token")
+                        if not token or not str(store.get('merchant_id') or '').strip():
+                            st.error("المتجر غير مربوط بشكل صحيح. معرف التاجر ورمز الوصول مطلوبان.")
+                            st.stop()
                         headers = {"Authorization": f"Bearer {token}"}
                         
                         # تفعيل حالة الدخول وتخزين معرف المتجر
@@ -473,8 +505,8 @@ if st.sidebar.button("🔄 إعادة مزامنة البيانات", type="prim
         try:
             with open("stores.json", "r", encoding="utf-8") as f:
                 s_data = json.load(f)
-            curr_m = str(st.session_state.get("merchant_id", "1450057019"))
-            matched_store = next((s for s in s_data if str(s.get("merchant_id")) == curr_m), s_data[0] if s_data else None)
+            curr_m = str(st.session_state.get("merchant_id") or "")
+            matched_store = next((s for s in s_data if str(s.get("merchant_id")) == curr_m), None) if curr_m else None
             if matched_store and matched_store.get("access_token"):
                 st.session_state["access_token"] = matched_store["access_token"]
         except Exception:
