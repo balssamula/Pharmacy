@@ -1,0 +1,25 @@
+-- FIRST: create two secrets via Supabase Dashboard > Vault (UI only):
+-- name: salla_refresh_project_url, value: https://YOUR-PROJECT-REF.supabase.co
+-- name: salla_refresh_job_secret, value: SAME 32+ character secret as Edge Functions CRON_JOB_SECRET
+-- Do NOT paste credentials or secrets into SQL Editor or GitHub.
+
+create extension if not exists pg_cron;
+create extension if not exists pg_net;
+-- Enable Vault through Database > Extensions (if not enabled already).
+
+-- Job runs hourly at minute 15. Create only once; if present, inspect Cron > Jobs first.
+select cron.schedule(
+  'salla-auto-refresh-hourly',
+  '15 * * * *',
+  $$
+  select net.http_post(
+    url := (select decrypted_secret from vault.decrypted_secrets where name = 'salla_refresh_project_url') || '/functions/v1/salla-token-refresh',
+    headers := jsonb_build_object(
+      'Content-Type', 'application/json',
+      'x-job-secret', (select decrypted_secret from vault.decrypted_secrets where name = 'salla_refresh_job_secret')
+    ),
+    body := '{}'::jsonb,
+    timeout_milliseconds := 120000
+  );
+  $$
+);

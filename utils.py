@@ -32,65 +32,29 @@ SALLA_CLIENT_SECRET = _configured_secret("SALLA_CLIENT_SECRET")
 token_refresh_lock = threading.Lock()
 
 def refresh_salla_token(merchant_id):
-    """دالة تقوم بتجديد الـ Access Token بصمت وتحديث ملف stores.json"""
-    STORES_FILE = 'stores.json'
-    
-    if not merchant_id or not SALLA_CLIENT_ID or not SALLA_CLIENT_SECRET:
-        logger.warning("Salla refresh blocked: missing merchant ID or OAuth credentials")
+    """Reload newer token from Supabase; ONLY the scheduled Edge Function calls OAuth.
+
+    On 401 we must NOT submit an OAuth refresh request: one-time refresh tokens
+    would be consumed by competing web sessions.
+    """
+    if not merchant_id:
         return False
-    with token_refresh_lock:
-        if not os.path.exists(STORES_FILE):
+    try:
+        from token_store import get_store
+        store = get_store(str(merchant_id))
+        if not store or store.get("connection_status") != "connected":
             return False
-            
-        with open(STORES_FILE, 'r', encoding='utf-8') as f:
-            stores = json.load(f)
-            
-        store_idx = next((i for i, s in enumerate(stores) if str(s.get('merchant_id')) == str(merchant_id)), None)
-        if store_idx is None:
+        new_access = store.get("access_token")
+        if not new_access or new_access == st.session_state.get("access_token"):
             return False
-            
-        current_refresh_token = stores[store_idx].get('refresh_token')
-        if not current_refresh_token:
-            return False
+        st.session_state["access_token"] = new_access
+        if isinstance(st.session_state.get("headers"), dict):
+            st.session_state["headers"]["Authorization"] = f"Bearer {new_access}"
+        return new_access
+    except (ImportError, RuntimeError):
+        logger.warning("Cannot load refreshed token from central storage")
+        return False
 
-        # تجهيز طلب التجديد حسب معايير سلة
-        token_url = "https://accounts.salla.sa/oauth2/token"
-        payload = {
-            "client_id": SALLA_CLIENT_ID,
-            "client_secret": SALLA_CLIENT_SECRET,
-            "grant_type": "refresh_token",
-            "refresh_token": current_refresh_token
-        }
-        headers = {
-            "Content-Type": "application/x-www-form-urlencoded"
-        }
-
-        try:
-            response = requests.post(token_url, data=payload, headers=headers, timeout=(10, 30))
-            if response.status_code == 200:
-                new_tokens = response.json()
-                
-                # 1. تحديث الرموز في المصفوفة
-                stores[store_idx]['access_token'] = new_tokens['access_token']
-                stores[store_idx]['refresh_token'] = new_tokens['refresh_token']
-                
-                # 2. حفظ التحديثات فوراً في ملف stores.json
-                _atomic_store_save(STORES_FILE, stores)
-                    
-                # 3. تحديث الذاكرة المؤقتة للتطبيق (Session State) ليعمل مباشرة
-                if 'access_token' in st.session_state:
-                    st.session_state['access_token'] = new_tokens['access_token']
-                if 'headers' in st.session_state:
-                    st.session_state['headers']['Authorization'] = f"Bearer {new_tokens['access_token']}"
-                    
-                return new_tokens['access_token']
-            else:
-                logger.warning("Salla token refresh failed: HTTP %s for merchant %s", response.status_code, merchant_id)
-                return False
-        except (requests.RequestException, ValueError, OSError, KeyError):
-            logger.exception("Unable to refresh Salla token; no token values logged")
-            return False
-            
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
@@ -1406,89 +1370,36 @@ if os.environ.get("ENABLE_LOCAL_SCHEDULER", "0") == "1":
 # ==========================================
 
 def check_token_expiry_info(merchant_id=None):
-    """
-    فحص صلاحية التوكن وحساب الأيام المتبقية لدورة الـ 14 يوماً
-    تُرجع: (needs_alert: bool, days_left: float, expiry_date: datetime, last_updated_str: str)
-    """
-    STORES_FILE = 'stores.json'
-    if not os.path.exists(STORES_FILE):
-        return False, 14.0, None, ""
-
+    """Read actual expiry from Supabase; no assumed 14-day local JSON clock."""
     try:
-        with open(STORES_FILE, 'r', encoding='utf-8') as f:
-            stores = json.load(f)
-
-        store = None
-        if merchant_id:
-            store = next((s for s in stores if str(s.get('merchant_id')) == str(merchant_id)), None)
+        from token_store import get_store, store_health
+        store = get_store(str(merchant_id)) if merchant_id else None
         if not store:
-            # افتراضياً البحث عن متجر بلسم العلا أو أول متجر
-            store = next((s for s in stores if "بلسم" in str(s.get('store_name', ''))), stores[0] if stores else None)
-
-        if not store:
-            return False, 14.0, None, ""
-
-        # تاريخ التحديث الأخير (أو تاريخ التثبيت كبديل أولي)
-        date_str = store.get('token_updated_at') or store.get('installed_at')
-        if not date_str:
-            return False, 14.0, None, ""
-
-        last_dt = datetime.strptime(date_str[:19], '%Y-%m-%d %H:%M:%S')
-        expiry_dt = last_dt + timedelta(days=14)
-        now = datetime.now()
-        
-        diff = expiry_dt - now
-        days_left = diff.total_seconds() / 86400.0
-
-        # الإنذار يعمل إذا تبقى 5 أيام أو أقل (أو انتهى بالفعل)
-        needs_alert = days_left <= 5.0
-        return needs_alert, days_left, expiry_dt, date_str
-
-    except Exception as e:
-        print(f"Error checking token expiry: {e}")
-        return False, 14.0, None, ""
+            return True, 0.0, None, ""
+        _label, status, days = store_health(store)
+        expiry_str = store.get("expires_at")
+        expiry = datetime.fromisoformat(str(expiry_str).replace("Z", "+00:00")) if expiry_str else None
+        needs_alert = status != "connected" or days is None or days <= 5
+        return needs_alert, float(days) if days is not None else 0.0, expiry, str(store.get("token_updated_at") or "")
+    except (ImportError, RuntimeError, ValueError):
+        return True, 0.0, None, ""
 
 
-def update_store_tokens(new_access_token: str, new_refresh_token: str = None, merchant_id = None) -> bool:
-    """تحديث access_token و refresh_token معاً في stores.json وتصفير عداد الصلاحية"""
-    STORES_FILE = 'stores.json'
-    new_access_token = str(new_access_token).strip()
-    if not new_access_token:
+def update_store_tokens(new_access_token: str, new_refresh_token: str = None, merchant_id=None) -> bool:
+    """Manual rescue only: save full access+refresh PAIR to central storage.
+
+    Never write into stores.json. The scheduled worker handles routine rotation.
+    """
+    if not merchant_id or not new_access_token or not new_refresh_token:
         return False
-
-    with token_refresh_lock:
-        if not os.path.exists(STORES_FILE):
+    try:
+        from token_store import get_store, save_credentials
+        store = get_store(str(merchant_id))
+        if not store or store.get("connection_status") == "refreshing":
             return False
-
-        try:
-            with open(STORES_FILE, 'r', encoding='utf-8') as f:
-                stores = json.load(f)
-
-            store_idx = None
-            if not merchant_id:
-                logger.error("Token update blocked: explicit merchant_id is required")
-                return False
-            store_idx = next((i for i, s in enumerate(stores) if str(s.get('merchant_id')) == str(merchant_id)), None)
-
-            if store_idx is None:
-                return False
-
-            now_str = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
-            stores[store_idx]['access_token'] = new_access_token
-            if new_refresh_token:
-                stores[store_idx]['refresh_token'] = str(new_refresh_token).strip()
-            stores[store_idx]['token_updated_at'] = now_str
-
-            _atomic_store_save(STORES_FILE, stores)
-
-            # تحديث الذاكرة اللحظية للتطبيق
-            if 'access_token' in st.session_state:
-                st.session_state['access_token'] = new_access_token
-            if 'headers' in st.session_state:
-                st.session_state['headers']['Authorization'] = f"Bearer {new_access_token}"
-
-            return True
-
-        except Exception as e:
-            logger.error("Could not save new Salla credentials for selected merchant")
-            return False
+        return save_credentials(str(merchant_id), store.get("store_name") or str(merchant_id),
+                                new_access_token, new_refresh_token,
+                                days_left=14.0, replace=True)
+    except (RuntimeError, ImportError, ValueError):
+        logger.warning("Could not manually save complete OAuth pair to Supabase")
+        return False

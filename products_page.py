@@ -737,7 +737,7 @@ def render_token_expiry_banner():
             msg_color = "#B45309"
             bg_color = "linear-gradient(135deg, #FFFBEB 0%, #FEF3C7 100%)"
             border_color = "#FCD34D"
-            time_txt = f"متبقي <b>{int(days_left)} أيام و {hours_left} ساعة</b> على انتهاء مهلة الـ 14 يوماً (تاريخ الانتهاء: <code>{expiry_dt.strftime('%Y-%m-%d')}</code>)."
+            time_txt = f"متبقي <b>{int(days_left)} أيام و {hours_left} ساعة</b> على انتهاء مهلة الـ 14 يوماً (تاريخ الانتهاء: <code>{(expiry_dt.strftime('%Y-%m-%d') if expiry_dt else "غير معروف")}</code>)."
 
         with st.container():
             st.markdown(f"""
@@ -782,9 +782,11 @@ def render_token_expiry_banner():
                     st.error("تأكد أن رسالة JSON تخص المتجر المحدد؛ لا يمكن حفظ الرموز لمتجر غير معروف.")
                 elif not acc_tok or not acc_tok.startswith("ory_at_"):
                     st.error("⚠️ يرجى التأكد من توفر رمز Access Token صحيح (يبدأ بـ ory_at_).")
+                elif not ref_tok:
+                    st.error("يلزم إدخال Refresh Token الجديد أيضًا؛ لا نحفظ رمز الوصول منفردًا.")
                 else:
                     if update_store_tokens(acc_tok, ref_tok, curr_m_id):
-                        st.success("✅ تم تحديث الرموز في stores.json وتجديد دورة الـ 14 يوماً بنجاح!")
+                        st.success("✅ تم حفظ الزوج الجديد في Supabase؛ سيُدار التجديد القادم تلقائيًا.")
                         
                         # 🔄 الحل الجذري لتحديث الصفحة: مسح الكاش لإجبار التطبيق على السحب الحي فوراً
                         if "all_products_fetched" in st.session_state:
@@ -797,7 +799,7 @@ def render_token_expiry_banner():
                         time.sleep(1.5)
                         st.rerun()
                     else:
-                        st.error("❌ حدث خطأ أثناء الحفظ في stores.json.")
+                        st.error("❌ لم تُحفظ الرموز في Supabase؛ تحقق من إعدادات الربط وأدخل كلا الرمزين.")
                             
 def render_products_page():
     import time

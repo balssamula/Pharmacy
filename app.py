@@ -8,6 +8,7 @@ import base64
 import time
 from datetime import datetime, timedelta
 from utils import get_headers, safe_api_request, get_branches_list
+from token_store import is_configured, list_stores, get_store, save_credentials, store_health
 import logging
 logging.getLogger('streamlit').setLevel(logging.ERROR)
 
@@ -258,54 +259,110 @@ if st.session_state["is_admin_logged_in"] and not st.session_state["logged_in"]:
     </div>
     """, unsafe_allow_html=True)
     
-    # 1. قراءة المتاجر المربوطة من قاعدة البيانات (أو ملف JSON)
-    stores_db_path = "stores.json"
-    if os.path.exists(stores_db_path):
-        with open(stores_db_path, "r", encoding="utf-8") as f:
-            connected_stores = json.load(f)
-    else:
-        connected_stores = []
-        st.warning("⚠️ ملف قاعدة بيانات المتاجر (stores.json) غير موجود!")
+    # Supabase is the only authoritative token store in this release.
+    if not is_configured():
+        st.error("⛔ أضف SUPABASE_URL و SUPABASE_SERVICE_ROLE_KEY إلى Streamlit Secrets أولاً.")
+        st.stop()
+    try:
+        connected_stores = list_stores()
+    except RuntimeError as exc:
+        st.error(str(exc))
+        st.stop()
 
-    # 2. عرض المتاجر كبطاقات إدارية
+    st.subheader("🛡️ حالة ربط المتاجر وتجديد رموز سلة")
+    st.caption("المواعيد وحالة التجديد من Supabase، وليس من ملف GitHub. لا تظهر الرموز لأي مستخدم.")
+    if st.button("🔄 تحديث حالة جميع المتاجر", key="refresh_store_status"):
+        st.rerun()
+
+    with st.expander("📦 نقل الرموز الموجودة في stores.json لمرة واحدة", expanded=not bool(connected_stores)):
+        st.warning("الرموز القديمة قد تكون منتهية. سنستوردها بحالة «يحتاج مراجعة» ولن تعمل عليها مهمة التجديد حتى تُفحص وتُعتمد من خلال حفظ زوج صالح جديد.")
+        confirm_legacy = st.checkbox("أؤكد أن لدي نسخة احتياطية وأن النقل سيُنفّذ دون استبدال رموز Supabase", key="confirm_legacy")
+        if st.button("استيراد المتاجر غير الموجودة فقط", disabled=not confirm_legacy, key="import_old_tokens"):
+            added, skipped = 0, 0
+            try:
+                with open("stores.json", "r", encoding="utf-8") as f:
+                    legacy = json.load(f)
+                for row in legacy if isinstance(legacy, list) else []:
+                    mid = str(row.get("merchant_id") or "").strip()
+                    if not (mid and row.get("access_token") and row.get("refresh_token")):
+                        skipped += 1
+                        continue
+                    # Old JSON may not record issuance date. Schedule a refresh soon,
+                    # using the latest pair exactly once; no automatic OAuth request here.
+                    if save_credentials(mid, row.get("store_name") or mid,
+                                        row["access_token"], row["refresh_token"],
+                                        days_left=0.05, replace=False,
+                                        initial_status="review_required"):
+                        added += 1
+                    else:
+                        skipped += 1
+                st.success(f"تم استيراد {added} متجر بحالة تحتاج مراجعة، وتخطي {skipped}. لا تُشغّل Cron قبل إدخال زوج حديث صالح والتحقق منه.")
+                st.rerun()
+            except (OSError, ValueError, RuntimeError, TypeError) as exc:
+                st.error("تعذر الاستيراد. تحقق من وجود الملف وجدول Supabase؛ لن نعرض الرموز في سجل الأخطاء.")
+
+    with st.expander("🔐 إدخال زوج رموز جديد لمتجر محدد (عند الضرورة)"):
+        with st.form("manual_oauth_pair_form", clear_on_submit=True):
+            merchant_input = st.text_input("معرف التاجر (merchant_id) - إلزامي")
+            name_input = st.text_input("اسم المتجر")
+            access_input = st.text_input("Access Token", type="password")
+            refresh_input = st.text_input("Refresh Token", type="password")
+            valid_days = st.number_input("الأيام المتبقية تقريبًا من صلاحية Access Token", min_value=1, max_value=14, value=14)
+            replace_existing = st.checkbox("أوافق على استبدال رموز المتجر المحدد الموجودة في Supabase")
+            if st.form_submit_button("💾 حفظ الزوج في Supabase", type="primary"):
+                try:
+                    result = save_credentials(merchant_input, name_input or merchant_input,
+                                              access_input, refresh_input,
+                                              days_left=float(valid_days), replace=replace_existing)
+                    if result:
+                        st.success("حُفظ الزوج في Supabase دون كتابة أي رموز في GitHub.")
+                        st.rerun()
+                    else:
+                        st.warning("المتجر موجود بالفعل؛ لم يُستبدل. فعّل الموافقة الصريحة للاستبدال.")
+                except (ValueError, RuntimeError) as exc:
+                    st.error(str(exc))
+
     if connected_stores:
-        cols = st.columns(3) # عرض المتاجر في 3 أعمدة
+        cols = st.columns(3)
         for idx, store in enumerate(connected_stores):
             with cols[idx % 3]:
                 with st.container(border=True):
                     from html import escape as escape_html
-                    safe_store_name = escape_html(str(store.get("store_name", "")))
-                    safe_merchant = escape_html(str(store.get("merchant_id", "")))
-                    safe_installed = escape_html(str(store.get("installed_at", "")))
-                    st.markdown(f"""
-                    <h3 style='color:#00EBCF; margin-bottom:5px; text-align:center;'>🏪 {safe_store_name}</h3>
-                    <div style='text-align:center; font-size:13px; color:#94A3B8; margin-bottom:15px;'>
-                        <b>رقم التاجر:</b> {safe_merchant}<br>
-                        <b>تاريخ الربط:</b> {safe_installed}
-                    </div>
-                    """, unsafe_allow_html=True)
-                    
-                    # زر تسجيل الدخول التلقائي لهذا المتجر بالذات
-                    if st.button(f"🔑 إدارة هذا المتجر", key=f"login_store_{store.get('merchant_id')}", use_container_width=True, type="primary"):
+                    safe_name = escape_html(str(store.get("store_name") or "متجر"))
+                    safe_merchant = escape_html(str(store.get("merchant_id") or ""))
+                    label, status, days_left = store_health(store)
+                    st.markdown(f"### 🏪 {safe_name}")
+                    st.caption(f"معرف التاجر: {safe_merchant}")
+                    st.write(label)
+                    st.caption("الحالة حسب التجديد المخزّن؛ لا تمثل اختبار API مباشرًا")
+                    if days_left is not None:
+                        st.write(f"🕒 المتبقي: {days_left:.1f} يوم" if days_left >= 0 else "⛔ انتهت صلاحية رمز الوصول")
+                    if store.get("token_updated_at"):
+                        st.caption(f"آخر حفظ للرموز: {str(store['token_updated_at'])[:16]} UTC")
+                    if store.get("last_successful_refresh_at"):
+                        st.caption(f"آخر تجديد ناجح: {str(store['last_successful_refresh_at'])[:16]} UTC")
+                    if store.get("last_refresh_attempt_at"):
+                        st.caption(f"آخر محاولة تجديد: {str(store['last_refresh_attempt_at'])[:16]} UTC")
+                    if store.get("last_error"):
+                        st.warning(f"تحتاج مراجعة: {str(store['last_error'])[:160]}")
+                    if st.button("🔑 إدارة هذا المتجر", key=f"login_store_{store.get('merchant_id')}",
+                                 use_container_width=True, type="primary",
+                                 disabled=(status in ('reconnect_required', 'refreshing') or
+                                           (days_left is not None and days_left <= 0))):
                         token = store.get("access_token")
-                        if not token or not str(store.get('merchant_id') or '').strip():
-                            st.error("المتجر غير مربوط بشكل صحيح. معرف التاجر ورمز الوصول مطلوبان.")
+                        if not token or not str(store.get("merchant_id") or "").strip():
+                            st.error("بيانات الربط غير مكتملة")
                             st.stop()
                         headers = {"Authorization": f"Bearer {token}"}
-                        
-                        # تفعيل حالة الدخول وتخزين معرف المتجر
-                        st.session_state["merchant_id"] = str(store.get('merchant_id'))  # ✅ ضروري جداً
-                        st.session_state["store_name"] = store.get('store_name')
+                        st.session_state["merchant_id"] = str(store.get("merchant_id"))
+                        st.session_state["store_name"] = store.get("store_name")
                         st.session_state["logged_in"] = True
                         st.session_state["access_token"] = token
-                        ksa_time = datetime.now() + timedelta(hours=3)
-                        st.session_state["login_time"] = ksa_time.strftime("%Y-%m-%d %I:%M %p")
-                        
-                        # 🚀 استدعاء المزامنة الحية
+                        st.session_state["login_time"] = datetime.now().strftime("%Y-%m-%d %H:%M")
                         perform_initial_sync_with_ui(headers)
                         st.rerun()
     else:
-        st.info("لم يقم أي تاجر بتثبيت التطبيق حتى الآن.")
+        st.info("لا توجد متاجر في المخزن الجديد. استخدم استيراد الملف القديم أو أدخل الرموز في النموذج الآمن.")
 
     # زر تسجيل الخروج للمدير
     st.divider()
@@ -314,6 +371,20 @@ if st.session_state["is_admin_logged_in"] and not st.session_state["logged_in"]:
         st.rerun()
         
     st.stop() # إيقاف الكود هنا حتى يختار المدير متجراً
+
+# Re-read the latest token on each Streamlit rerun; the Edge Function may have rotated it.
+if st.session_state.get("logged_in") and st.session_state.get("merchant_id"):
+    try:
+        current_store = get_store(st.session_state["merchant_id"])
+        if current_store and current_store.get("access_token"):
+            if current_store.get("connection_status") == "reconnect_required":
+                st.error("ربط المتجر يحتاج إعادة تفويض من سلة؛ لا تستخدم الرموز القديمة.")
+                st.session_state["logged_in"] = False
+                st.stop()
+            st.session_state["access_token"] = current_store["access_token"]
+    except RuntimeError as exc:
+        st.error(str(exc))
+        st.stop()
 
 # ==========================================
 # 🏠 الواجهة الرئيسية (بعد اختيار المتجر)
@@ -500,17 +571,16 @@ page = st.sidebar.radio("القائمة الرئيسية", ["مركز إدارة
 st.sidebar.divider()
 
 if st.sidebar.button("🔄 إعادة مزامنة البيانات", type="primary", use_container_width=True):
-    # 1. إعادة قراءة أحدث توكن من stores.json مباشرة
-    if os.path.exists("stores.json"):
+    # Get the newest token from central storage. Never read GitHub stores.json.
+    curr_m = str(st.session_state.get("merchant_id") or "")
+    if curr_m:
         try:
-            with open("stores.json", "r", encoding="utf-8") as f:
-                s_data = json.load(f)
-            curr_m = str(st.session_state.get("merchant_id") or "")
-            matched_store = next((s for s in s_data if str(s.get("merchant_id")) == curr_m), None) if curr_m else None
-            if matched_store and matched_store.get("access_token"):
-                st.session_state["access_token"] = matched_store["access_token"]
-        except Exception:
-            pass
+            latest = get_store(curr_m)
+            if latest and latest.get("access_token"):
+                st.session_state["access_token"] = latest["access_token"]
+        except RuntimeError as exc:
+            st.error(str(exc))
+            st.stop()
 
     # 2. تفريغ كاش المتجر والباقة
     cache = get_global_store_cache()
